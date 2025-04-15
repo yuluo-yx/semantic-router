@@ -1,0 +1,25 @@
+[package]
+name = "candle-semantic-router"
+version = "0.1.0"
+edition = "2021"
+description = "Go bindings for Candle BERT semantic similarity model for LLM routing"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "candle_semantic_router"
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+anyhow = { version = "1", features = ["backtrace"] }
+candle-core = "0.8.4"
+candle-nn = "0.8.4"
+candle-transformers = "0.8.4"
+tokenizers = { version = "0.21.0", features = ["http"] }
+hf-hub = "0.4.1"
+safetensors = "0.4.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.93"
+tracing = "0.1.37"
+libc = "0.2.147"
+lazy_static = "1.4.0"
+rand = "0.8.5" 

@@ -1,0 +1,33 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+extproc-server
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependency directories
+vendor/
+
+# Environment variables
+.env
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Project specific
+/docs/architecture.png 
