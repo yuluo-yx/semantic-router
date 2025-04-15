@@ -3,6 +3,15 @@ target/
 **/*.rs.bk
 Cargo.lock
 
+# Python
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+__pycache__/
+.venv/
+
 # Go
 *.exe
 *.exe~
