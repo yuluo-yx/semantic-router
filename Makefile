@@ -1,4 +1,4 @@
-.PHONY: all build clean
+.PHONY: all build clean test
 
 # Default target
 all: build
@@ -10,6 +10,15 @@ build: rust
 rust:
 	@echo "Building Rust library..."
 	cd candle-binding && cargo build --release
+
+# Test the Rust library
+test-binding:
+	@echo "Running Go tests with static library..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		cd candle-binding && CGO_ENABLED=1 go test -v
+
+# Test the Rust library and the Go binding
+test: test-binding
 
 # Clean built artifacts
 clean:

@@ -31,6 +31,11 @@ var testModels = []struct {
 		modelID: "sentence-transformers/all-MiniLM-L6-v2",
 		size:    "small",
 	},
+	{
+		name:    "MiniLM-L12",
+		modelID: "sentence-transformers/all-MiniLM-L12-v2",
+		size:    "medium",
+	},
 }
 
 // More comprehensive test dataset for better model differentiation
