@@ -30,4 +30,4 @@ vendor/
 Thumbs.db
 
 # Project specific
-/docs/architecture.png 
+bin/
