@@ -1,3 +1,3 @@
-module github.com/rootfs/LLM_Semantic_Router/candle-binding
+module github.com/neuralmagic/semantic_router_poc/candle-binding
 
-go 1.24.1 
+go 1.24.1

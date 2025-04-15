@@ -13,6 +13,7 @@ import (
 #include <stdbool.h>
 
 extern bool init_similarity_model(const char* model_id, bool use_cpu);
+
 extern float calculate_similarity(const char* text1, const char* text2);
 
 // Similarity result structure
@@ -27,8 +28,9 @@ extern void free_cstring(char* s);
 import "C"
 
 var (
-	initOnce sync.Once
-	initErr  error
+	initOnce         sync.Once
+	initErr          error
+	modelInitialized bool
 )
 
 // SimResult represents the result of a similarity search
@@ -37,30 +39,45 @@ type SimResult struct {
 	Score float32 // Similarity score
 }
 
-// InitModel initializes the BERT model with the specified model path
-func InitModel(modelPath string, useCPU bool) error {
+// InitModel initializes the BERT model with the specified model ID
+func InitModel(modelID string, useCPU bool) error {
 	var err error
 	initOnce.Do(func() {
-		if modelPath == "" {
-			modelPath = "sentence-transformers/all-MiniLM-L6-v2"
+		if modelID == "" {
+			modelID = "sentence-transformers/all-MiniLM-L6-v2"
 		}
 
-		fmt.Println("Initializing BERT similarity model:", modelPath)
+		fmt.Println("Initializing BERT similarity model:", modelID)
 
 		// Initialize BERT directly using CGO
-		cModelID := C.CString(modelPath)
+		cModelID := C.CString(modelID)
 		defer C.free(unsafe.Pointer(cModelID))
 
 		success := C.init_similarity_model(cModelID, C.bool(useCPU))
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize BERT similarity model")
+			return
 		}
+
+		modelInitialized = true
 	})
+
+	// Reset the once so we can try again with a different model ID if needed
+	if err != nil {
+		initOnce = sync.Once{}
+		modelInitialized = false
+	}
+
 	return err
 }
 
 // CalculateSimilarity calculates the similarity between two texts
 func CalculateSimilarity(text1, text2 string) float32 {
+	if !modelInitialized {
+		fmt.Println("BERT model not initialized")
+		return -1.0
+	}
+
 	cText1 := C.CString(text1)
 	defer C.free(unsafe.Pointer(cText1))
 
@@ -73,6 +90,11 @@ func CalculateSimilarity(text1, text2 string) float32 {
 
 // FindMostSimilar finds the most similar text from a list of candidates
 func FindMostSimilar(query string, candidates []string) SimResult {
+	if !modelInitialized {
+		fmt.Println("BERT model not initialized")
+		return SimResult{Index: -1, Score: -1.0}
+	}
+
 	if len(candidates) == 0 {
 		return SimResult{Index: -1, Score: -1.0}
 	}
@@ -101,4 +123,9 @@ func FindMostSimilar(query string, candidates []string) SimResult {
 // SetMemoryCleanupHandler sets up a finalizer to clean up memory when the Go GC runs
 func SetMemoryCleanupHandler() {
 	runtime.GC()
+}
+
+// IsModelInitialized returns whether the model has been successfully initialized
+func IsModelInitialized() bool {
+	return modelInitialized
 }

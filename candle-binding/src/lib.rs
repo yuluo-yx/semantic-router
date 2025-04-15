@@ -12,7 +12,7 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
 // Structure to hold BERT model and tokenizer for semantic similarity
-struct BertSimilarity {
+pub struct BertSimilarity {
     model: BertModel,
     tokenizer: Tokenizer,
     device: Device,
@@ -23,18 +23,25 @@ lazy_static::lazy_static! {
 }
 
 impl BertSimilarity {
-    fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
+    pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
         let device = if use_cpu {
             Device::Cpu
         } else {
             Device::cuda_if_available(0)?
         };
 
-        // Load model and tokenizer from Hugging Face Hub
+        // Default to a sentence transformer model if not specified or empty
+        let model_id = if model_id.is_empty() {
+            "sentence-transformers/all-MiniLM-L6-v2"
+        } else {
+            model_id
+        };
+
+        // Load model and tokenizer from HF
         let repo = Repo::with_revision(
-            model_id.to_string(),
-            RepoType::Model,
-            "main".to_string(),
+            model_id.to_string(), 
+            RepoType::Model, 
+            "main".to_string()  // Use main branch instead of PR/21
         );
 
         let (config_filename, tokenizer_filename, weights_filename) = {
@@ -50,7 +57,7 @@ impl BertSimilarity {
         let mut config: Config = serde_json::from_str(&config)?;
         let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
 
-        // Use approximate GELU for better performance
+        // Use the approximate GELU for better performance
         config.hidden_act = HiddenAct::GeluApproximate;
 
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], DTYPE, &device)? };
@@ -64,66 +71,70 @@ impl BertSimilarity {
     }
 
     // Get embedding for a text
-    fn get_embedding(&self, text: &str) -> Result<Tensor> {
+    pub fn get_embedding(&self, text: &str) -> Result<Tensor> {
+        // Encode the text with the tokenizer
         let encoding = self.tokenizer
             .encode(text, true)
             .map_err(E::msg)?;
         
+        // Get token IDs and attention mask
         let token_ids = encoding.get_ids().to_vec();
+        let attention_mask = encoding.get_attention_mask().to_vec();
+        
+        // Create tensors
         let token_ids_tensor = Tensor::new(&token_ids[..], &self.device)?.unsqueeze(0)?;
+        let attention_mask_tensor = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
         let token_type_ids = token_ids_tensor.zeros_like()?;
         
-        // Run the text through BERT
-        let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, None)?;
+        // Run the text through BERT with attention mask
+        let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, Some(&attention_mask_tensor))?;
         
-        // Extract the CLS token (first token) embedding
-        let cls_embedding = embeddings.narrow(1, 0, 1)?.squeeze(1)?;
+        // Mean pooling: sum over tokens and divide by attention mask sum
+        let sum_embeddings = embeddings.sum(1)?;
+        let attention_sum = attention_mask_tensor.sum(1)?.to_dtype(embeddings.dtype())?;
+        let pooled = sum_embeddings.broadcast_div(&attention_sum)?;
         
-        // Convert to the right type and normalize
-        let embedding = cls_embedding.to_dtype(DType::F32)?;
+        // Convert to float32 and normalize
+        let embedding = pooled.to_dtype(DType::F32)?;
         
-        // Normalize the embedding (L2 norm)
-        let norm = embedding.sqr()?.sum_all()?.sqrt()?;
-        let normalized = embedding.broadcast_div(&norm)?;
-        
-        Ok(normalized)
+        normalize_l2(&embedding)
     }
 
     // Calculate cosine similarity between two texts
-    fn calculate_similarity(&self, text1: &str, text2: &str) -> Result<f32> {
+    pub fn calculate_similarity(&self, text1: &str, text2: &str) -> Result<f32> {
         let embedding1 = self.get_embedding(text1)?;
         let embedding2 = self.get_embedding(text2)?;
         
-        // Calculate cosine similarity
-        let similarity = embedding1.matmul(&embedding2.transpose(0, 1)?)?;
+        // For normalized vectors, dot product equals cosine similarity
+        let dot_product = embedding1.matmul(&embedding2.transpose(0, 1)?)?;
         
-        // Convert to scalar
-        let sim_value = similarity.to_vec0::<f32>()?;
+        // Extract the scalar value from the result
+        let sim_value = dot_product.squeeze(0)?.squeeze(0)?.to_scalar::<f32>()?;
         
         Ok(sim_value)
     }
 
     // Find most similar text from a list
-    fn find_most_similar(&self, query_text: &str, candidates: &[&str]) -> Result<(usize, f32)> {
+    pub fn find_most_similar(&self, query_text: &str, candidates: &[&str]) -> Result<(usize, f32)> {
         if candidates.is_empty() {
             return Err(E::msg("Empty candidate list"));
         }
         
         let query_embedding = self.get_embedding(query_text)?;
         
-        // Track best match
+        // Calculate similarity for each candidate individually
         let mut best_idx = 0;
         let mut best_score = -1.0;
         
         for (idx, candidate) in candidates.iter().enumerate() {
             let candidate_embedding = self.get_embedding(candidate)?;
             
-            // Calculate similarity
-            let similarity = query_embedding.matmul(&candidate_embedding.transpose(0, 1)?)?;
-            let sim_value = similarity.to_vec0::<f32>()?;
+            // Calculate similarity (dot product of normalized vectors = cosine similarity)
+            let sim = query_embedding.matmul(&candidate_embedding.transpose(0, 1)?)?;
+            let score = sim.squeeze(0)?.squeeze(0)?.to_scalar::<f32>()?;
             
-            if sim_value > best_score {
-                best_score = sim_value;
+            if score > best_score {
+                best_score = score;
                 best_idx = idx;
             }
         }
@@ -255,4 +266,10 @@ pub extern "C" fn free_cstring(s: *mut c_char) {
             let _ = CString::from_raw(s);
         }
     }
+}
+
+// Helper function to L2 normalize a tensor
+fn normalize_l2(v: &Tensor) -> Result<Tensor> {
+    let norm = v.sqr()?.sum_keepdim(1)?.sqrt()?;
+    Ok(v.broadcast_div(&norm)?)
 } 
