@@ -15,6 +15,21 @@ static_resources:
           - name: envoy.access_loggers.stdout
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              log_format:
+                json_format:
+                  time: "%START_TIME%"
+                  protocol: "%PROTOCOL%"
+                  request_method: "%REQ(:METHOD)%"
+                  request_path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                  response_code: "%RESPONSE_CODE%"
+                  response_flags: "%RESPONSE_FLAGS%"
+                  bytes_received: "%BYTES_RECEIVED%"
+                  bytes_sent: "%BYTES_SENT%"
+                  duration: "%DURATION%"
+                  upstream_host: "%UPSTREAM_HOST%"
+                  upstream_cluster: "%UPSTREAM_CLUSTER%"
+                  upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+                  request_id: "%REQ(X-REQUEST-ID)%"
           route_config:
             name: local_route
             virtual_hosts:
@@ -39,7 +54,7 @@ static_resources:
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
               failure_mode_allow: true
-              message_timeout: 30s
+              message_timeout: 60s
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -56,8 +71,8 @@ static_resources:
         explicit_http_config:
           http2_protocol_options:
             connection_keepalive:
-              interval: 30s
-              timeout: 5s
+              interval: 60s
+              timeout: 60s
     load_assignment:
       cluster_name: extproc_service
       endpoints:
@@ -68,24 +83,15 @@ static_resources:
                 address: 127.0.0.1
                 port_value: 50051
   
-  - name: default_backend
-    connect_timeout: 1s
-    type: strict_dns
-    lb_policy: round_robin
-    load_assignment:
-      cluster_name: default_backend
-      endpoints:
-      - lb_endpoints:
-        - endpoint:
-            address:
-              socket_address:
-                address: default-llm-service
-                port_value: 8000
-
   - name: vllm_backend
-    connect_timeout: 3s
+    connect_timeout: 30s
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http_protocol_options: {}
     load_assignment:
       cluster_name: vllm_backend
       endpoints:

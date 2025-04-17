@@ -11,7 +11,6 @@ import (
 	"sync"
 	"syscall"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	candle_binding "github.com/neuralmagic/semantic_router_poc/candle-binding"
@@ -168,23 +167,16 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 						return status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 					}
 
-					// Create header mutation for content-length
-					headerMutation := &ext_proc.HeaderMutation{
-						SetHeaders: []*corev3.HeaderValueOption{
-							{
-								Header: &corev3.HeaderValue{
-									Key:   "content-length",
-									Value: fmt.Sprintf("%d", len(modifiedBody)),
-								},
-							},
-						},
-					}
-
 					// Create body mutation with the modified body
 					bodyMutation := &ext_proc.BodyMutation{
 						Mutation: &ext_proc.BodyMutation_Body{
 							Body: modifiedBody,
 						},
+					}
+
+					// Also create a header mutation to remove the original content-length
+					headerMutation := &ext_proc.HeaderMutation{
+						RemoveHeaders: []string{"content-length"},
 					}
 
 					// Set the response with both mutations
