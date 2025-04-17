@@ -1,0 +1,32 @@
+bert_model:
+  model_id: "sentence-transformers/all-MiniLM-L12-v2"
+  threshold: 0.8
+  use_cpu: true
+
+default_model: "phi4:latest"
+
+categories:
+  - name: "STEM"
+    description: "Science, Technology, Engineering, and Mathematics topics"
+    model: "phi4:latest"
+    tasks:
+      - name: "Mathematics"
+        description: "Mathematical problems, calculations, and theorems"
+        typical_prompt: "You are a math professional. Explain math concepts clearly and show step-by-step solutions to problems."
+      - name: "Physics"
+        description: "Physics principles, problems, and phenomena explanations"
+        typical_prompt: "You are a physics professional. Explain physics concepts in simple terms with examples that are easy to understand."
+      - name: "Computer Science"
+        description: "Computer algorithms, data structures, and computational problems"
+        typical_prompt: "You are a computer science professional. Explain coding concepts and algorithms in simple terms. Show examples when needed."
+
+  - name: "Creative Tasks"
+    description: "Writing, art, music, and creative expression"
+    model: "gemma3:27b"
+    tasks:
+      - name: "Story Writing"
+        description: "Generate creative narratives and fictional content"
+        typical_prompt: "You are a story writer. Create interesting stories with good characters and settings."
+      - name: "Brainstorming"
+        description: "Generate creative ideas for projects, marketing, or problem solving"
+        typical_prompt: "You are an idea generator. Come up with creative ideas for different projects and problems."

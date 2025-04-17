@@ -3,9 +3,9 @@ module github.com/neuralmagic/semantic_router_poc/semantic_router
 go 1.24.1
 
 replace (
-	github.com/neuralmagic/semantic_router_poc/semantic_router/pkg/extproc => ./pkg/extproc
 	github.com/neuralmagic/semantic_router_poc/candle-binding => ../candle-binding
 	github.com/neuralmagic/semantic_router_poc/semantic_router/pkg/config => ./pkg/config
+	github.com/neuralmagic/semantic_router_poc/semantic_router/pkg/extproc => ./pkg/extproc
 )
 
 require (
@@ -17,6 +17,7 @@ require (
 
 require (
 	github.com/cncf/xds/go v0.0.0-20241223141626-cff3c89139a3 // indirect
+	github.com/envoyproxy/go-control-plane v0.13.4 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	golang.org/x/net v0.34.0 // indirect

@@ -12,8 +12,9 @@ import (
 type RouterConfig struct {
 	// BERT model configuration for Candle BERT similarity comparison
 	BertModel struct {
-		ModelID string `yaml:"model_id"`
-		UseCPU  bool   `yaml:"use_cpu"`
+		ModelID   string  `yaml:"model_id"`
+		Threshold float32 `yaml:"threshold"`
+		UseCPU    bool    `yaml:"use_cpu"`
 	} `yaml:"bert_model"`
 
 	// Categories of tasks for routing
