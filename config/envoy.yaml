@@ -62,7 +62,7 @@ static_resources:
 
   clusters:
   - name: extproc_service
-    connect_timeout: 1s
+    connect_timeout: 30s
     type: STATIC
     lb_policy: ROUND_ROBIN
     typed_extension_protocol_options:
@@ -84,7 +84,7 @@ static_resources:
                 port_value: 50051
   
   - name: vllm_backend
-    connect_timeout: 30s
+    connect_timeout: 60s
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
     typed_extension_protocol_options:

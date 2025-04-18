@@ -1,9 +1,9 @@
 bert_model:
   model_id: "sentence-transformers/all-MiniLM-L12-v2"
-  threshold: 0.8
+  threshold: 0.6
   use_cpu: true
 
-default_model: "phi4:latest"
+default_model: "mistral-small3.1"
 
 categories:
   - name: "STEM"
