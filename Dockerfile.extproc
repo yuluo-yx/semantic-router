@@ -30,7 +30,7 @@ ENV CGO_ENABLED=1
 RUN cd /app/semantic_router && go build -o extproc-server ./cmd/main.go
 
 # Final stage: copy the binary and the shared library
-FROM centos:stream9
+FROM quay.io/centos/centos:stream9
 
 WORKDIR /app
 
