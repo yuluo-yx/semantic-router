@@ -3,10 +3,11 @@
 use std::ffi::{c_char, CStr, CString};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::path::Path;
 
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, Tensor};
-use candle_nn::{VarBuilder};
+use candle_nn::{VarBuilder, Linear};
 use candle_transformers::models::bert::{BertModel, Config, HiddenAct, DTYPE};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
@@ -21,8 +22,18 @@ pub struct BertSimilarity {
     device: Device,
 }
 
+// Structure to hold BERT model, tokenizer, and classification head for text classification
+pub struct BertClassifier {
+    model: BertModel,
+    tokenizer: Tokenizer,
+    classification_head: Linear,
+    num_classes: usize,
+    device: Device,
+}
+
 lazy_static::lazy_static! {
     static ref BERT_SIMILARITY: Arc<Mutex<Option<BertSimilarity>>> = Arc::new(Mutex::new(None));
+    static ref BERT_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
 }
 
 // Structure to hold tokenization result
@@ -49,14 +60,36 @@ impl BertSimilarity {
             model_id
         };
 
-        // Load model and tokenizer from HF
-        let repo = Repo::with_revision(
-            model_id.to_string(), 
-            RepoType::Model, 
-            "main".to_string()  // Use main branch instead of PR/21
-        );
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) = if Path::new(model_id).exists() {
+            // Local model path
+            println!("Loading model from local directory: {}", model_id);
+            let config_path = Path::new(model_id).join("config.json");
+            let tokenizer_path = Path::new(model_id).join("tokenizer.json");
+            
+            // Check for safetensors first, fall back to PyTorch
+            let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
+                (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
+            } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
+            } else {
+                return Err(E::msg(format!("No model weights found in {}", model_id)));
+            };
+            
+            (
+                config_path.to_string_lossy().to_string(),
+                tokenizer_path.to_string_lossy().to_string(),
+                weights_path.0,
+                weights_path.1
+            )
+        } else {
+            // HuggingFace Hub model
+            println!("Loading model from HuggingFace Hub: {}", model_id);
+            let repo = Repo::with_revision(
+                model_id.to_string(), 
+                RepoType::Model, 
+                "main".to_string()
+            );
 
-        let (config_filename, tokenizer_filename, weights_filename, use_pth) = {
             let api = Api::new()?;
             let api = api.repo(repo);
             let config = api.get("config.json")?;
@@ -77,7 +110,12 @@ impl BertSimilarity {
                 }
             };
 
-            (config, tokenizer, weights, use_pth)
+            (
+                config.to_string_lossy().to_string(),
+                tokenizer.to_string_lossy().to_string(),
+                weights.to_string_lossy().to_string(),
+                use_pth
+            )
         };
 
         let config = std::fs::read_to_string(config_filename)?;
@@ -200,6 +238,261 @@ impl BertSimilarity {
         }
         
         Ok((best_idx, best_score))
+    }
+}
+
+impl BertClassifier {
+    pub fn new(model_id: &str, num_classes: usize, use_cpu: bool) -> Result<Self> {
+        if num_classes < 2 {
+            return Err(E::msg(format!("Number of classes must be at least 2, got {}", num_classes)));
+        }
+
+        let device = if use_cpu {
+            Device::Cpu
+        } else {
+            Device::cuda_if_available(0)?
+        };
+
+        println!("Initializing classifier model: {}", model_id);
+
+        // Check if this is a SentenceTransformer linear classifier model
+        let is_sentence_transformer = Path::new(model_id).join("modules.json").exists();
+        
+        if is_sentence_transformer {
+            println!("Detected SentenceTransformer model with linear classifier head");
+        }
+
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) = if Path::new(model_id).exists() {
+            // Local model path
+            println!("Loading model from local directory: {}", model_id);
+            let config_path = Path::new(model_id).join("config.json");
+            let tokenizer_path = Path::new(model_id).join("tokenizer.json");
+            
+            // For SentenceTransformer models, check both the root and 0_Transformer
+            let weights_path = if is_sentence_transformer {
+                // First check if model weights are at the root level (most common for sentence-transformers)
+                if Path::new(model_id).join("model.safetensors").exists() {
+                    println!("Found model weights at root level");
+                    (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
+                } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                    println!("Found PyTorch model at root level");
+                    (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                }
+                // Otherwise check if there's a 0_Transformer directory
+                else {
+                    let transformer_path = Path::new(model_id).join("0_Transformer");
+                    if transformer_path.exists() {
+                        if transformer_path.join("model.safetensors").exists() {
+                            (transformer_path.join("model.safetensors").to_string_lossy().to_string(), false)
+                        } else if transformer_path.join("pytorch_model.bin").exists() {
+                            (transformer_path.join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                        } else {
+                            return Err(E::msg(format!("No transformer model weights found in {}", transformer_path.display())));
+                        }
+                    } else {
+                        return Err(E::msg(format!("No model weights found in {}", model_id)));
+                    }
+                }
+            } else if Path::new(model_id).join("model.safetensors").exists() {
+                (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
+            } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
+            } else {
+                return Err(E::msg(format!("No model weights found in {}", model_id)));
+            };
+            
+            (
+                config_path.to_string_lossy().to_string(),
+                tokenizer_path.to_string_lossy().to_string(),
+                weights_path.0,
+                weights_path.1
+            )
+        } else {
+            // HuggingFace Hub model
+            println!("Loading model from HuggingFace Hub: {}", model_id);
+            let repo = Repo::with_revision(
+                model_id.to_string(),
+                RepoType::Model,
+                "main".to_string(),
+            );
+
+            let api = Api::new()?;
+            let api = api.repo(repo);
+            let config = api.get("config.json")?;
+            let tokenizer = api.get("tokenizer.json")?;
+
+            // Try safetensors first, fall back to PyTorch
+            let (weights, use_pth) = match api.get("model.safetensors") {
+                Ok(weights) => (weights, false),
+                Err(_) => {
+                    println!("Safetensors model not found, trying PyTorch model instead...");
+                    (api.get("pytorch_model.bin")?, true)
+                }
+            };
+
+            (
+                config.to_string_lossy().to_string(),
+                tokenizer.to_string_lossy().to_string(),
+                weights.to_string_lossy().to_string(),
+                use_pth
+            )
+        };
+
+        let config = std::fs::read_to_string(config_filename)?;
+        let mut config: Config = serde_json::from_str(&config)?;
+        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+
+        // Use approximate GELU for better performance
+        config.hidden_act = HiddenAct::GeluApproximate;
+
+        let vb = if use_pth {
+            VarBuilder::from_pth(&weights_filename, DTYPE, &device)?
+        } else {
+            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], DTYPE, &device)? }
+        };
+
+        println!("Successfully loaded transformer model");
+        let model = BertModel::load(vb.clone(), &config)?;
+        println!("Successfully initialized BERT model instance");
+
+        // Create a classification head
+        // For SentenceTransformer models, we need to load the Dense layer weights from 2_Dense
+        let (w, b) = if is_sentence_transformer {
+            // Load the dense layer weights from 2_Dense
+            let dense_dir = Path::new(model_id).join("2_Dense");
+            println!("Looking for dense weights in {}", dense_dir.display());
+            
+            let dense_config_path = dense_dir.join("config.json");
+            
+            if dense_config_path.exists() {
+                println!("Found dense config at {}", dense_config_path.display());
+                let dense_config = std::fs::read_to_string(dense_config_path)?;
+                let dense_config: serde_json::Value = serde_json::from_str(&dense_config)?;
+                
+                // Get dimensions from the config
+                let in_features = dense_config["in_features"].as_i64().unwrap_or(768) as usize;
+                let out_features = dense_config["out_features"].as_i64().unwrap_or(num_classes as i64) as usize;
+                
+                println!("Dense layer dimensions: in_features={}, out_features={}", in_features, out_features);
+                
+                // Try to load dense weights from safetensors or pytorch files
+                let weights_path = if dense_dir.join("model.safetensors").exists() {
+                    println!("Found dense safetensors weights");
+                    (dense_dir.join("model.safetensors").to_string_lossy().to_string(), false)
+                } else if dense_dir.join("pytorch_model.bin").exists() {
+                    println!("Found dense PyTorch weights");
+                    (dense_dir.join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                } else {
+                    return Err(E::msg(format!("No dense layer weights found in {}", dense_dir.display())));
+                };
+                
+                // Load the weights
+                let dense_vb = if weights_path.1 {
+                    VarBuilder::from_pth(&weights_path.0, DType::F32, &device)?
+                } else {
+                    unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path.0], DType::F32, &device)? }
+                };
+                
+                // Get the weight and bias tensors - PyTorch uses [out_features, in_features] format
+                let weight = dense_vb.get((out_features, in_features), "linear.weight")?;
+                // Transpose the weight matrix to match our expected format [in_features, out_features]
+                let weight = weight.t()?;
+                let bias = dense_vb.get(out_features, "linear.bias")?;
+                println!("Successfully loaded dense layer weights");
+                
+                (weight, bias)
+            } else {
+                // Fallback: create random weights as before
+                println!("No dense config found, using random weights");
+                let hidden_size = config.hidden_size;
+                let w = Tensor::randn(0.0, 0.02, (hidden_size, num_classes), &device)?;
+                let b = Tensor::zeros((num_classes,), DType::F32, &device)?;
+                (w, b)
+            }
+        } else {
+            // Regular BERT model: create random weights
+            let hidden_size = config.hidden_size;
+            let w = Tensor::randn(0.0, 0.02, (hidden_size, num_classes), &device)?;
+            let b = Tensor::zeros((num_classes,), DType::F32, &device)?;
+            (w, b)
+        };
+        
+        let classification_head = Linear::new(w, Some(b));
+        println!("Linear classification head created");
+
+        Ok(Self {
+            model,
+            tokenizer,
+            classification_head,
+            num_classes,
+            device,
+        })
+    }
+
+    pub fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
+        // Encode the text with the tokenizer
+        let encoding = self.tokenizer
+            .encode(text, true)
+            .map_err(E::msg)?;
+        
+        let token_ids = encoding.get_ids().to_vec();
+        let attention_mask = encoding.get_attention_mask().to_vec();
+        let token_ids_tensor = Tensor::new(&token_ids[..], &self.device)?.unsqueeze(0)?;
+        let token_type_ids = token_ids_tensor.zeros_like()?;
+        let attention_mask_tensor = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
+        
+        // Run the text through BERT
+        let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, Some(&attention_mask_tensor))?;
+        
+        // Implement proper mean pooling for SentenceTransformer
+        // Sum over token dimension (dim=1) and divide by attention mask sum to get mean
+        let embedding_sum = embeddings.sum(1)?;
+        let attention_mask_sum = attention_mask_tensor.to_dtype(embeddings.dtype())?.sum(1)?;
+        let pooled_embedding = embedding_sum.broadcast_div(&attention_mask_sum)?;
+        
+        // Get the dimensions and convert to the right type
+        let pooled_embedding = pooled_embedding.to_dtype(DType::F32)?;
+        
+        // Apply the linear layer (classification head) manually
+        let weights = self.classification_head.weight().to_dtype(DType::F32)?;
+        let bias = self.classification_head.bias().unwrap().to_dtype(DType::F32)?;
+        
+        // Use matmul with the weights matrix
+        // If weights are already transposed to [in_features, out_features]
+        let logits = pooled_embedding.matmul(&weights)?;
+        
+        // Add bias
+        let logits = logits.broadcast_add(&bias)?;
+        
+        // If logits has shape [1, num_classes], squeeze it to get [num_classes]
+        let logits = if logits.dims().len() > 1 {
+            logits.squeeze(0)?
+        } else {
+            logits
+        };
+        
+        // Apply softmax to get probabilities
+        let logits_vec = logits.to_vec1::<f32>()?;
+        let max_logit = logits_vec.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let exp_values: Vec<f32> = logits_vec.iter().map(|&x| (x - max_logit).exp()).collect();
+        let exp_sum: f32 = exp_values.iter().sum();
+        let probabilities: Vec<f32> = exp_values.iter().map(|&x| x / exp_sum).collect();
+        
+        // Get the predicted class with highest probability
+        let (predicted_idx, &max_prob) = probabilities.iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or((0, &0.0));
+        
+        // Ensure we don't return a class index outside our expected range
+        if predicted_idx >= self.num_classes {
+            return Err(E::msg(format!(
+                "Invalid class index: {} (num_classes: {})",
+                predicted_idx, self.num_classes
+            )));
+        }
+        
+        Ok((predicted_idx, max_prob))
     }
 }
 
@@ -515,4 +808,74 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
 fn normalize_l2(v: &Tensor) -> Result<Tensor> {
     let norm = v.sqr()?.sum_keepdim(1)?.sqrt()?;
     Ok(v.broadcast_div(&norm)?)
+}
+
+// New structure to hold classification result
+#[repr(C)]
+pub struct ClassificationResult {
+    pub class: i32,
+    pub confidence: f32,
+}
+
+// Initialize the BERT classifier model (called from Go)
+#[no_mangle]
+pub extern "C" fn init_classifier(model_id: *const c_char, num_classes: i32, use_cpu: bool) -> bool {
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    // Ensure num_classes is valid
+    if num_classes < 2 {
+        eprintln!("Number of classes must be at least 2, got {}", num_classes);
+        return false;
+    }
+
+    match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
+        Ok(classifier) => {
+            let mut bert_opt = BERT_CLASSIFIER.lock().unwrap();
+            *bert_opt = Some(classifier);
+            true
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize BERT classifier: {}", e);
+            false
+        }
+    }
+}
+
+// Classify text using BERT (called from Go)
+#[no_mangle]
+pub extern "C" fn classify_text(text: *const c_char) -> ClassificationResult {
+    let default_result = ClassificationResult {
+        class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    let bert_opt = BERT_CLASSIFIER.lock().unwrap();
+    match &*bert_opt {
+        Some(classifier) => match classifier.classify_text(text) {
+            Ok((class_idx, confidence)) => ClassificationResult {
+                class: class_idx as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("Error classifying text: {}", e);
+                default_result
+            }
+        },
+        None => {
+            eprintln!("BERT classifier not initialized");
+            default_result
+        }
+    }
 } 

@@ -16,6 +16,8 @@ extern bool init_similarity_model(const char* model_id, bool use_cpu);
 
 extern float calculate_similarity(const char* text1, const char* text2, int max_length);
 
+extern bool init_classifier(const char* model_id, int num_classes, bool use_cpu);
+
 // Similarity result structure
 typedef struct {
     int index;
@@ -37,19 +39,28 @@ typedef struct {
     bool error;
 } TokenizationResult;
 
+// Classification result structure
+typedef struct {
+    int class;
+    float confidence;
+} ClassificationResult;
+
 extern SimilarityResult find_most_similar(const char* query, const char** candidates, int num_candidates, int max_length);
 extern EmbeddingResult get_text_embedding(const char* text, int max_length);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
+extern ClassificationResult classify_text(const char* text);
 */
 import "C"
 
 var (
-	initOnce         sync.Once
-	initErr          error
-	modelInitialized bool
+	initOnce           sync.Once
+	initErr            error
+	modelInitialized   bool
+	classifierInitOnce sync.Once
+	classifierInitErr  error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -62,6 +73,12 @@ type TokenizeResult struct {
 type SimResult struct {
 	Index int     // Index of the most similar text
 	Score float32 // Similarity score
+}
+
+// ClassResult represents the result of a text classification
+type ClassResult struct {
+	Class      int     // Class index
+	Confidence float32 // Confidence score
 }
 
 // InitModel initializes the BERT model with the specified model ID
@@ -262,4 +279,49 @@ func SetMemoryCleanupHandler() {
 // IsModelInitialized returns whether the model has been successfully initialized
 func IsModelInitialized() bool {
 	return modelInitialized
+}
+
+// InitClassifier initializes the BERT classifier with the specified model path and number of classes
+func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
+	var err error
+	classifierInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default to BERT base model if path is empty
+			modelPath = "bert-base-uncased"
+		}
+
+		if numClasses < 2 {
+			err = fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
+			return
+		}
+
+		fmt.Println("Initializing classifier model:", modelPath)
+
+		// Initialize classifier directly using CGO
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_classifier(cModelID, C.int(numClasses), C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize classifier model")
+		}
+	})
+	return err
+}
+
+// ClassifyText classifies the provided text and returns the predicted class and confidence
+func ClassifyText(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
 }

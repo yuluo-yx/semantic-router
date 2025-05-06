@@ -87,6 +87,12 @@ else
 		cd candle-binding && CGO_ENABLED=1 go test -v
 endif
 
+# Test with the candle-binding library
+test-classifier: rust
+	@echo "Testing domain classifier with candle-binding..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		cd classifier_model_fine_tuning && CGO_ENABLED=1 go run test_linear_classifier.go
+
 # Test the Rust library and the Go binding
 test: test-binding
 

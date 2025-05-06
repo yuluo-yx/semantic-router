@@ -3,6 +3,7 @@ package candle_binding
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -326,4 +327,91 @@ func checkGPUAvailability(t *testing.T) bool {
 
 	t.Log("GPU is available and working")
 	return true
+}
+
+func TestClassifyText(t *testing.T) {
+	// Number of classes for our test classifier (e.g., sentiment: negative, neutral, positive)
+	const NUM_CLASSES = 3
+
+	// Initialize the classifier model.
+	// Note this model is not fined tuned for sentiment analysis. The actual results may not be as expected.
+	err := InitClassifier("sentence-transformers/all-MiniLM-L12-v2", NUM_CLASSES, true) // Use CPU for testing
+	if err != nil {
+		t.Fatalf("Failed to initialize BERT classifier: %v", err)
+	}
+
+	testCases := []struct {
+		name string
+		text string
+	}{
+		{
+			name: "Positive sentiment",
+			text: "I love this product, it's amazing!",
+		},
+		{
+			name: "Negative sentiment",
+			text: "This is the worst experience I've ever had.",
+		},
+		{
+			name: "Neutral statement",
+			text: "The weather today is partly cloudy with a chance of rain.",
+		},
+		{
+			name: "Technical description",
+			text: "This model uses transformer architecture with self-attention mechanism.",
+		},
+		{
+			name: "Question",
+			text: "How does the classification system determine sentiment?",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ClassifyText(tc.text)
+			if err != nil {
+				t.Fatalf("Classification failed: %v", err)
+			}
+
+			// Check that the class index is within the expected range
+			// But ignore the result as the model is not fine tuned for sentiment analysis
+			if result.Class < 0 || result.Class >= NUM_CLASSES {
+				t.Errorf("Expected class index between 0 and %d, got %d", NUM_CLASSES-1, result.Class)
+			}
+
+			// Check that the confidence score is between 0 and 1
+			if result.Confidence < 0.0 || result.Confidence > 1.0 {
+				t.Errorf("Expected confidence score between 0.0 and 1.0, got %f", result.Confidence)
+			}
+
+			t.Logf("Text: '%s', Classified as: %d, Confidence: %.4f", tc.text, result.Class, result.Confidence)
+		})
+	}
+
+	// Test consistency for the same text
+	t.Run("Consistency", func(t *testing.T) {
+		text := "This is a test sentence for classification."
+
+		result1, err := ClassifyText(text)
+		if err != nil {
+			t.Fatalf("First classification failed: %v", err)
+		}
+
+		result2, err := ClassifyText(text)
+		if err != nil {
+			t.Fatalf("Second classification failed: %v", err)
+		}
+
+		// Same text should be classified into the same class
+		if result1.Class != result2.Class {
+			t.Errorf("Expected same class for identical text, got %d and %d", result1.Class, result2.Class)
+		}
+
+		// Confidence scores should be very close
+		confidenceDiff := math.Abs(float64(result1.Confidence - result2.Confidence))
+		if confidenceDiff > 1e-4 {
+			t.Errorf("Expected similar confidence scores, got %f and %f (diff: %f)",
+				result1.Confidence, result2.Confidence, confidenceDiff)
+		}
+	})
 }
