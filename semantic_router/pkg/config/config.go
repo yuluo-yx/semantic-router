@@ -17,7 +17,15 @@ type RouterConfig struct {
 		UseCPU    bool    `yaml:"use_cpu"`
 	} `yaml:"bert_model"`
 
-	// Categories of tasks for routing
+	// Classifier configuration for text classification
+	Classifier struct {
+		ModelID             string  `yaml:"model_id"`
+		Threshold           float32 `yaml:"threshold"`
+		UseCPU              bool    `yaml:"use_cpu"`
+		CategoryMappingPath string  `yaml:"category_mapping_path"`
+	} `yaml:"classifier"`
+
+	// Categories for routing queries
 	Categories []Category `yaml:"categories"`
 
 	// Default LLM model to use if no match is found
@@ -51,20 +59,11 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	return c.BertModel.Threshold
 }
 
-// Category represents a category of tasks
+// Category represents a category for routing queries
 type Category struct {
-	Name        string      `yaml:"name"`
-	Description string      `yaml:"description,omitempty"`
-	Model       string      `yaml:"model"` // LLM model name like "llama3-70b", "gpt-4o", etc.
-	Tasks       []TaskEntry `yaml:"tasks,omitempty"`
-}
-
-// TaskEntry represents a task description and its associated typical prompt
-type TaskEntry struct {
-	Name          string `yaml:"name"`
-	Description   string `yaml:"description,omitempty"`
-	TypicalPrompt string `yaml:"typical_prompt,omitempty"`
-	Model         string `yaml:"model,omitempty"` // Optional override of category LLM model
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description,omitempty"`
+	Models      []string `yaml:"models"` // Ranked list of LLM models
 }
 
 var (
@@ -100,40 +99,31 @@ func GetConfig() *RouterConfig {
 	return config
 }
 
-// GetTaskDescriptions returns all task descriptions for similarity matching
-func (c *RouterConfig) GetTaskDescriptions() []string {
+// GetCategoryDescriptions returns all category descriptions for similarity matching
+func (c *RouterConfig) GetCategoryDescriptions() []string {
 	var descriptions []string
 	for _, category := range c.Categories {
-		for _, task := range category.Tasks {
-			descriptions = append(descriptions, task.Description)
+		if category.Description != "" {
+			descriptions = append(descriptions, category.Description)
+		} else {
+			// Use category name if no description is available
+			descriptions = append(descriptions, category.Name)
 		}
 	}
 	return descriptions
 }
 
-// GetModelForTaskIndex returns the LLM model name for a task at the given index
-func (c *RouterConfig) GetModelForTaskIndex(index int) string {
-	if index < 0 {
+// GetModelForCategoryIndex returns the best LLM model name for the category at the given index
+func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
+	if index < 0 || index >= len(c.Categories) {
 		return c.DefaultModel
 	}
 
-	count := 0
-	for _, category := range c.Categories {
-		for _, task := range category.Tasks {
-			if count == index {
-				// If task has a specific model, use it
-				if task.Model != "" {
-					return task.Model
-				}
-				// Otherwise, use the category's model
-				if category.Model != "" {
-					return category.Model
-				}
-				// Fall back to default model
-				return c.DefaultModel
-			}
-			count++
-		}
+	category := c.Categories[index]
+	if len(category.Models) > 0 {
+		return category.Models[0]
 	}
+
+	// Fall back to default model if category has no models
 	return c.DefaultModel
 }

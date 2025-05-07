@@ -32,9 +32,10 @@ var (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests
 type OpenAIRouter struct {
-	Config           *config.RouterConfig
-	TaskDescriptions []string
-	Cache            *cache.SemanticCache
+	Config               *config.RouterConfig
+	CategoryDescriptions []string
+	CategoryMapping      *CategoryMapping
+	Cache                *cache.SemanticCache
 	// Map to track pending requests and their unique IDs
 	pendingRequests     map[string][]byte
 	pendingRequestsLock sync.Mutex
@@ -53,17 +54,49 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 
+	// Load category mapping if classifier is enabled
+	var categoryMapping *CategoryMapping
+	if cfg.Classifier.CategoryMappingPath != "" {
+		categoryMapping, err = LoadCategoryMapping(cfg.Classifier.CategoryMappingPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load category mapping: %w", err)
+		}
+		log.Printf("Loaded category mapping with %d categories", len(categoryMapping.CategoryToIdx))
+	}
+
 	if !initialized {
-		// Initialize the BERT model
+		// Initialize the BERT model for similarity search
 		err = candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
 		}
+
+		// Initialize the classifier model if enabled
+		if categoryMapping != nil {
+			// Get the number of categories from the mapping
+			numClasses := len(categoryMapping.CategoryToIdx)
+			if numClasses < 2 {
+				log.Printf("Warning: Not enough categories for classification, need at least 2, got %d", numClasses)
+			} else {
+				// Use the same model or a specific classifier model
+				classifierModelID := cfg.Classifier.ModelID
+				if classifierModelID == "" {
+					classifierModelID = cfg.BertModel.ModelID
+				}
+
+				err = candle_binding.InitClassifier(classifierModelID, numClasses, cfg.Classifier.UseCPU)
+				if err != nil {
+					return nil, fmt.Errorf("failed to initialize classifier model: %w", err)
+				}
+				log.Printf("Initialized classifier with %d categories", numClasses)
+			}
+		}
+
 		initialized = true
 	}
 
-	taskDescriptions := cfg.GetTaskDescriptions()
-	log.Printf("Task descriptions: %v", taskDescriptions)
+	categoryDescriptions := cfg.GetCategoryDescriptions()
+	log.Printf("Category descriptions: %v", categoryDescriptions)
 
 	// Create semantic cache with config options
 	cacheOptions := cache.SemanticCacheOptions{
@@ -82,10 +115,11 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	return &OpenAIRouter{
-		Config:           cfg,
-		TaskDescriptions: taskDescriptions,
-		Cache:            semanticCache,
-		pendingRequests:  make(map[string][]byte),
+		Config:               cfg,
+		CategoryDescriptions: categoryDescriptions,
+		CategoryMapping:      categoryMapping,
+		Cache:                semanticCache,
+		pendingRequests:      make(map[string][]byte),
 	}, nil
 }
 
@@ -260,57 +294,65 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			// so we only use non-user messages (aka system, assistant, etc)
 			// If there are non-user messages, use BERT to find the best model
 			actualModel := originalModel
-			if len(nonUserMessages) > 0 && userContent != "" {
-				// Add all non-user messages to get context
-				nonUserContent := strings.Join(nonUserMessages, " ")
+			if len(nonUserMessages) > 0 || userContent != "" {
+				// Determine text to use for classification/similarity
+				var classificationText string
+				if len(userContent) > 0 {
+					classificationText = userContent
+				} else if len(nonUserMessages) > 0 {
+					// Fall back to user content if no system/assistant messages
+					classificationText = strings.Join(nonUserMessages, " ")
+				}
 
-				// Find the most similar task description
-				matchedModel := r.findBestModelMatch(nonUserContent)
-				if matchedModel != originalModel && matchedModel != "" {
-					log.Printf("Routing to model: %s", matchedModel)
+				if classificationText != "" {
+					// Find the most similar task description or classify
+					matchedModel := r.findBestModelMatch(classificationText)
+					if matchedModel != originalModel && matchedModel != "" {
+						log.Printf("Routing to model: %s", matchedModel)
 
-					// Track the model routing change
-					metrics.RecordModelRouting(originalModel, matchedModel)
+						// Track the model routing change
+						metrics.RecordModelRouting(originalModel, matchedModel)
 
-					// Update the actual model that will be used
-					actualModel = matchedModel
+						// Update the actual model that will be used
+						actualModel = matchedModel
 
-					// Modify the model in the request
-					openAIRequest.Model = matchedModel
+						// Modify the model in the request
+						openAIRequest.Model = matchedModel
 
-					// Serialize the modified request
-					modifiedBody, err := json.Marshal(openAIRequest)
-					if err != nil {
-						log.Printf("Error serializing modified request: %v", err)
-						return status.Errorf(codes.Internal, "error serializing modified request: %v", err)
-					}
+						// Serialize the modified request
+						modifiedBody, err := json.Marshal(openAIRequest)
+						if err != nil {
+							log.Printf("Error serializing modified request: %v", err)
+							return status.Errorf(codes.Internal, "error serializing modified request: %v", err)
+						}
 
-					// Create body mutation with the modified body
-					bodyMutation := &ext_proc.BodyMutation{
-						Mutation: &ext_proc.BodyMutation_Body{
-							Body: modifiedBody,
-						},
-					}
+						// Create body mutation with the modified body
+						bodyMutation := &ext_proc.BodyMutation{
+							Mutation: &ext_proc.BodyMutation_Body{
+								Body: modifiedBody,
+							},
+						}
 
-					// Also create a header mutation to remove the original content-length
-					headerMutation := &ext_proc.HeaderMutation{
-						RemoveHeaders: []string{"content-length"},
-					}
+						// Also create a header mutation to remove the original content-length
+						headerMutation := &ext_proc.HeaderMutation{
+							RemoveHeaders: []string{"content-length"},
+						}
 
-					// Set the response with both mutations
-					response = &ext_proc.ProcessingResponse{
-						Response: &ext_proc.ProcessingResponse_RequestBody{
-							RequestBody: &ext_proc.BodyResponse{
-								Response: &ext_proc.CommonResponse{
-									Status:         ext_proc.CommonResponse_CONTINUE,
-									HeaderMutation: headerMutation,
-									BodyMutation:   bodyMutation,
+						// Set the response with both mutations
+						response = &ext_proc.ProcessingResponse{
+							Response: &ext_proc.ProcessingResponse_RequestBody{
+								RequestBody: &ext_proc.BodyResponse{
+									Response: &ext_proc.CommonResponse{
+										Status:         ext_proc.CommonResponse_CONTINUE,
+										HeaderMutation: headerMutation,
+										BodyMutation:   bodyMutation,
+									},
 								},
 							},
-						},
-					}
+						}
 
-					log.Printf("Use new model: %s", matchedModel)
+						log.Printf("Use new model: %s", matchedModel)
+					}
 				}
 			}
 
@@ -421,25 +463,54 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	}
 }
 
-// Find the best model match using similarity search
+// Find the best model match using classification
 func (r *OpenAIRouter) findBestModelMatch(query string) string {
-	if len(r.TaskDescriptions) == 0 {
+	if len(r.CategoryDescriptions) == 0 {
 		return r.Config.DefaultModel
 	}
 
-	// Use BERT to find the most similar task description
-	result := candle_binding.FindMostSimilarDefault(query, r.TaskDescriptions)
-	log.Printf("Similarity search result: index=%d, score=%.4f", result.Index, result.Score)
+	if r.CategoryMapping != nil {
+		// Use BERT classifier to get the category index and confidence
+		result, err := candle_binding.ClassifyText(query)
+		if err != nil {
+			log.Printf("Classification error: %v, falling back to default model", err)
+			return r.Config.DefaultModel
+		}
 
-	if result.Index < 0 || result.Score < r.Config.BertModel.Threshold {
-		log.Printf("Using default model: %s", r.Config.DefaultModel)
+		log.Printf("Classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
+
+		// Check confidence threshold
+		if result.Confidence < r.Config.Classifier.Threshold {
+			log.Printf("Classification confidence (%.4f) below threshold (%.4f), using default model",
+				result.Confidence, r.Config.Classifier.Threshold)
+			return r.Config.DefaultModel
+		}
+
+		// Convert class index to category name
+		categoryName, ok := r.CategoryMapping.IdxToCategory[fmt.Sprintf("%d", result.Class)]
+		if !ok {
+			log.Printf("Class index %d not found in category mapping, using default model", result.Class)
+			return r.Config.DefaultModel
+		}
+
+		log.Printf("Classified as category: %s", categoryName)
+
+		// Find the category index in the config
+		for i, category := range r.Config.Categories {
+			if strings.EqualFold(category.Name, categoryName) {
+				// Get the model for this category
+				model := r.Config.GetModelForCategoryIndex(i)
+				log.Printf("Found matching model via classification: %s", model)
+				return model
+			}
+		}
+
+		// If we couldn't find a matching category, use default model
+		log.Printf("Could not find matching category %s in config, using default model", categoryName)
 		return r.Config.DefaultModel
 	}
 
-	// Get the model for the matched task
-	model := r.Config.GetModelForTaskIndex(result.Index)
-	log.Printf("Found matching model: %s", model)
-	return model
+	return r.Config.DefaultModel
 }
 
 // OpenAIRequest represents an OpenAI API request
@@ -566,4 +637,27 @@ func (s *Server) Stop() {
 		s.server.GracefulStop()
 		log.Println("Server stopped")
 	}
+}
+
+// CategoryMapping holds the mapping between indices and domain categories
+type CategoryMapping struct {
+	CategoryToIdx map[string]int    `json:"category_to_idx"`
+	IdxToCategory map[string]string `json:"idx_to_category"`
+}
+
+// LoadCategoryMapping loads the category mapping from a JSON file
+func LoadCategoryMapping(path string) (*CategoryMapping, error) {
+	// Read the mapping file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read mapping file: %w", err)
+	}
+
+	// Parse the JSON data
+	var mapping CategoryMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		return nil, fmt.Errorf("failed to parse mapping JSON: %w", err)
+	}
+
+	return &mapping, nil
 }

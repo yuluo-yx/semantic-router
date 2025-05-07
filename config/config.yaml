@@ -1,42 +1,89 @@
-# BERT model configuration for semantic similarity
 bert_model:
-  #model_id: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-  model_id: "sentence-transformers/all-MiniLM-L12-v2"
+  model_id: sentence-transformers/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
 
-default_model: "mistral-small3.1"
+# Classifier configuration for text classification
+classifier:
+  model_id: "classifier_model_fine_tuning/category_classifier_linear_model"
+  threshold: 0.7
+  use_cpu: true
+  category_mapping_path: "config/category_mapping.json"
 
-# Categories and tasks for model routing
-categories:
-  - name: "STEM"
-    description: "Science, Technology, Engineering, and Mathematics topics"
-    model: "phi4:latest"
-    tasks:
-      - name: "Mathematics"
-        description: "Mathematical problems, calculations, and theorems"
-        typical_prompt: "You are a math professional. Explain math concepts clearly and show step-by-step solutions to problems."
-      - name: "Physics"
-        description: "Physics principles, problems, and phenomena explanations"
-        typical_prompt: "You are a physics professional. Explain physics concepts in simple terms with examples that are easy to understand."
-      - name: "Computer Science"
-        description: "Computer algorithms, data structures, and computational problems"
-        typical_prompt: "You are a computer science professional. Explain coding concepts and algorithms in simple terms. Show examples when needed."
-
-  - name: "Creative Tasks"
-    description: "Writing, art, music, and creative expression"
-    model: "gemma3:27b"
-    tasks:
-      - name: "Story Writing"
-        description: "Generate creative narratives and fictional content"
-        typical_prompt: "You are a story writer. Create interesting stories with good characters and settings."
-      - name: "Brainstorming"
-        description: "Generate creative ideas for projects, marketing, or problem solving"
-        typical_prompt: "You are an idea generator. Come up with creative ideas for different projects and problems."
-
-# Semantic cache configuration
 semantic_cache:
   enabled: true
-  similarity_threshold: 0.80 
+  similarity_threshold: 0.8
   max_entries: 1000
   ttl_seconds: 3600
+categories:
+- name: business
+  models:
+  - phi4
+  - gemma3
+  - mistral-small3.1
+- name: law
+  models:
+  - gemma3
+  - phi4
+  - mistral-small3.1
+- name: psychology
+  models:
+  - mistral-small3.1
+  - gemma3
+  - phi4
+- name: biology
+  models:
+  - mistral-small3.1
+  - gemma3
+  - phi4
+- name: chemistry
+  models:
+  - mistral-small3.1
+  - gemma3
+  - phi4
+- name: history
+  models:
+  - mistral-small3.1
+  - phi4
+  - gemma3
+- name: other
+  models:
+  - gemma3
+  - phi4
+  - mistral-small3.1
+- name: health
+  models:
+  - gemma3
+  - phi4
+  - mistral-small3.1
+- name: economics
+  models:
+  - gemma3
+  - mistral-small3.1
+  - phi4
+- name: math
+  models:
+  - phi4
+  - mistral-small3.1
+  - gemma3
+- name: physics
+  models:
+  - gemma3
+  - phi4
+  - mistral-small3.1
+- name: computer science
+  models:
+  - gemma3
+  - mistral-small3.1
+  - phi4
+- name: philosophy
+  models:
+  - phi4
+  - gemma3
+  - mistral-small3.1
+- name: engineering
+  models:
+  - gemma3
+  - mistral-small3.1
+  - phi4
+default_model: mistral-small3.1

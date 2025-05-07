@@ -100,5 +100,5 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 192.168.12.175
+                address: 192.168.12.90
                 port_value: 11434
