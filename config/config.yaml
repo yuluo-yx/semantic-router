@@ -6,7 +6,7 @@ bert_model:
 # Classifier configuration for text classification
 classifier:
   model_id: "classifier_model_fine_tuning/category_classifier_linear_model"
-  threshold: 0.7
+  threshold: 0.2
   use_cpu: true
   category_mapping_path: "config/category_mapping.json"
 
@@ -19,71 +19,71 @@ categories:
 - name: business
   models:
   - phi4
-  - gemma3
+  - gemma3:27b
   - mistral-small3.1
 - name: law
   models:
-  - gemma3
+  - gemma3:27b
   - phi4
   - mistral-small3.1
 - name: psychology
   models:
   - mistral-small3.1
-  - gemma3
+  - gemma3:27b
   - phi4
 - name: biology
   models:
   - mistral-small3.1
-  - gemma3
+  - gemma3:27b
   - phi4
 - name: chemistry
   models:
   - mistral-small3.1
-  - gemma3
+  - gemma3:27b
   - phi4
 - name: history
   models:
   - mistral-small3.1
   - phi4
-  - gemma3
+  - gemma3:27b
 - name: other
   models:
-  - gemma3
+  - gemma3:27b
   - phi4
   - mistral-small3.1
 - name: health
   models:
-  - gemma3
+  - gemma3:27b
   - phi4
   - mistral-small3.1
 - name: economics
   models:
-  - gemma3
+  - gemma3:27b
   - mistral-small3.1
   - phi4
 - name: math
   models:
   - phi4
   - mistral-small3.1
-  - gemma3
+  - gemma3:27b
 - name: physics
   models:
-  - gemma3
+  - gemma3:27b
   - phi4
   - mistral-small3.1
 - name: computer science
   models:
-  - gemma3
+  - gemma3:27b
   - mistral-small3.1
   - phi4
 - name: philosophy
   models:
   - phi4
-  - gemma3
+  - gemma3:27b
   - mistral-small3.1
 - name: engineering
   models:
-  - gemma3
+  - gemma3:27b
   - mistral-small3.1
   - phi4
 default_model: mistral-small3.1

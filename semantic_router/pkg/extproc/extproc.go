@@ -290,11 +290,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				},
 			}
 
-			// The user content could be very long and not relevant to the task,
-			// so we only use non-user messages (aka system, assistant, etc)
-			// If there are non-user messages, use BERT to find the best model
+			// Only change the model if the original model is "auto"
 			actualModel := originalModel
-			if len(nonUserMessages) > 0 || userContent != "" {
+			if originalModel == "auto" && (len(nonUserMessages) > 0 || userContent != "") {
 				// Determine text to use for classification/similarity
 				var classificationText string
 				if len(userContent) > 0 {
