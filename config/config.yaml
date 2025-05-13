@@ -2,89 +2,150 @@ bert_model:
   model_id: sentence-transformers/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
-
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+gpu_config:
+  flops: 312000000000000  # 312e12 fp16
+  hbm: 2000000000000      # 2e12 (2 TB/s)
+  description: "A100-80G" # https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf
+model_config:
+  phi4:
+    param_count: 14000000000  # 14B parameters https://huggingface.co/microsoft/phi-4
+    batch_size: 512.0  # vLLM default batch size
+    context_size: 16384.0 # based on https://huggingface.co/microsoft/phi-4
+  "gemma3:27b:27b":
+    param_count: 27000000000  # 27B parameters
+    batch_size: 512.0  # vLLM default batch size
+    context_size: 16384.0
+  gemma3:27b:
+    param_count: 27000000000  # 27B parameters (base version)
+    batch_size: 512.0
+    context_size: 16384.0
+  "mistral-small3.1":
+    param_count: 22000000000
+    batch_size: 512.0
+    context_size: 16384.0
 # Classifier configuration for text classification
 classifier:
   model_id: "classifier_model_fine_tuning/category_classifier_linear_model"
   threshold: 0.1
   use_cpu: true
-  category_mapping_path: "config/category_mapping.json"
-
-semantic_cache:
-  enabled: false
-  similarity_threshold: 0.8
-  max_entries: 1000
-  ttl_seconds: 3600
-
+  load_aware: false
+  category_mapping_path: "config/category_mapping.json"    
 categories:
 - name: business
-  models:
-  - phi4
-  - gemma3:27b
-  - mistral-small3.1
+  model_scores:
+  - model: phi4
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.4
+  - model: mistral-small3.1
+    score: 0.2
 - name: law
-  models:
-  - gemma3:27b
-  - phi4
-  - mistral-small3.1
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: phi4
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.4
 - name: psychology
-  models:
-  - mistral-small3.1
-  - gemma3:27b
-  - phi4
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.6
+  - model: gemma3:27b
+    score: 0.4
+  - model: phi4
+    score: 0.4
 - name: biology
-  models:
-  - mistral-small3.1
-  - gemma3:27b
-  - phi4
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.6
+  - model: phi4
+    score: 0.2
 - name: chemistry
-  models:
-  - mistral-small3.1
-  - gemma3:27b
-  - phi4
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.6
+  - model: phi4
+    score: 0.6
 - name: history
-  models:
-  - mistral-small3.1
-  - phi4
-  - gemma3:27b
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.8
+  - model: phi4
+    score: 0.6
+  - model: gemma3:27b
+    score: 0.4
 - name: other
-  models:
-  - gemma3:27b
-  - phi4
-  - mistral-small3.1
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: phi4
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.6
 - name: health
-  models:
-  - gemma3:27b
-  - phi4
-  - mistral-small3.1
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: phi4
+    score: 0.8
+  - model: mistral-small3.1
+    score: 0.6
 - name: economics
-  models:
-  - gemma3:27b
-  - mistral-small3.1
-  - phi4
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: mistral-small3.1
+    score: 0.8
+  - model: phi4
+    score: 0.0
 - name: math
-  models:
-  - phi4
-  - mistral-small3.1
-  - gemma3:27b
+  model_scores:
+  - model: phi4
+    score: 1.0
+  - model: mistral-small3.1
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.6
 - name: physics
-  models:
-  - gemma3:27b
-  - phi4
-  - mistral-small3.1
+  model_scores:
+  - model: gemma3:27b
+    score: 0.4
+  - model: phi4
+    score: 0.4
+  - model: mistral-small3.1
+    score: 0.4
 - name: computer science
-  models:
-  - gemma3:27b
-  - mistral-small3.1
-  - phi4
+  model_scores:
+  - model: gemma3:27b
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.6
+  - model: phi4
+    score: 0.0
 - name: philosophy
-  models:
-  - phi4
-  - gemma3:27b
-  - mistral-small3.1
+  model_scores:
+  - model: phi4
+    score: 0.6
+  - model: gemma3:27b
+    score: 0.2
+  - model: mistral-small3.1
+    score: 0.2
 - name: engineering
-  models:
-  - gemma3:27b
-  - mistral-small3.1
-  - phi4
+  model_scores:
+  - model: gemma3:27b
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.6
+  - model: phi4
+    score: 0.2
 default_model: mistral-small3.1

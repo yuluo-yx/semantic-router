@@ -77,6 +77,15 @@ var (
 			Help: "The total number of cache hits",
 		},
 	)
+
+	// CategoryClassifications tracks the number of times each category is classified
+	CategoryClassifications = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_category_classifications_total",
+			Help: "The total number of times each category is classified",
+		},
+		[]string{"category"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model
@@ -118,4 +127,9 @@ func RecordModelRoutingLatency(seconds float64) {
 // RecordCacheHit records a cache hit
 func RecordCacheHit() {
 	CacheHits.Inc()
+}
+
+// RecordCategoryClassification increments the gauge for a specific category classification
+func RecordCategoryClassification(category string) {
+	CategoryClassifications.WithLabelValues(category).Inc()
 }

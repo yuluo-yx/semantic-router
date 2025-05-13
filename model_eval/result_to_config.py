@@ -82,39 +82,52 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
             "max_entries": 1000,
             "ttl_seconds": 3600
         },
+        "classifier": {
+            "model_id": "classifier_model_fine_tuning/category_classifier_linear_model",
+            "threshold": 0.1,
+            "use_cpu": True,
+            "category_mapping_path": "config/category_mapping.json"
+        },
         "categories": []
     }
-    
-    # Get the best model overall to use as default
+
+    # Get the best model overall to use as default (excluding 'auto')
     all_models_avg = defaultdict(list)
     for category, models in category_accuracies.items():
         for model_name, accuracy in models.items():
-            all_models_avg[model_name].append(accuracy)
-    
+            base_model = model_name.split(":")[0]
+            if base_model != "auto":
+                all_models_avg[model_name].append(accuracy)
+
     # Calculate average accuracy across all categories
     model_avg_accuracies = {
-        model: sum(accuracies) / len(accuracies) 
+        model: sum(accuracies) / len(accuracies)
         for model, accuracies in all_models_avg.items()
     }
-    
+
     # Set default model to the one with highest average accuracy
     default_model = max(model_avg_accuracies, key=model_avg_accuracies.get)
     config["default_model"] = default_model.split(":")[0]  # Remove the approach suffix
-    
-    # Create category entries with ranked models
+
+    # Create category entries with ranked model-score pairs (excluding 'auto')
     for category, models in category_accuracies.items():
-        # Sort models by accuracy (descending)
-        ranked_models = sorted(models.items(), key=lambda x: x[1], reverse=True)
-        
-        # Extract just the model names without approach suffix for config
-        model_names = [model.split(":")[0] for model, _ in ranked_models]
-        
+        # Sort models by accuracy (descending), exclude 'auto'
+        ranked_models = [
+            (model.split(":")[0], acc)
+            for model, acc in sorted(models.items(), key=lambda x: x[1], reverse=True)
+            if model.split(":")[0] != "auto"
+        ]
+        # Build the model_scores list
+        model_scores = [
+            {"model": model, "score": float(acc)}
+            for model, acc in ranked_models
+        ]
         # Add category to config
         config["categories"].append({
             "name": category,
-            "models": model_names
+            "model_scores": model_scores
         })
-    
+
     return config
 
 
