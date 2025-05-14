@@ -25,7 +25,7 @@ def create_new_chat():
 with st.sidebar:
     st.title("Settings")
     api_endpoint = st.text_input("Semantic Router Endpoint", "http://localhost:8801/v1")
-    model = st.text_input("Model Name", "qwen2.5:32b")
+    model = st.text_input("Model Name", "auto")
     api_key = st.text_input("API Key (if required)", type="password")
     
     # System prompt input

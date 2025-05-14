@@ -83,7 +83,7 @@ func (c *SemanticCache) AddPendingRequest(model string, query string, requestBod
 	}
 
 	c.entries = append(c.entries, entry)
-	log.Printf("Added pending cache entry for: %s", query)
+	// log.Printf("Added pending cache entry for: %s", query)
 
 	// Enforce max entries limit if set
 	if c.maxEntries > 0 && len(c.entries) > c.maxEntries {
@@ -114,7 +114,7 @@ func (c *SemanticCache) UpdateWithResponse(query string, responseBody []byte) er
 			// Update with response
 			c.entries[i].ResponseBody = responseBody
 			c.entries[i].Timestamp = time.Now()
-			log.Printf("Cache entry updated: %s", query)
+			// log.Printf("Cache entry updated: %s", query)
 			return nil
 		}
 	}

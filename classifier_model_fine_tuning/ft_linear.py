@@ -77,7 +77,7 @@ train_samples = [(question, category) for question, category in zip(train_questi
 train_loss = ClassificationLoss(model)
 
 # Configure the training
-num_epochs = 2
+num_epochs = 8
 batch_size = 16
 train_examples = []
 for question, category_idx in train_samples:

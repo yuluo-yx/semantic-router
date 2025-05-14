@@ -39,6 +39,13 @@ type OpenAIRouter struct {
 	// Map to track pending requests and their unique IDs
 	pendingRequests     map[string][]byte
 	pendingRequestsLock sync.Mutex
+
+	// Model load tracking: model name -> active request count
+	modelLoad     map[string]int
+	modelLoadLock sync.Mutex
+
+	// Model TTFT info: model name -> base TTFT (ms)
+	modelTTFT map[string]float64
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -114,13 +121,17 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		log.Println("Semantic cache is disabled")
 	}
 
-	return &OpenAIRouter{
+	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
 		CategoryMapping:      categoryMapping,
 		Cache:                semanticCache,
 		pendingRequests:      make(map[string][]byte),
-	}, nil
+		modelLoad:            make(map[string]int),
+		modelTTFT:            make(map[string]float64),
+	}
+	router.initModelTTFT()
+	return router, nil
 }
 
 // Send a response with proper error handling and logging
@@ -229,7 +240,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				if err != nil {
 					log.Printf("Error searching cache: %v", err)
 				} else if found {
-					log.Printf("Cache hit! Returning cached response for query: %s", requestQuery)
+					// log.Printf("Cache hit! Returning cached response for query: %s", requestQuery)
 
 					// Return immediate response from cache
 					immediateResponse := &ext_proc.ImmediateResponse{
@@ -275,7 +286,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 					r.pendingRequestsLock.Lock()
 					r.pendingRequests[requestID] = []byte(cacheID)
 					r.pendingRequestsLock.Unlock()
-					log.Printf("Added pending request with ID: %s, cacheID: %s", requestID, cacheID)
+					// log.Printf("Added pending request with ID: %s, cacheID: %s", requestID, cacheID)
 				}
 			}
 
@@ -303,10 +314,15 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				}
 
 				if classificationText != "" {
-					// Find the most similar task description or classify
-					matchedModel := r.findBestModelMatch(classificationText)
+					// Find the most similar task description or classify, then select best model
+					matchedModel := r.classifyAndSelectBestModel(classificationText)
 					if matchedModel != originalModel && matchedModel != "" {
 						log.Printf("Routing to model: %s", matchedModel)
+
+						// Track the model load for the selected model
+						r.modelLoadLock.Lock()
+						r.modelLoad[matchedModel]++
+						r.modelLoadLock.Unlock()
 
 						// Track the model routing change
 						metrics.RecordModelRouting(originalModel, matchedModel)
@@ -404,6 +420,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 					float64(completionTokens),
 				)
 				metrics.RecordModelCompletionLatency(requestModel, completionLatency.Seconds())
+				r.modelLoadLock.Lock()
+				if r.modelLoad[requestModel] > 0 {
+					r.modelLoad[requestModel]--
+				}
+				r.modelLoadLock.Unlock()
 			}
 
 			// Check if this request has a pending cache entry
@@ -461,12 +482,15 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	}
 }
 
-// Find the best model match using classification
-func (r *OpenAIRouter) findBestModelMatch(query string) string {
+// Choose best models based on category classification and model quality and expected TTFT
+func (r *OpenAIRouter) classifyAndSelectBestModel(query string) string {
+	// If no categories defined, return default model
 	if len(r.CategoryDescriptions) == 0 {
 		return r.Config.DefaultModel
 	}
 
+	// First, classify the text to determine the category
+	var categoryName string
 	if r.CategoryMapping != nil {
 		// Use BERT classifier to get the category index and confidence
 		result, err := candle_binding.ClassifyText(query)
@@ -485,30 +509,81 @@ func (r *OpenAIRouter) findBestModelMatch(query string) string {
 		}
 
 		// Convert class index to category name
-		categoryName, ok := r.CategoryMapping.IdxToCategory[fmt.Sprintf("%d", result.Class)]
+		var ok bool
+		categoryName, ok = r.CategoryMapping.IdxToCategory[fmt.Sprintf("%d", result.Class)]
 		if !ok {
 			log.Printf("Class index %d not found in category mapping, using default model", result.Class)
 			return r.Config.DefaultModel
 		}
 
+		// Record the category classification metric
+		metrics.RecordCategoryClassification(categoryName)
+
 		log.Printf("Classified as category: %s", categoryName)
-
-		// Find the category index in the config
-		for i, category := range r.Config.Categories {
-			if strings.EqualFold(category.Name, categoryName) {
-				// Get the model for this category
-				model := r.Config.GetModelForCategoryIndex(i)
-				log.Printf("Found matching model via classification: %s", model)
-				return model
-			}
-		}
-
-		// If we couldn't find a matching category, use default model
-		log.Printf("Could not find matching category %s in config, using default model", categoryName)
+	} else {
 		return r.Config.DefaultModel
 	}
 
-	return r.Config.DefaultModel
+	var cat *config.Category
+	for i, category := range r.Config.Categories {
+		if strings.EqualFold(category.Name, categoryName) {
+			cat = &r.Config.Categories[i]
+			break
+		}
+	}
+
+	if cat == nil {
+		log.Printf("Could not find matching category %s in config, using default model", categoryName)
+		return r.Config.DefaultModel
+	}
+	// Then select the best model from the determined category based on score and TTFT
+	r.modelLoadLock.Lock()
+	defer r.modelLoadLock.Unlock()
+
+	bestModel := ""
+	bestScore := -1.0 // initialize to a low score
+	bestQuality := 0.0
+
+	if r.Config.Classifier.LoadAware {
+		// Load-aware: combine accuracy and TTFT
+		for _, modelScore := range cat.ModelScores {
+			quality := modelScore.Score
+			model := modelScore.Model
+
+			baseTTFT := r.modelTTFT[model]
+			load := r.modelLoad[model]
+			estTTFT := baseTTFT * (1 + float64(load))
+			if estTTFT == 0 {
+				estTTFT = 1 // avoid div by zero
+			}
+			score := quality / estTTFT
+			if score > bestScore {
+				bestScore = score
+				bestModel = model
+				bestQuality = quality
+			}
+		}
+	} else {
+		// Not load-aware: pick the model with the highest accuracy only
+		for _, modelScore := range cat.ModelScores {
+			quality := modelScore.Score
+			model := modelScore.Model
+			if quality > bestScore {
+				bestScore = quality
+				bestModel = model
+				bestQuality = quality
+			}
+		}
+	}
+
+	if bestModel == "" {
+		log.Printf("No models found for category %s, using default model", categoryName)
+		return r.Config.DefaultModel
+	}
+
+	log.Printf("Selected model %s for category %s with quality %.4f and combined score %.4e",
+		bestModel, categoryName, bestQuality, bestScore)
+	return bestModel
 }
 
 // OpenAIRequest represents an OpenAI API request
@@ -658,4 +733,48 @@ func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	}
 
 	return &mapping, nil
+}
+
+// Compute base TTFT for a model using the formula based on https://www.jinghong-chen.net/estimate-vram-usage-in-llm-inference/
+// TTFT = (2*N*b*s)/(FLOPs) + (2*N)/(HBM)
+// Parameters are loaded from config: model-specific (N, b, s) and GPU-specific (FLOPs, HBM)
+func (r *OpenAIRouter) computeBaseTTFT(modelName string) float64 {
+	// Get model-specific parameters from config
+	defaultParamCount := 7e9    // Default to 7B if unknown
+	defaultBatchSize := 512.0   // Default batch size
+	defaultContextSize := 256.0 // Default context size
+
+	// Get model parameters
+	N := r.Config.GetModelParamCount(modelName, defaultParamCount)
+	b := r.Config.GetModelBatchSize(modelName, defaultBatchSize)
+	s := r.Config.GetModelContextSize(modelName, defaultContextSize)
+
+	// Get GPU parameters from config
+	FLOPs := r.Config.GPUConfig.FLOPS
+	HBM := r.Config.GPUConfig.HBM
+
+	prefillCompute := 2 * N * b * s
+	prefillMemory := 2 * N
+
+	TTFT := (prefillCompute/FLOPs + prefillMemory/HBM) * 1000 // ms
+	return TTFT
+}
+
+// Initialize modelTTFT map for all models in config
+func (r *OpenAIRouter) initModelTTFT() {
+	if r.modelTTFT == nil {
+		r.modelTTFT = make(map[string]float64)
+	}
+	for _, cat := range r.Config.Categories {
+		for _, modelScore := range cat.ModelScores {
+			if _, ok := r.modelTTFT[modelScore.Model]; !ok {
+				r.modelTTFT[modelScore.Model] = r.computeBaseTTFT(modelScore.Model)
+			}
+		}
+	}
+	if r.Config.DefaultModel != "" {
+		if _, ok := r.modelTTFT[r.Config.DefaultModel]; !ok {
+			r.modelTTFT[r.Config.DefaultModel] = r.computeBaseTTFT(r.Config.DefaultModel)
+		}
+	}
 }

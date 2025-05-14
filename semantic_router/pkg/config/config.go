@@ -23,6 +23,7 @@ type RouterConfig struct {
 		Threshold           float32 `yaml:"threshold"`
 		UseCPU              bool    `yaml:"use_cpu"`
 		CategoryMappingPath string  `yaml:"category_mapping_path"`
+		LoadAware           bool    `yaml:"load_aware"`
 	} `yaml:"classifier"`
 
 	// Categories for routing queries
@@ -33,6 +34,12 @@ type RouterConfig struct {
 
 	// Semantic cache configuration
 	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
+
+	// Model parameters configuration
+	ModelConfig map[string]ModelParams `yaml:"model_config"`
+
+	// GPU configuration for TTFT calculation
+	GPUConfig GPUConfig `yaml:"gpu_config"`
 }
 
 // SemanticCacheConfig represents configuration for the semantic cache
@@ -51,6 +58,30 @@ type SemanticCacheConfig struct {
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
 }
 
+// ModelParams represents configuration for model-specific parameters
+type ModelParams struct {
+	// Number of parameters in the model
+	ParamCount float64 `yaml:"param_count"`
+
+	// Default batch size for this model
+	BatchSize float64 `yaml:"batch_size"`
+
+	// Default context size for this model
+	ContextSize float64 `yaml:"context_size"`
+}
+
+// GPUConfig represents configuration for GPU parameters used in TTFT calculation
+type GPUConfig struct {
+	// FLOPs performance in operations per second
+	FLOPS float64 `yaml:"flops"`
+
+	// HBM memory bandwidth in bytes per second
+	HBM float64 `yaml:"hbm"`
+
+	// Description of the GPU configuration (e.g., "A100-80G")
+	Description string `yaml:"description"`
+}
+
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
 func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	if c.SemanticCache.SimilarityThreshold != nil {
@@ -60,10 +91,15 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 }
 
 // Category represents a category for routing queries
+type ModelScore struct {
+	Model string  `yaml:"model"`
+	Score float64 `yaml:"score"`
+}
+
 type Category struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description,omitempty"`
-	Models      []string `yaml:"models"` // Ranked list of LLM models
+	Name        string       `yaml:"name"`
+	Description string       `yaml:"description,omitempty"`
+	ModelScores []ModelScore `yaml:"model_scores"`
 }
 
 var (
@@ -120,10 +156,37 @@ func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
 	}
 
 	category := c.Categories[index]
-	if len(category.Models) > 0 {
-		return category.Models[0]
+	if len(category.ModelScores) > 0 {
+		return category.ModelScores[0].Model
 	}
 
 	// Fall back to default model if category has no models
 	return c.DefaultModel
+}
+
+// GetModelParamCount returns the parameter count for a given model
+// If the model is not found in the config, returns the default value
+func (c *RouterConfig) GetModelParamCount(modelName string, defaultValue float64) float64 {
+	if modelConfig, ok := c.ModelConfig[modelName]; ok {
+		return modelConfig.ParamCount
+	}
+	return defaultValue
+}
+
+// GetModelBatchSize returns the batch size for a given model
+// If the model is not found in the config, returns the default value
+func (c *RouterConfig) GetModelBatchSize(modelName string, defaultValue float64) float64 {
+	if modelConfig, ok := c.ModelConfig[modelName]; ok {
+		return modelConfig.BatchSize
+	}
+	return defaultValue
+}
+
+// GetModelContextSize returns the context size for a given model
+// If the model is not found in the config, returns the default value
+func (c *RouterConfig) GetModelContextSize(modelName string, defaultValue float64) float64 {
+	if modelConfig, ok := c.ModelConfig[modelName]; ok {
+		return modelConfig.ContextSize
+	}
+	return defaultValue
 }

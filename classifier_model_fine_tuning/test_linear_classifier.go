@@ -87,6 +87,7 @@ func main() {
 		"What causes mental illnesses?",
 		"How do computer algorithms work?",
 		"Explain the historical significance of the Roman Empire.",
+		"What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?",
 	}
 
 	// Process each query
@@ -107,8 +108,8 @@ func main() {
 
 		// Print the result
 		fmt.Printf("%d. Query: %s\n", i+1, query)
-		fmt.Printf("   Classified as: %s (Confidence: %.4f)\n\n",
-			categoryName, confidence)
+		fmt.Printf("   Classified as: %s (Class ID: %d, Confidence: %.4f)\n\n",
+			categoryName, classID, confidence)
 	}
 
 	fmt.Println("\nTest complete!")
