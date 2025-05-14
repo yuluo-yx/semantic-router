@@ -16,10 +16,6 @@ model_config:
     param_count: 14000000000  # 14B parameters https://huggingface.co/microsoft/phi-4
     batch_size: 512.0  # vLLM default batch size
     context_size: 16384.0 # based on https://huggingface.co/microsoft/phi-4
-  "gemma3:27b:27b":
-    param_count: 27000000000  # 27B parameters
-    batch_size: 512.0  # vLLM default batch size
-    context_size: 16384.0
   gemma3:27b:
     param_count: 27000000000  # 27B parameters (base version)
     batch_size: 512.0
