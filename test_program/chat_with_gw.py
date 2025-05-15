@@ -3,6 +3,7 @@ import streamlit as st
 from openai import OpenAI
 from datetime import datetime
 import traceback
+import time
 
 st.set_page_config(page_title="Semantic Router Chat", layout="wide", page_icon="💬")
 
@@ -77,6 +78,7 @@ if st.session_state.current_chat_id:
             message_placeholder = st.empty()
             
             try:
+                start_time = time.time()
                 # Initialize OpenAI client with custom base URL
                 client = OpenAI(base_url=api_endpoint, api_key=api_key if api_key else "dummy")
                 
@@ -101,12 +103,14 @@ if st.session_state.current_chat_id:
                     messages=messages,
                     stream=False
                 )
-                
+                end_time = time.time()
+                latency = end_time - start_time
                 # Extract response content
                 print(response)
                 full_response = response.choices[0].message.content      
                 print(full_response)          
                 message_placeholder.write(str(full_response))
+                st.write(f"⏱️ Latency: {latency:.2f} seconds")
                 
             except Exception as e:
                 st.error(f"Error: {str(e)}")
