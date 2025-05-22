@@ -9,13 +9,13 @@ These tests use custom headers to trace request processing.
 
 import json
 import requests
-import unittest
 import sys
 import os
 import uuid
 
 # Add parent directory to path to allow importing common test utilities
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
@@ -23,18 +23,28 @@ OPENAI_ENDPOINT = "/v1/chat/completions"
 DEFAULT_MODEL = "qwen2.5:32b"  # Changed from gemma3:27b to match make test-prompt
 
 
-class EnvoyExtProcTest(unittest.TestCase):
+class EnvoyExtProcTest(SemanticRouterTestBase):
     """Test Envoy and ExtProc interaction."""
 
     def setUp(self):
         """Check if the Envoy server is running before running tests."""
+        self.print_test_header(
+            "Setup Check",
+            "Verifying that Envoy server is running and accepting requests"
+        )
+        
         try:
-            # Use a basic POST request to check if Envoy is up
             payload = {
                 "model": DEFAULT_MODEL,
                 "messages": [{"role": "assistant", "content": "You are a helpful assistant."},
                              {"role": "user", "content": "test"}]
             }
+            
+            self.print_request_info(
+                payload=payload,
+                expectations="Expect: Service health check to succeed with 2xx status code"
+            )
+            
             response = requests.post(
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
@@ -42,15 +52,21 @@ class EnvoyExtProcTest(unittest.TestCase):
                 timeout=60
             )
             
-            # If we get a 5xx error, the service is probably down
             if response.status_code >= 500:
                 self.skipTest(f"Envoy server returned server error: {response.status_code}")
+                
+            self.print_response_info(response)
+            
         except requests.exceptions.ConnectionError:
             self.skipTest("Cannot connect to Envoy server. Is it running?")
 
     def test_request_headers_propagation(self):
         """Test that request headers are correctly propagated through the ExtProc."""
-        # Generate a unique trace ID to track this request
+        self.print_test_header(
+            "Request Headers Propagation Test",
+            "Verifies that request headers are correctly handled by the ExtProc"
+        )
+        
         trace_id = str(uuid.uuid4())
         
         payload = {
@@ -62,12 +78,19 @@ class EnvoyExtProcTest(unittest.TestCase):
             "temperature": 0.7
         }
         
-        # Add custom headers to trace request
         headers = {
             "Content-Type": "application/json",
             "X-Test-Trace-ID": trace_id,
             "X-Original-Model": DEFAULT_MODEL
         }
+        
+        self.print_request_info(
+            payload=payload,
+            expectations=(
+                "Expect: 2xx status code, Content-Type header in response, "
+                "and potential model routing changes"
+            )
+        )
         
         response = requests.post(
             f"{ENVOY_URL}{OPENAI_ENDPOINT}",
@@ -76,32 +99,42 @@ class EnvoyExtProcTest(unittest.TestCase):
             timeout=30
         )
         
+        passed = (
+            response.status_code < 400 and
+            "Content-Type" in response.headers and
+            "model" in response.json()
+        )
+        
+        response_json = response.json()
+        self.print_response_info(
+            response,
+            {
+                "Original Model": DEFAULT_MODEL,
+                "Routed Model": response_json.get("model", "Not specified"),
+                "Trace ID Preserved": response.headers.get("X-Test-Trace-ID") == trace_id
+            }
+        )
+        
+        self.print_test_result(
+            passed=passed,
+            message=(
+                "Headers processed correctly, model routing applied" if passed else
+                "Issues with header processing or model routing"
+            )
+        )
+        
         self.assertLess(response.status_code, 400, 
                       f"Request was rejected with status code {response.status_code}")
-        
-        # Check if response has Content-Type header
         self.assertIn("Content-Type", response.headers, "Response is missing Content-Type header")
-        
-        # We don't check for trace header preservation since the implementation doesn't support it
-        # Simply log whether it was preserved or not for informational purposes
-        if response.headers.get("X-Test-Trace-ID") == trace_id:
-            print(f"\nTrace header was preserved: {trace_id}")
-        else:
-            print(f"\nTrace header was not preserved (expected behavior)")
-        
-        # Attempt to verify routing by checking the response model
-        response_json = response.json()
-        print(f"\nOriginal Model: {DEFAULT_MODEL}")
-        print(f"Routed Model: {response_json.get('model', 'Not specified')}")
-        
-        # The model in the response should indicate if re-routing occurred
-        # If ExtProc is working, the model might be different from the requested one
-        # This is a loose test since we can't guarantee which model it will route to
         self.assertIn("model", response_json, "Response is missing 'model' field")
 
     def test_extproc_override(self):
         """Test that the ExtProc can modify the request's target model."""
-        # We'll send two different queries - one math, one creative
+        self.print_test_header(
+            "ExtProc Model Override Test",
+            "Verifies that ExtProc correctly routes different query types to appropriate models"
+        )
+        
         test_cases = [
             {
                 "name": "Math Query",
@@ -118,10 +151,12 @@ class EnvoyExtProcTest(unittest.TestCase):
         results = {}
         
         for test_case in test_cases:
+            self.print_subtest_header(test_case["name"])
+            
             trace_id = str(uuid.uuid4())
             
             payload = {
-                "model": DEFAULT_MODEL,  # Use same model for all requests
+                "model": DEFAULT_MODEL,
                 "messages": [
                     {"role": "assistant", "content": f"You are an expert in {test_case['category']}."},
                     {"role": "user", "content": test_case["content"]}
@@ -133,9 +168,13 @@ class EnvoyExtProcTest(unittest.TestCase):
                 "Content-Type": "application/json",
                 "X-Test-Trace-ID": trace_id,
                 "X-Original-Model": DEFAULT_MODEL,
-                # This helps the ExtProc know it's a test request
                 "X-Test-Category": test_case["category"]
             }
+            
+            self.print_request_info(
+                payload=payload,
+                expectations=f"Expect: Query to be routed based on {test_case['category']} category"
+            )
             
             response = requests.post(
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
@@ -144,33 +183,43 @@ class EnvoyExtProcTest(unittest.TestCase):
                 timeout=60
             )
             
-            self.assertLess(response.status_code, 400, 
-                         f"{test_case['name']} request failed with status {response.status_code}")
-            
             response_json = response.json()
             results[test_case["name"]] = response_json.get("model", "unknown")
             
-            print(f"\n{test_case['name']} response:")
-            print(f"Original model: {DEFAULT_MODEL}")
-            print(f"Routed model: {response_json.get('model', 'Not specified')}")
+            self.print_response_info(
+                response,
+                {
+                    "Category": test_case["category"],
+                    "Original Model": DEFAULT_MODEL,
+                    "Routed Model": results[test_case["name"]]
+                }
+            )
+            
+            passed = response.status_code < 400 and results[test_case["name"]] != "unknown"
+            self.print_test_result(
+                passed=passed,
+                message=(
+                    f"Successfully routed to model: {results[test_case['name']]}" if passed else
+                    f"Routing failed or returned unknown model"
+                )
+            )
+            
+            self.assertLess(response.status_code, 400,
+                         f"{test_case['name']} request failed with status {response.status_code}")
         
-        # The math and creative queries should route to different models
-        # This is a probabilistic test - in some configurations they might route to the same model
-        # In that case, this test would fail
-        if "Math Query" in results and "Creative Writing Query" in results:
-            if results["Math Query"] != "unknown" and results["Creative Writing Query"] != "unknown":
-                print(f"\nMath routed to: {results['Math Query']}")
-                print(f"Creative routed to: {results['Creative Writing Query']}")
-        
-        # Optionally check that they routed to different models
-        # Uncomment if your configuration guarantees different routing
-        # self.assertNotEqual(results.get("Math Query"), results.get("Creative Writing Query"),
-        #                     "Math and Creative Writing queries should route to different models")
+        # Final summary of routing results
+        if len(results) == 2:
+            print("\nRouting Summary:")
+            print(f"Math Query → {results['Math Query']}")
+            print(f"Creative Writing Query → {results['Creative Writing Query']}")
 
     def test_extproc_body_modification(self):
         """Test that the ExtProc can modify the request and response bodies."""
-        # Add a special test header that might trigger additional processing
-        # in the ExtProc for testing purposes
+        self.print_test_header(
+            "ExtProc Body Modification Test",
+            "Verifies that ExtProc can modify request and response bodies while preserving essential fields"
+        )
+        
         trace_id = str(uuid.uuid4())
         
         payload = {
@@ -180,7 +229,6 @@ class EnvoyExtProcTest(unittest.TestCase):
                 {"role": "user", "content": "What is quantum computing?"}
             ],
             "temperature": 0.7,
-            # Add a test field that should be preserved
             "test_field": "should_be_preserved"
         }
         
@@ -190,6 +238,11 @@ class EnvoyExtProcTest(unittest.TestCase):
             "X-Test-Body-Modification": "true"
         }
         
+        self.print_request_info(
+            payload=payload,
+            expectations="Expect: Request processing with body modifications while preserving essential fields"
+        )
+        
         response = requests.post(
             f"{ENVOY_URL}{OPENAI_ENDPOINT}",
             headers=headers,
@@ -197,15 +250,27 @@ class EnvoyExtProcTest(unittest.TestCase):
             timeout=60
         )
         
-        self.assertLess(response.status_code, 400, 
-                      f"Request was rejected with status code {response.status_code}")
-        
-        # Check that our test field was preserved
         response_json = response.json()
-        # Note: The ExtProc might not actually preserve custom fields
-        # This is mainly to check if body processing is working
-        print(f"\nResponse model: {response_json.get('model', 'Not specified')}")
-        # If the original request has been completely replaced, the test field might be gone
+        self.print_response_info(
+            response,
+            {
+                "Original Model": DEFAULT_MODEL,
+                "Final Model": response_json.get("model", "Not specified"),
+                "Test Field Preserved": "test_field" in response_json
+            }
+        )
+        
+        passed = response.status_code < 400 and "model" in response_json
+        self.print_test_result(
+            passed=passed,
+            message=(
+                "Request processed successfully with body modifications" if passed else
+                "Issues with request processing or body modifications"
+            )
+        )
+        
+        self.assertLess(response.status_code, 400,
+                      f"Request was rejected with status code {response.status_code}")
 
 
 if __name__ == "__main__":
