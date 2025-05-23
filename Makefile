@@ -93,6 +93,12 @@ test-classifier: rust
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd classifier_model_fine_tuning && CGO_ENABLED=1 go run test_linear_classifier.go
 
+# Test the PII classifier
+test-pii-classifier: rust
+	@echo "Testing PII classifier with candle-binding..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		cd pii_model_fine_tuning && CGO_ENABLED=1 go run pii_classifier_verifier.go
+
 # Test the Rust library and the Go binding
 test: test-binding
 
