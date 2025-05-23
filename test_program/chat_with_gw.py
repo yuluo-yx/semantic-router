@@ -101,6 +101,7 @@ if st.session_state.current_chat_id:
                 response = client.chat.completions.create(
                     model=model,
                     messages=messages,
+                    temperature=0,
                     stream=False
                 )
                 end_time = time.time()
