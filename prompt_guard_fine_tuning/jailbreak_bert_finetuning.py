@@ -410,7 +410,7 @@ class GPUOptimizer:
         optimal_length = max(optimal_length, 64)
         
         # Round to nearest power of 2 for efficiency (optional)
-        powers_of_2 = [64, 128, 256, 512, 1024]
+        powers_of_2 = [64, 128, 256, 512, 1024, 2048]
         optimal_length = min(powers_of_2, key=lambda x: abs(x - optimal_length))
         
         logger.info(f"Optimal sequence length: {optimal_length}")
@@ -463,7 +463,7 @@ class GPUOptimizer:
         logger.info(f"Creating optimization configuration (attempt {retry_count + 1})...")
         
         # Progressive sequence length reduction for memory conservation
-        base_seq_length = self.optimize_sequence_length(train_texts, tokenizer)
+        base_seq_length = self.optimize_sequence_length(train_texts, tokenizer, default_max_length=1024)
         if retry_count >= 1:
             base_seq_length = min(base_seq_length, 128)  # Reduce to 128 on first retry
         if retry_count >= 2:
