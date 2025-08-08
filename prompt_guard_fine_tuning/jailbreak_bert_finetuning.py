@@ -36,6 +36,11 @@ Usage:
     # Test inference with trained model
     python jailbreak_bert_finetuning.py --mode test --model bert-base
 
+    # Cache management examples
+    python jailbreak_bert_finetuning.py --cache-info          # Show cache information
+    python jailbreak_bert_finetuning.py --clear-cache         # Clear all cached data
+    python jailbreak_bert_finetuning.py --mode train --disable-cache  # Train without caching
+
 Supported models:
     - bert-base, bert-large: Standard BERT models
     - roberta-base, roberta-large: RoBERTa models
@@ -55,6 +60,11 @@ Features:
     - Multiple dataset integration
     - Configurable sampling and dataset selection
     - Support for both jailbreak and benign prompt datasets
+    - **INTELLIGENT CACHING SYSTEM:**
+        * Automatic caching of loaded datasets to skip re-downloading
+        * Tokenized dataset caching to skip re-tokenization
+        * Separate caches for different model/dataset/parameter combinations
+        * Cache management commands (info, clear, disable)
     - **AUTO-OPTIMIZATION SYSTEM:**
         * Automatic GPU memory and compute optimization
         * Dynamic batch size tuning with OOM protection
@@ -85,6 +95,8 @@ import json
 import torch
 import numpy as np
 import warnings
+import hashlib
+import pickle
 
 # Suppress common non-critical warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Suppress tokenizer parallelism warnings
@@ -190,6 +202,137 @@ class OptimizationConfig:
     use_torch_compile: bool
     pin_memory: bool
     dataloader_drop_last: bool
+
+class DatasetCache:
+    """Handles caching of dataset loading and tokenization to speed up subsequent runs."""
+    
+    def __init__(self, cache_dir="./dataset_cache"):
+        """Initialize the cache manager."""
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(exist_ok=True)
+        
+    def _get_cache_key(self, **kwargs):
+        """Generate a unique cache key based on parameters."""
+        # Create a string representation of all parameters
+        key_string = json.dumps(kwargs, sort_keys=True)
+        # Generate MD5 hash for the key
+        return hashlib.md5(key_string.encode()).hexdigest()
+    
+    def _get_dataset_cache_path(self, dataset_sources, max_samples_per_source):
+        """Get cache path for raw dataset."""
+        cache_key = self._get_cache_key(
+            dataset_sources=dataset_sources,
+            max_samples_per_source=max_samples_per_source,
+            cache_type="raw_dataset"
+        )
+        return self.cache_dir / f"dataset_{cache_key}.pkl"
+    
+    def _get_tokenized_cache_path(self, dataset_sources, max_samples_per_source, model_name, max_length):
+        """Get cache path for tokenized dataset."""
+        cache_key = self._get_cache_key(
+            dataset_sources=dataset_sources,
+            max_samples_per_source=max_samples_per_source,
+            model_name=model_name,
+            max_length=max_length,
+            cache_type="tokenized_dataset"
+        )
+        return self.cache_dir / f"tokenized_{cache_key}.pkl"
+    
+    def save_raw_dataset(self, datasets, dataset_sources, max_samples_per_source, label_mappings):
+        """Save raw dataset to cache."""
+        cache_path = self._get_dataset_cache_path(dataset_sources, max_samples_per_source)
+        
+        cache_data = {
+            'datasets': datasets,
+            'label_mappings': label_mappings,
+            'timestamp': time.time(),
+            'dataset_sources': dataset_sources,
+            'max_samples_per_source': max_samples_per_source
+        }
+        
+        try:
+            with open(cache_path, 'wb') as f:
+                pickle.dump(cache_data, f)
+            logger.info(f"Raw dataset cached to: {cache_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cache raw dataset: {e}")
+    
+    def load_raw_dataset(self, dataset_sources, max_samples_per_source):
+        """Load raw dataset from cache if available."""
+        cache_path = self._get_dataset_cache_path(dataset_sources, max_samples_per_source)
+        
+        if not cache_path.exists():
+            return None, None
+        
+        try:
+            with open(cache_path, 'rb') as f:
+                cache_data = pickle.load(f)
+            
+            logger.info(f"Loaded raw dataset from cache: {cache_path}")
+            return cache_data['datasets'], cache_data['label_mappings']
+            
+        except Exception as e:
+            logger.warning(f"Failed to load raw dataset cache: {e}")
+            return None, None
+    
+    def save_tokenized_datasets(self, train_dataset, val_dataset, test_dataset, 
+                               dataset_sources, max_samples_per_source, model_name, max_length):
+        """Save tokenized datasets to cache."""
+        cache_path = self._get_tokenized_cache_path(dataset_sources, max_samples_per_source, model_name, max_length)
+        
+        cache_data = {
+            'train_dataset': train_dataset,
+            'val_dataset': val_dataset,
+            'test_dataset': test_dataset,
+            'timestamp': time.time(),
+            'dataset_sources': dataset_sources,
+            'max_samples_per_source': max_samples_per_source,
+            'model_name': model_name,
+            'max_length': max_length
+        }
+        
+        try:
+            with open(cache_path, 'wb') as f:
+                pickle.dump(cache_data, f)
+            logger.info(f"Tokenized datasets cached to: {cache_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cache tokenized datasets: {e}")
+    
+    def load_tokenized_datasets(self, dataset_sources, max_samples_per_source, model_name, max_length):
+        """Load tokenized datasets from cache if available."""
+        cache_path = self._get_tokenized_cache_path(dataset_sources, max_samples_per_source, model_name, max_length)
+        
+        if not cache_path.exists():
+            return None, None, None
+        
+        try:
+            with open(cache_path, 'rb') as f:
+                cache_data = pickle.load(f)
+            
+            logger.info(f"Loaded tokenized datasets from cache: {cache_path}")
+            return cache_data['train_dataset'], cache_data['val_dataset'], cache_data['test_dataset']
+            
+        except Exception as e:
+            logger.warning(f"Failed to load tokenized dataset cache: {e}")
+            return None, None, None
+    
+    def clear_cache(self):
+        """Clear all cached data."""
+        try:
+            for cache_file in self.cache_dir.glob("*.pkl"):
+                cache_file.unlink()
+            logger.info("Dataset cache cleared")
+        except Exception as e:
+            logger.warning(f"Failed to clear cache: {e}")
+    
+    def get_cache_info(self):
+        """Get information about cached data."""
+        cache_files = list(self.cache_dir.glob("*.pkl"))
+        total_size = sum(f.stat().st_size for f in cache_files) / (1024**2)  # MB
+        
+        logger.info(f"Cache directory: {self.cache_dir}")
+        logger.info(f"Cache files: {len(cache_files)}")
+        logger.info(f"Total cache size: {total_size:.2f} MB")
 
 class GPUOptimizer:
     """Automatically optimizes training parameters based on GPU capabilities and dataset characteristics."""
@@ -1099,8 +1242,22 @@ class Jailbreak_Dataset:
         
         logger.info(f"Created mappings for {len(unique_labels)} labels: {unique_labels}")
         
-    def prepare_datasets(self):
+    def prepare_datasets(self, use_cache=True):
         """Prepare train/validation/test datasets from HuggingFace jailbreak dataset."""
+        
+        # Initialize cache
+        cache = DatasetCache() if use_cache else None
+        
+        # Try to load from cache first
+        if cache:
+            cached_datasets, cached_label_mappings = cache.load_raw_dataset(
+                self.dataset_sources, self.max_samples_per_source
+            )
+            if cached_datasets and cached_label_mappings:
+                logger.info("Using cached raw dataset - skipping dataset loading!")
+                self.label2id = cached_label_mappings['label2id']
+                self.id2label = cached_label_mappings['id2label']
+                return cached_datasets
         
         # Load the full dataset
         logger.info("Loading jailbreak classification dataset...")
@@ -1126,11 +1283,21 @@ class Jailbreak_Dataset:
         val_label_ids = [self.label2id[label] for label in val_labels]
         test_label_ids = [self.label2id[label] for label in test_labels]
         
-        return {
+        final_datasets = {
             'train': (train_texts, train_label_ids),
             'validation': (val_texts, val_label_ids),
             'test': (test_texts, test_label_ids)
         }
+        
+        # Cache the results
+        if cache:
+            label_mappings = {
+                'label2id': self.label2id,
+                'id2label': self.id2label
+            }
+            cache.save_raw_dataset(final_datasets, self.dataset_sources, self.max_samples_per_source, label_mappings)
+        
+        return final_datasets
 
 # Function to predict jailbreak type using the classification model
 def predict_jailbreak_type(model, tokenizer, text, idx_to_label_map, device):
@@ -1184,7 +1351,7 @@ def evaluate_jailbreak_classifier(model, tokenizer, texts_list, true_label_indic
     
     return accuracy, class_report, conf_matrix, (predictions, true_labels)
 
-def main_with_oom_recovery(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, max_retries=4):
+def main_with_oom_recovery(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, use_cache=True, max_retries=4):
     """Main function with OOM recovery - tries multiple configurations if memory issues occur."""
     
     # Preemptive memory check - quit if GPU is insufficient
@@ -1212,7 +1379,7 @@ def main_with_oom_recovery(model_name="modernbert-base", max_epochs=10, batch_si
             
             return main_single_attempt(model_name, max_epochs, batch_size, dataset_sources, 
                                      max_samples_per_source, target_accuracy, patience, 
-                                     enable_auto_optimization, retry_count)
+                                     enable_auto_optimization, use_cache, retry_count)
                                      
         except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
             error_msg = str(e).lower()
@@ -1247,11 +1414,11 @@ def main_with_oom_recovery(model_name="modernbert-base", max_epochs=10, batch_si
     logger.error("All attempts failed")
     return None
 
-def main(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True):
+def main(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, use_cache=True):
     """Main function wrapper that calls the OOM recovery version."""
-    return main_with_oom_recovery(model_name, max_epochs, batch_size, dataset_sources, max_samples_per_source, target_accuracy, patience, enable_auto_optimization)
+    return main_with_oom_recovery(model_name, max_epochs, batch_size, dataset_sources, max_samples_per_source, target_accuracy, patience, enable_auto_optimization, use_cache)
 
-def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, retry_count=0):
+def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, use_cache=True, retry_count=0):
     """Main function to demonstrate jailbreak classification fine-tuning with accuracy-based early stopping."""
     
     # Validate model name and apply model downgrading on retries for memory conservation
@@ -1299,7 +1466,7 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
     else:
         dataset_loader = Jailbreak_Dataset(dataset_sources=dataset_sources, max_samples_per_source=max_samples_per_source)
     
-    datasets = dataset_loader.prepare_datasets()
+    datasets = dataset_loader.prepare_datasets(use_cache=use_cache)
     
     train_texts, train_categories = datasets['train']
     val_texts, val_categories = datasets['validation']
@@ -1415,97 +1582,118 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
     else:
         max_sequence_length = 512
     
-    # Tokenize datasets with memory protection
-    def tokenize_function(examples):
-        # Tokenize (this happens on CPU - which is normal and efficient)
-        # Keep everything on CPU during tokenization to avoid CUDA multiprocessing issues
-        tokens = tokenizer(
-            examples["text"], 
-            truncation=True, 
-            padding="max_length", 
-            max_length=max_sequence_length,
-            return_tensors="pt"
-        )
-        
-        # Convert to lists for HF datasets compatibility
-        # GPU transfer will happen automatically during training via DataLoader
-        return {
-            'input_ids': tokens['input_ids'].tolist(),
-            'attention_mask': tokens['attention_mask'].tolist()
-        }
+    # Initialize cache for tokenized datasets
+    tokenized_cache = DatasetCache()
     
-    try:
-        # Create datasets
-        logger.info("Creating datasets...")
-        train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
-        val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
-        test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
+    # Try to load tokenized datasets from cache first
+    cached_train, cached_val, cached_test = tokenized_cache.load_tokenized_datasets(
+        dataset_sources, max_samples_per_source, model_name, max_sequence_length
+    )
+    
+    if cached_train and cached_val and cached_test:
+        logger.info("Using cached tokenized datasets - skipping tokenization!")
+        train_dataset, val_dataset, test_dataset = cached_train, cached_val, cached_test
+    else:
+        logger.info("No valid tokenized cache found, proceeding with tokenization...")
         
-        # Clear memory before tokenization
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
+        # Tokenize datasets with memory protection
+        def tokenize_function(examples):
+            # Tokenize (this happens on CPU - which is normal and efficient)
+            # Keep everything on CPU during tokenization to avoid CUDA multiprocessing issues
+            tokens = tokenizer(
+                examples["text"], 
+                truncation=True, 
+                padding="max_length", 
+                max_length=max_sequence_length,
+                return_tensors="pt"
+            )
+            
+            # Convert to lists for HF datasets compatibility
+            # GPU transfer will happen automatically during training via DataLoader
+            return {
+                'input_ids': tokens['input_ids'].tolist(),
+                'attention_mask': tokens['attention_mask'].tolist()
+            }
         
-        # Use larger batch sizes for faster tokenization (tensors moved to GPU)
-        tokenize_batch_size = 4000 if retry_count == 0 else (2000 if retry_count == 1 else 1000)
-        logger.info(f"Tokenizing datasets with GPU tensor optimization (batch_size={tokenize_batch_size})...")
-        
-        # Disable multiprocessing when using CUDA to avoid forking issues
-        # CUDA doesn't work well with multiprocessing fork method
-        num_proc = 1 if torch.cuda.is_available() else min(4, os.cpu_count())
-        if retry_count > 0:
-            num_proc = 1  # Always single process on retries
-        
-        train_dataset = train_dataset.map(
-            tokenize_function, 
-            batched=True, 
-            batch_size=tokenize_batch_size,
-            num_proc=num_proc,
-            remove_columns=["text"]  # Remove original text to save memory
-        )
-        
-        # Clear memory between dataset tokenizations
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
-        
-        val_dataset = val_dataset.map(
-            tokenize_function, 
-            batched=True, 
-            batch_size=tokenize_batch_size,
-            num_proc=num_proc,
-            remove_columns=["text"]
-        )
-        
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
-        
-        test_dataset = test_dataset.map(
-            tokenize_function, 
-            batched=True, 
-            batch_size=tokenize_batch_size,
-            num_proc=num_proc,
-            remove_columns=["text"]
-        )
-        
-        logger.info("Dataset tokenization completed successfully")
-        
-    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
-        logger.error(f"OOM during dataset tokenization: {e}")
-        # Clear memory and try with minimal batch size
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
-        
-        logger.warning("Retrying tokenization with minimal batch size...")
-        train_dataset = train_dataset.map(tokenize_function, batched=True, batch_size=1)
-        val_dataset = val_dataset.map(tokenize_function, batched=True, batch_size=1)
-        test_dataset = test_dataset.map(tokenize_function, batched=True, batch_size=1)
-        
-    except Exception as e:
-        logger.error(f"Error during dataset tokenization: {e}")
-        raise
+        try:
+            # Create datasets
+            logger.info("Creating datasets...")
+            train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
+            val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
+            test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
+            
+            # Clear memory before tokenization
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            # Use larger batch sizes for faster tokenization (tensors moved to GPU)
+            tokenize_batch_size = 4000 if retry_count == 0 else (2000 if retry_count == 1 else 1000)
+            logger.info(f"Tokenizing datasets with GPU tensor optimization (batch_size={tokenize_batch_size})...")
+            
+            # Disable multiprocessing when using CUDA to avoid forking issues
+            # CUDA doesn't work well with multiprocessing fork method
+            num_proc = 1 if torch.cuda.is_available() else min(4, os.cpu_count())
+            if retry_count > 0:
+                num_proc = 1  # Always single process on retries
+            
+            train_dataset = train_dataset.map(
+                tokenize_function, 
+                batched=True, 
+                batch_size=tokenize_batch_size,
+                num_proc=num_proc,
+                remove_columns=["text"]  # Remove original text to save memory
+            )
+            
+            # Clear memory between dataset tokenizations
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            val_dataset = val_dataset.map(
+                tokenize_function, 
+                batched=True, 
+                batch_size=tokenize_batch_size,
+                num_proc=num_proc,
+                remove_columns=["text"]
+            )
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            test_dataset = test_dataset.map(
+                tokenize_function, 
+                batched=True, 
+                batch_size=tokenize_batch_size,
+                num_proc=num_proc,
+                remove_columns=["text"]
+            )
+            
+            logger.info("Dataset tokenization completed successfully")
+            
+            # Cache the tokenized datasets
+            logger.info("Caching tokenized datasets for future runs...")
+            tokenized_cache.save_tokenized_datasets(
+                train_dataset, val_dataset, test_dataset,
+                dataset_sources, max_samples_per_source, model_name, max_sequence_length
+            )
+            
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            logger.error(f"OOM during dataset tokenization: {e}")
+            # Clear memory and try with minimal batch size
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            logger.warning("Retrying tokenization with minimal batch size...")
+            train_dataset = train_dataset.map(tokenize_function, batched=True, batch_size=1)
+            val_dataset = val_dataset.map(tokenize_function, batched=True, batch_size=1)
+            test_dataset = test_dataset.map(tokenize_function, batched=True, batch_size=1)
+            
+        except Exception as e:
+            logger.error(f"Error during dataset tokenization: {e}")
+            raise
     
     # Check transformers version compatibility
     eval_strategy_param = check_transformers_compatibility()
@@ -1818,8 +2006,26 @@ if __name__ == "__main__":
                        help="List available datasets and their descriptions")
     parser.add_argument("--disable-auto-optimization", action="store_true",
                        help="Disable automatic GPU optimization (use manual batch size and settings)")
+    parser.add_argument("--clear-cache", action="store_true",
+                       help="Clear all cached datasets before training")
+    parser.add_argument("--disable-cache", action="store_true",
+                       help="Disable dataset caching (always reload and retokenize)")
+    parser.add_argument("--cache-info", action="store_true",
+                       help="Show cache information and exit")
     
     args = parser.parse_args()
+    
+    # Handle cache operations
+    if args.cache_info:
+        cache = DatasetCache()
+        cache.get_cache_info()
+        exit(0)
+    
+    if args.clear_cache:
+        cache = DatasetCache()
+        cache.clear_cache()
+        print("Dataset cache cleared successfully!")
+        exit(0)
     
     if args.list_datasets:
         print("\nAvailable Dataset Sources:")
@@ -1865,6 +2071,6 @@ if __name__ == "__main__":
         exit(0)
     
     if args.mode == "train":
-        main(args.model, args.max_epochs, args.batch_size, args.datasets, args.max_samples_per_source, args.target_accuracy, args.patience, not args.disable_auto_optimization)
+        main(args.model, args.max_epochs, args.batch_size, args.datasets, args.max_samples_per_source, args.target_accuracy, args.patience, not args.disable_auto_optimization, not args.disable_cache)
     elif args.mode == "test":
         demo_inference(args.model) 
