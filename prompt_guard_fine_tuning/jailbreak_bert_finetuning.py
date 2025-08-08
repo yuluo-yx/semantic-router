@@ -30,6 +30,9 @@ Usage:
     # Quick training with lower accuracy target
     python jailbreak_bert_finetuning.py --mode train --model distilbert --target-accuracy 0.85 --max-epochs 20
 
+    # Disable auto-optimization for manual control
+    python jailbreak_bert_finetuning.py --mode train --model bert-base --batch-size 16 --disable-auto-optimization
+
     # Test inference with trained model
     python jailbreak_bert_finetuning.py --mode test --model bert-base
 
@@ -38,7 +41,7 @@ Supported models:
     - roberta-base, roberta-large: RoBERTa models
     - deberta-v3-base, deberta-v3-large: DeBERTa v3 models
     - modernbert-base, modernbert-large: ModernBERT models (default)
-    - minilm: Lightweight MiniLM model (default for compatibility)
+    - minilm: Lightweight MiniLM model
     - distilbert: Distilled BERT
     - electra-base, electra-large: ELECTRA models
 
@@ -52,12 +55,41 @@ Features:
     - Multiple dataset integration
     - Configurable sampling and dataset selection
     - Support for both jailbreak and benign prompt datasets
+    - **AUTO-OPTIMIZATION SYSTEM:**
+        * Automatic GPU memory and compute optimization
+        * Dynamic batch size tuning with OOM protection
+        * Mixed precision detection and configuration (FP16/BF16)
+        * Dataset-aware sequence length optimization
+        * Automatic DataLoader optimization (num_workers, pin_memory)
+        * Gradient accumulation for effective large batch sizes
+        * Gradient checkpointing for memory-constrained GPUs
+        * Torch compile integration for PyTorch 2.0+
+        * Smart training arguments optimization
+
+Auto-Optimization Details:
+    The auto-optimization system automatically analyzes your GPU capabilities and dataset 
+    characteristics to maximize training speed while preventing out-of-memory errors:
+
+    1. **GPU Analysis**: Detects GPU memory, compute capability, and architecture
+    2. **Batch Size Optimization**: Uses binary search to find maximum safe batch size
+    3. **Mixed Precision**: Automatically selects FP16 or BF16 based on GPU architecture
+    4. **Sequence Length Optimization**: Analyzes dataset to find optimal max_length
+    5. **DataLoader Tuning**: Optimizes num_workers and memory settings
+    6. **Gradient Accumulation**: Simulates larger batch sizes when memory is limited
+    7. **Memory Management**: Enables gradient checkpointing for memory-constrained GPUs
+    8. **Performance Enhancements**: Applies torch.compile() when available
 """
 
 import os
 import json
 import torch
 import numpy as np
+import warnings
+
+# Suppress common non-critical warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Suppress tokenizer parallelism warnings
+warnings.filterwarnings("ignore", message=".*TensorFloat32.*")  # Suppress TF32 performance hints
+warnings.filterwarnings("ignore", message=".*Online softmax.*")  # Suppress inductor optimization info
 from pathlib import Path
 from transformers import (
     AutoTokenizer, 
@@ -73,10 +105,430 @@ from sklearn.metrics import f1_score, accuracy_score, classification_report, con
 from collections import Counter
 import logging
 import random
+import time
+import gc
+import psutil
+from dataclasses import dataclass
+from typing import Dict, Tuple, Optional, List
+import signal
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def timeout_handler(signum, frame):
+    """Handle timeout signal."""
+    raise TimeoutError("Dataset loading timed out")
+
+def with_timeout(seconds):
+    """Decorator to add timeout to functions (Unix-like systems only)."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Only use signal-based timeout on Unix-like systems
+            if hasattr(signal, 'SIGALRM') and os.name != 'nt':
+                # Set up the timeout
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(seconds)
+                try:
+                    result = func(*args, **kwargs)
+                finally:
+                    # Reset the alarm
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                return result
+            else:
+                # On Windows/WSL, just run without timeout
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def retry_with_backoff(max_retries=3, base_delay=1):
+    """Decorator to retry function calls with exponential backoff."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay} seconds...")
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"All {max_retries} attempts failed. Last error: {e}")
+            raise last_exception
+        return wrapper
+    return decorator
+
+@dataclass
+class GPUStats:
+    """Container for GPU statistics."""
+    total_memory_gb: float
+    used_memory_gb: float
+    free_memory_gb: float
+    memory_utilization: float
+    compute_utilization: float
+    gpu_name: str
+    cuda_version: str
+    supports_mixed_precision: bool
+
+@dataclass
+class OptimizationConfig:
+    """Container for optimized training configuration."""
+    batch_size: int
+    gradient_accumulation_steps: int
+    max_sequence_length: int
+    num_workers: int
+    use_mixed_precision: bool
+    precision_type: str  # 'fp16' or 'bf16'
+    enable_gradient_checkpointing: bool
+    use_torch_compile: bool
+    pin_memory: bool
+    dataloader_drop_last: bool
+
+class GPUOptimizer:
+    """Automatically optimizes training parameters based on GPU capabilities and dataset characteristics."""
+    
+    def __init__(self):
+        self.device = get_device()
+        self.gpu_stats = self._get_gpu_stats()
+        self.cpu_count = psutil.cpu_count()
+        
+    def _get_gpu_stats(self) -> Optional[GPUStats]:
+        """Get current GPU statistics."""
+        if not torch.cuda.is_available():
+            return None
+            
+        device_id = torch.cuda.current_device()
+        gpu_props = torch.cuda.get_device_properties(device_id)
+        
+        # Get memory info
+        total_memory = gpu_props.total_memory / (1024**3)  # GB
+        reserved_memory = torch.cuda.memory_reserved(device_id) / (1024**3)
+        allocated_memory = torch.cuda.memory_allocated(device_id) / (1024**3)
+        free_memory = total_memory - reserved_memory
+        
+        # Calculate utilization (approximation)
+        memory_utilization = (reserved_memory / total_memory) * 100
+        
+        # Check mixed precision support
+        supports_mixed_precision = gpu_props.major >= 7  # Volta and newer
+        
+        return GPUStats(
+            total_memory_gb=total_memory,
+            used_memory_gb=reserved_memory,
+            free_memory_gb=free_memory,
+            memory_utilization=memory_utilization,
+            compute_utilization=0.0,  # We'll measure this during training
+            gpu_name=gpu_props.name,
+            cuda_version=torch.version.cuda or "Unknown",
+            supports_mixed_precision=supports_mixed_precision
+        )
+    
+    def _estimate_memory_usage(self, model, batch_size: int, seq_length: int) -> float:
+        """Estimate memory usage for given parameters (in GB)."""
+        if not self.gpu_stats:
+            return 0.0
+            
+        # Rough estimation based on model parameters and batch size
+        # This is a simplified calculation - actual usage may vary
+        param_count = sum(p.numel() for p in model.parameters())
+        
+        # Get model configuration dynamically
+        model_config = model.config
+        hidden_size = getattr(model_config, 'hidden_size', 768)
+        num_hidden_layers = getattr(model_config, 'num_hidden_layers', 12)
+        num_attention_heads = getattr(model_config, 'num_attention_heads', 12)
+        
+        # Estimate memory for:
+        # - Model parameters (4 bytes per param for fp32)
+        # - Gradients (same as parameters)
+        # - Optimizer states (2x parameters for Adam)
+        # - Activations (depends on batch size and sequence length)
+        
+        model_memory = param_count * 4 / (1024**3)  # GB
+        gradient_memory = model_memory  # Same as model
+        optimizer_memory = model_memory * 2  # Adam states
+        
+        # Dynamic activation memory estimate based on actual model architecture
+        # Activations include: embeddings, attention matrices, feed-forward outputs
+        activation_memory = (batch_size * seq_length * hidden_size * num_hidden_layers * 4) / (1024**3)  # GB
+        
+        total_memory = model_memory + gradient_memory + optimizer_memory + activation_memory
+        
+        logger.debug(f"Memory estimation - Model: {hidden_size}x{num_hidden_layers} layers, {num_attention_heads} heads")
+        logger.debug(f"Memory breakdown - Model: {model_memory:.2f}GB, Gradients: {gradient_memory:.2f}GB, "
+                    f"Optimizer: {optimizer_memory:.2f}GB, Activations: {activation_memory:.2f}GB")
+        
+        return total_memory * 1.2  # Add 20% safety margin
+    
+    def _test_batch_size(self, model, tokenizer, sample_texts: List[str], 
+                        batch_size: int, seq_length: int) -> bool:
+        """Test if a batch size works without OOM."""
+        if not sample_texts:
+            return True
+            
+        try:
+            # Clear cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                
+            # Create a small test batch
+            test_texts = sample_texts[:min(batch_size, len(sample_texts))]
+            
+            # Tokenize
+            inputs = tokenizer(
+                test_texts, 
+                return_tensors="pt", 
+                truncation=True, 
+                padding=True, 
+                max_length=seq_length
+            )
+            
+            # Move to device
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            # Set model to training mode to enable gradients
+            model.train()
+            
+            # Forward pass with gradients enabled
+            outputs = model(**inputs)
+            
+            # Simulate backward pass memory usage
+            # Create a dummy loss that requires gradients
+            loss = outputs.logits.mean()  # Use mean instead of sum to avoid overflow
+            loss.backward()
+            
+            # Clear gradients
+            model.zero_grad()
+            
+            return True
+            
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower() or "cuda out of memory" in str(e).lower():
+                return False
+            # Also catch gradient-related errors as OOM-like failures
+            if "does not require grad" in str(e).lower():
+                return False
+            raise e
+        except Exception as e:
+            # Catch any other memory-related issues
+            if "memory" in str(e).lower():
+                return False
+            raise e
+        finally:
+            # Cleanup
+            model.zero_grad()  # Ensure gradients are cleared
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+    
+    def find_optimal_batch_size(self, model, tokenizer, sample_texts: List[str], 
+                               seq_length: int, max_batch_size: int = 64, retry_count: int = 0) -> int:
+        """Find the largest batch size that fits in memory with aggressive fallback."""
+        if not self.gpu_stats:
+            logger.warning("No GPU detected, using conservative batch size")
+            return min(2, max_batch_size)
+        
+        logger.info(f"Finding optimal batch size (attempt {retry_count + 1})...")
+        
+        # Progressive reduction based on retry count
+        memory_safety_factor = 0.8 - (retry_count * 0.1)  # 80%, 70%, 60%, etc.
+        memory_safety_factor = max(0.3, memory_safety_factor)  # Never go below 30%
+        
+        # Start with a reasonable estimate based on available memory
+        estimated_memory = self._estimate_memory_usage(model, 1, seq_length)
+        if estimated_memory > 0:
+            # Estimate how many samples we can fit
+            available_memory = self.gpu_stats.free_memory_gb * memory_safety_factor
+            estimated_batch_size = max(1, int(available_memory / estimated_memory))
+            start_batch_size = min(estimated_batch_size, max_batch_size)
+        else:
+            start_batch_size = min(8 >> retry_count, max_batch_size)  # 8, 4, 2, 1...
+        
+        # Aggressive fallback for high retry counts
+        if retry_count >= 2:
+            start_batch_size = min(2, start_batch_size)
+        if retry_count >= 3:
+            start_batch_size = 1
+            
+        # Binary search for optimal batch size
+        low, high = 1, min(start_batch_size * 2, max_batch_size)
+        optimal_batch_size = 1
+        
+        while low <= high:
+            mid = (low + high) // 2
+            
+            logger.info(f"Testing batch size: {mid}")
+            
+            if self._test_batch_size(model, tokenizer, sample_texts, mid, seq_length):
+                optimal_batch_size = mid
+                low = mid + 1
+            else:
+                high = mid - 1
+        
+        logger.info(f"Optimal batch size found: {optimal_batch_size} (safety factor: {memory_safety_factor:.1%})")
+        return optimal_batch_size
+    
+    def _analyze_sequence_lengths(self, texts: List[str], tokenizer) -> Dict[str, int]:
+        """Analyze sequence length distribution in the dataset."""
+        lengths = []
+        sample_size = min(1000, len(texts))  # Sample for efficiency
+        
+        for text in texts[:sample_size]:
+            tokens = tokenizer.encode(text, add_special_tokens=True)
+            lengths.append(len(tokens))
+        
+        lengths = np.array(lengths)
+        
+        return {
+            'mean': int(np.mean(lengths)),
+            'median': int(np.median(lengths)),
+            'p95': int(np.percentile(lengths, 95)),
+            'p99': int(np.percentile(lengths, 99)),
+            'max': int(np.max(lengths))
+        }
+    
+    def optimize_sequence_length(self, texts: List[str], tokenizer, 
+                                default_max_length: int = 512) -> int:
+        """Find optimal sequence length based on dataset characteristics."""
+        logger.info("Analyzing sequence length distribution...")
+        
+        stats = self._analyze_sequence_lengths(texts, tokenizer)
+        
+        logger.info(f"Sequence length stats: {stats}")
+        
+        # Use 95th percentile as optimal length, but cap at reasonable limits
+        optimal_length = min(stats['p95'], default_max_length)
+        
+        # Ensure minimum viable length
+        optimal_length = max(optimal_length, 64)
+        
+        # Round to nearest power of 2 for efficiency (optional)
+        powers_of_2 = [64, 128, 256, 512, 1024]
+        optimal_length = min(powers_of_2, key=lambda x: abs(x - optimal_length))
+        
+        logger.info(f"Optimal sequence length: {optimal_length}")
+        return optimal_length
+    
+    def determine_mixed_precision(self) -> Tuple[bool, str]:
+        """Determine optimal mixed precision settings."""
+        if not self.gpu_stats or not self.gpu_stats.supports_mixed_precision:
+            return False, "fp32"
+        
+        # Check GPU architecture for best precision type
+        gpu_name = self.gpu_stats.gpu_name.lower()
+        
+        # BF16 is better on Ampere (RTX 30xx, A100) and newer
+        if any(arch in gpu_name for arch in ['a100', 'rtx 30', 'rtx 40', 'h100']):
+            # Try BF16 first, fall back to FP16
+            try:
+                # Simple test to see if BF16 works
+                test_tensor = torch.tensor([1.0], dtype=torch.bfloat16, device=self.device)
+                return True, "bf16"
+            except:
+                return True, "fp16"
+        else:
+            # Use FP16 for older architectures
+            return True, "fp16"
+    
+    def optimize_dataloader_settings(self, dataset_size: int) -> Dict[str, any]:
+        """Optimize DataLoader settings based on system capabilities."""
+        # Determine optimal number of workers
+        # General rule: 2-4 workers per GPU, but not more than CPU cores
+        if self.gpu_stats:
+            optimal_workers = min(4, self.cpu_count // 2, 8)
+        else:
+            optimal_workers = min(2, self.cpu_count // 2, 4)
+        
+        # For small datasets, fewer workers might be better
+        if dataset_size < 1000:
+            optimal_workers = min(optimal_workers, 2)
+        
+        return {
+            'num_workers': optimal_workers,
+            'pin_memory': torch.cuda.is_available(),
+            'persistent_workers': optimal_workers > 0 and dataset_size > 1000,
+            'prefetch_factor': 2 if optimal_workers > 0 else None
+        }
+    
+    def create_optimization_config(self, model, tokenizer, train_texts: List[str], 
+                                 max_batch_size: int = 64, retry_count: int = 0) -> OptimizationConfig:
+        """Create comprehensive optimization configuration with OOM recovery."""
+        logger.info(f"Creating optimization configuration (attempt {retry_count + 1})...")
+        
+        # Progressive sequence length reduction for memory conservation
+        base_seq_length = self.optimize_sequence_length(train_texts, tokenizer)
+        if retry_count >= 1:
+            base_seq_length = min(base_seq_length, 128)  # Reduce to 128 on first retry
+        if retry_count >= 2:
+            base_seq_length = min(base_seq_length, 64)   # Further reduce to 64
+        if retry_count >= 3:
+            base_seq_length = min(base_seq_length, 32)   # Ultra-short sequences
+        
+        # Find optimal batch size with retry awareness
+        optimal_batch_size = self.find_optimal_batch_size(
+            model, tokenizer, train_texts, base_seq_length, max_batch_size, retry_count
+        )
+        
+        # Determine mixed precision (disable on high retry counts)
+        use_mixed_precision, precision_type = self.determine_mixed_precision()
+        if retry_count >= 3:
+            use_mixed_precision = False  # Disable mixed precision as last resort
+            precision_type = "fp32"
+        
+        # Optimize DataLoader settings with memory conservation
+        dataloader_settings = self.optimize_dataloader_settings(len(train_texts))
+        if retry_count >= 1:
+            dataloader_settings['num_workers'] = min(1, dataloader_settings['num_workers'])
+            dataloader_settings['pin_memory'] = False
+        
+        # Determine gradient accumulation steps with aggressive scaling
+        target_effective_batch_size = max(8, 32 >> retry_count)  # 32, 16, 8, 4...
+        gradient_accumulation_steps = max(1, target_effective_batch_size // optimal_batch_size)
+        
+        # Enable gradient checkpointing more aggressively
+        enable_gradient_checkpointing = (
+            retry_count >= 1 or  # Always enable on retry
+            (self.gpu_stats and self.gpu_stats.total_memory_gb < 16)
+        )
+        
+        # Disable torch compile on retry to save memory
+        use_torch_compile = (
+            retry_count == 0 and  # Only on first attempt
+            hasattr(torch, 'compile') and torch.__version__.startswith('2.')
+        )
+        
+        config = OptimizationConfig(
+            batch_size=optimal_batch_size,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            max_sequence_length=base_seq_length,
+            num_workers=dataloader_settings['num_workers'],
+            use_mixed_precision=use_mixed_precision,
+            precision_type=precision_type,
+            enable_gradient_checkpointing=enable_gradient_checkpointing,
+            use_torch_compile=use_torch_compile,
+            pin_memory=dataloader_settings['pin_memory'],
+            dataloader_drop_last=len(train_texts) > 1000
+        )
+        
+        logger.info("Optimization configuration:")
+        logger.info(f"  Batch size: {config.batch_size}")
+        logger.info(f"  Gradient accumulation steps: {config.gradient_accumulation_steps}")
+        logger.info(f"  Effective batch size: {config.batch_size * config.gradient_accumulation_steps}")
+        logger.info(f"  Max sequence length: {config.max_sequence_length}")
+        logger.info(f"  Mixed precision: {config.use_mixed_precision} ({config.precision_type})")
+        logger.info(f"  DataLoader workers: {config.num_workers}")
+        logger.info(f"  Gradient checkpointing: {config.enable_gradient_checkpointing}")
+        logger.info(f"  Torch compile: {config.use_torch_compile}")
+        logger.info(f"  Retry count: {retry_count}")
+        
+        return config
 
 # Check transformers version and compatibility
 def check_transformers_compatibility():
@@ -95,15 +547,31 @@ def check_transformers_compatibility():
 
 # Device configuration - prioritize GPU if available
 def get_device():
-    """Get the best available device (GPU if available, otherwise CPU)."""
+    """Get GPU device or quit if not available."""
     if torch.cuda.is_available():
         device = 'cuda'
-        logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
+        gpu_name = torch.cuda.get_device_name(0)
+        total_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        
+        logger.info(f"GPU detected: {gpu_name}")
         logger.info(f"CUDA version: {torch.version.cuda}")
-        logger.info(f"GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+        logger.info(f"GPU memory: {total_memory_gb:.1f} GB")
+        
+        # Check if GPU has sufficient memory
+        if total_memory_gb < 6:
+            logger.error(f"ERROR: GPU has insufficient memory ({total_memory_gb:.1f}GB).")
+            logger.error("Minimum 6GB GPU memory required for transformer training.")
+            logger.error("Please use a GPU with more memory.")
+            logger.error("Exiting.")
+            exit(1)
+        elif total_memory_gb < 8:
+            logger.warning(f"GPU has moderate memory ({total_memory_gb:.1f}GB). Will use conservative settings.")
+        else:
+            logger.info(f"GPU has sufficient memory ({total_memory_gb:.1f}GB) for optimal training.")
     else:
-        device = 'cpu'
-        logger.warning("No GPU detected. Using CPU. For better performance, ensure CUDA is installed.")
+        logger.error("No CUDA-capable GPU detected.")
+        logger.error("Exiting.")
+        exit(1)
     
     logger.info(f"Using device: {device}")
     return device
@@ -118,7 +586,7 @@ MODEL_CONFIGS = {
     'deberta-v3-large': 'microsoft/deberta-v3-large',
     'modernbert-base': 'answerdotai/ModernBERT-base',
     'modernbert-large': 'answerdotai/ModernBERT-large',
-    'minilm': 'sentence-transformers/all-MiniLM-L12-v2',  # Default fallback
+    'minilm': 'sentence-transformers/all-MiniLM-L12-v2',
     'distilbert': 'distilbert-base-uncased',
     'electra-base': 'google/electra-base-discriminator',
     'electra-large': 'google/electra-large-discriminator'
@@ -205,11 +673,11 @@ class Jailbreak_Dataset:
         self.dataset_configs = {
             "salad-data": {
                 "name": "OpenSafetyLab/Salad-Data",
-                "config": "attack_enhanced_set",
+                "config": "attack_enhanced_set",  # Use the correct config
                 "type": "jailbreak",
-                "text_field": "prompt",
-                "filter_field": "category",
-                "filter_value": "O5: Malicious Use",
+                "text_field": "augq",  # Use augmented question (more adversarial)
+                "filter_field": None,  # Remove filter for now
+                "filter_value": None,
                 "description": "Sophisticated jailbreak attempts from Salad-Data"
             },
             "toxic-chat": {
@@ -224,7 +692,9 @@ class Jailbreak_Dataset:
             "spml-injection": {
                 "name": "reshabhs/SPML_Chatbot_Prompt_Injection",
                 "type": "jailbreak",
-                "text_field": "prompt",
+                "text_field": "User Prompt",  # Use 'User Prompt' which is the actual jailbreak attempt
+                "filter_field": "Prompt injection",  # Filter by prompt injection indicator
+                "filter_value": True,  # Only include samples marked as prompt injection
                 "description": "Scenario-based prompt injection attacks (16k samples)"
             },
             
@@ -233,21 +703,18 @@ class Jailbreak_Dataset:
                 "name": "alespalla/chatbot_instruction_prompts",
                 "type": "benign",
                 "text_field": "prompt", 
-                "max_samples": 7000,
                 "description": "Benign chatbot instruction prompts"
             },
             "orca-agentinstruct": {
                 "name": "microsoft/orca-agentinstruct-1M-v1",
                 "type": "benign",
-                "text_field": "content",
-                "max_samples": 7000,
+                "text_field": "messages",  # Try 'messages' field
                 "description": "Benign prompts from Orca AgentInstruct dataset"
             },
             "vmware-openinstruct": {
                 "name": "VMware/open-instruct",
                 "type": "benign",
-                "text_field": "prompt",
-                "max_samples": 7000,
+                "text_field": "instruction",  # Try 'instruction' instead of 'prompt'
                 "description": "Benign instruction prompts from VMware"
             },
             
@@ -257,9 +724,34 @@ class Jailbreak_Dataset:
                 "text_field": "prompt",
                 "label_field": "type",
                 "description": "Original jailbreak classification dataset"
+            },
+
+            "alpaca-gpt4": {
+                "name": "vicgalle/alpaca-gpt4",
+                "type": "benign",
+                "text_field": "instruction",
+                "description": "High-quality instruction dataset from GPT-4"
+            },
+            "databricks-dolly": {
+                "name": "databricks/databricks-dolly-15k",
+                "type": "benign",
+                "text_field": "instruction",
+                "description": "High-quality instruction dataset from Databricks"
             }
         }
         
+    @retry_with_backoff(max_retries=3, base_delay=2)
+    def _load_dataset_with_retries(self, dataset_name, config_name=None):
+        """Load dataset with retries and timeout."""
+        try:
+            if config_name:
+                return load_dataset(dataset_name, config_name, download_mode="reuse_cache_if_exists")
+            else:
+                return load_dataset(dataset_name, download_mode="reuse_cache_if_exists")
+        except Exception as e:
+            logger.warning(f"Failed to load {dataset_name} with config {config_name}: {e}")
+            raise
+
     def load_single_dataset(self, config_key):
         """Load a single dataset based on configuration."""
         config = self.dataset_configs[config_key]
@@ -270,11 +762,40 @@ class Jailbreak_Dataset:
         logger.info(f"Loading {config['description']} from {dataset_name}...")
         
         try:
-            # Load the dataset
-            if "config" in config:
-                dataset = load_dataset(dataset_name, config["config"])
-            else:
-                dataset = load_dataset(dataset_name)
+            # Load the dataset with multiple fallback strategies
+            dataset = None
+            
+            # Strategy 1: Try with specified config
+            if config.get("config"):
+                try:
+                    dataset = self._load_dataset_with_retries(dataset_name, config["config"])
+                except Exception as e:
+                    logger.warning(f"Failed to load with config '{config['config']}': {e}")
+            
+            # Strategy 2: Try without config
+            if dataset is None:
+                try:
+                    dataset = self._load_dataset_with_retries(dataset_name)
+                except Exception as e:
+                    logger.warning(f"Failed to load without config: {e}")
+            
+            # Strategy 3: Try with different common configs
+            if dataset is None:
+                common_configs = ["default", "main", "train"]
+                # For Salad-Data, try the known configs
+                if "Salad-Data" in dataset_name:
+                    common_configs = ["attack_enhanced_set", "base_set", "defense_enhanced_set", "mcq_set"]
+                
+                for cfg in common_configs:
+                    try:
+                        dataset = self._load_dataset_with_retries(dataset_name, cfg)
+                        logger.info(f"Successfully loaded {dataset_name} with config '{cfg}'")
+                        break
+                    except Exception as e:
+                        continue
+            
+            if dataset is None:
+                raise Exception(f"Could not load dataset with any configuration")
             
             texts = []
             labels = []
@@ -283,17 +804,111 @@ class Jailbreak_Dataset:
             for split_name in dataset.keys():
                 split_data = dataset[split_name]
                 
+                # Get first few samples to inspect structure
+                try:
+                    sample_items = list(split_data.take(5))
+                    if sample_items:
+                        logger.info(f"Sample fields in {split_name}: {list(sample_items[0].keys())}")
+                    else:
+                        logger.warning(f"No samples found in split {split_name}")
+                        continue
+                except Exception as e:
+                    logger.warning(f"Could not inspect dataset structure: {e}")
+                    continue
+                
+                # Try multiple possible text field names
+                possible_text_fields = [text_field, "augq", "baseq", "User Prompt", "text", "prompt", "instruction", "input", "question", "content", "user_input", "query", "message"]
+                actual_text_field = None
+                
+                for field in possible_text_fields:
+                    if sample_items and field in sample_items[0]:
+                        # Check if the field contains valid text data
+                        sample_value = sample_items[0][field]
+                        if sample_value is not None:
+                            actual_text_field = field
+                            break
+                
+                if not actual_text_field:
+                    logger.warning(f"Could not find valid text field in {dataset_name}. Available fields: {list(sample_items[0].keys()) if sample_items else 'None'}")
+                    # Try to use the best available field as fallback
+                    fallback_priorities = ["augq", "User Prompt", "System Prompt", "alpaca_prompt", "conversations", "chat", "baseq"]
+                    
+                    # First try priority fields
+                    for priority_field in fallback_priorities:
+                        if sample_items and priority_field in sample_items[0]:
+                            sample_value = sample_items[0][priority_field]
+                            if sample_value is not None:
+                                actual_text_field = priority_field
+                                logger.info(f"Using priority fallback text field: {actual_text_field}")
+                                break
+                    
+                    # If no priority field found, use the first good string field
+                    if not actual_text_field:
+                        for field_name, field_value in sample_items[0].items():
+                            if isinstance(field_value, str) and len(field_value.strip()) > 10:
+                                actual_text_field = field_name
+                                logger.info(f"Using general fallback text field: {actual_text_field}")
+                                break
+                    
+                    if not actual_text_field:
+                        continue
+                else:
+                    logger.info(f"Using text field: {actual_text_field}")
+                
+                processed_count = 0
+                split_size = len(split_data) if hasattr(split_data, '__len__') else "unknown"
+                logger.info(f"Processing {split_size} samples from split {split_name}")
+                
                 for sample in split_data:
+                    processed_count += 1
+                    
+                    # Progress logging for large datasets
+                    if processed_count % 10000 == 0:
+                        logger.info(f"Processed {processed_count} samples, collected {len(texts)} valid texts")
+                    
                     # Extract text
-                    if text_field not in sample:
+                    text = sample.get(actual_text_field)
+                    if not text:
                         continue
                     
-                    text = sample[text_field]
-                    if not text or not isinstance(text, str):
+                    # Handle different text formats
+                    try:
+                        if isinstance(text, list):
+                            # For datasets where text is a list (like messages)
+                            if len(text) > 0:
+                                if isinstance(text[0], dict) and "content" in text[0]:
+                                    text = text[0]["content"]  # For message format
+                                elif isinstance(text[0], dict) and "text" in text[0]:
+                                    text = text[0]["text"]  # Alternative message format
+                                else:
+                                    text = str(text[0])
+                            else:
+                                continue
+                        elif isinstance(text, dict):
+                            # For nested structures
+                            if "content" in text:
+                                text = text["content"]
+                            elif "text" in text:
+                                text = text["text"]
+                            elif "instruction" in text:
+                                text = text["instruction"]
+                            else:
+                                text = str(text)
+                        
+                        if not isinstance(text, str) or len(text.strip()) == 0:
+                            continue
+                            
+                        # Basic text quality filtering
+                        text = text.strip()
+                        if len(text) < 10 or len(text) > 10000:  # Skip very short or very long texts
+                            continue
+                            
+                    except Exception as e:
+                        logger.debug(f"Error processing text field: {e}")
                         continue
                     
                     # Apply filters if specified
-                    if "filter_field" in config:
+                    if config.get("filter_field") and config.get("filter_value") is not None:
                         filter_field = config["filter_field"]
                         filter_value = config["filter_value"]
                         if filter_field not in sample or sample[filter_field] != filter_value:
@@ -311,8 +926,12 @@ class Jailbreak_Dataset:
                         # Default labeling for mixed datasets without explicit label field
                         label = "unknown"
                     
-                    texts.append(text.strip())
+                    texts.append(text)
                     labels.append(label)
+                    
+                    # No per-split limit - process all available samples
+                
+                logger.info(f"Collected {len(texts)} valid samples from split {split_name}")
             
             # Apply sampling if specified
             max_samples = config.get("max_samples", self.max_samples_per_source)
@@ -329,6 +948,7 @@ class Jailbreak_Dataset:
             
         except Exception as e:
             logger.warning(f"Failed to load dataset {dataset_name}: {e}")
+            logger.warning(f"Error details: {type(e).__name__}: {str(e)}")
             return [], []
     
     def load_default_datasets(self):
@@ -338,14 +958,16 @@ class Jailbreak_Dataset:
         all_texts = []
         all_labels = []
         
-        # Default datasets
+        # Default datasets with fallbacks
         default_datasets = [
-            "salad-data",           # Sophisticated jailbreak attempts
             "toxic-chat",           # Jailbreak prompts from toxic-chat
-            "spml-injection",       # Scenario-based attacks
             "chatbot-instructions", # Benign prompts (7k samples)
+            "salad-data",           # Sophisticated jailbreak attempts
+            "spml-injection",       # Scenario-based attacks
             "orca-agentinstruct",   # Benign prompts (7k samples)
-            "vmware-openinstruct"   # Benign prompts (7k samples)
+            "vmware-openinstruct",  # Benign prompts (7k samples)
+            "alpaca-gpt4",          # Benign dataset
+            "databricks-dolly"      # Benign dataset
         ]
         
         dataset_stats = {}
@@ -363,6 +985,29 @@ class Jailbreak_Dataset:
         logger.info("Dataset loading summary:")
         for dataset_key, count in dataset_stats.items():
             logger.info(f"  {dataset_key}: {count} samples")
+        
+        # Check if we have minimum required samples
+        total_samples = len(all_texts)
+        jailbreak_samples = sum(1 for label in all_labels if label == "jailbreak")
+        benign_samples = sum(1 for label in all_labels if label == "benign")
+        
+        logger.info(f"Total samples: {total_samples}")
+        logger.info(f"Jailbreak samples: {jailbreak_samples}")
+        logger.info(f"Benign samples: {benign_samples}")
+        
+        # Minimum requirements
+        min_total_samples = 1000
+        min_samples_per_class = 100
+        
+        if total_samples < min_total_samples:
+            logger.warning(f"Only loaded {total_samples} samples, which is less than minimum {min_total_samples}")
+            logger.warning("Consider using additional datasets or reducing sample limits")
+        
+        if jailbreak_samples < min_samples_per_class:
+            logger.warning(f"Only {jailbreak_samples} jailbreak samples loaded, minimum recommended: {min_samples_per_class}")
+            
+        if benign_samples < min_samples_per_class:
+            logger.warning(f"Only {benign_samples} benign samples loaded, minimum recommended: {min_samples_per_class}")
         
         return all_texts, all_labels
     
@@ -539,21 +1184,100 @@ def evaluate_jailbreak_classifier(model, tokenizer, texts_list, true_label_indic
     
     return accuracy, class_report, conf_matrix, (predictions, true_labels)
 
-def main(model_name="minilm", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3):
+def main_with_oom_recovery(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, max_retries=4):
+    """Main function with OOM recovery - tries multiple configurations if memory issues occur."""
+    
+    # Preemptive memory check - quit if GPU is insufficient
+    if torch.cuda.is_available():
+        total_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        if total_memory_gb < 6:
+            logger.error(f"GPU memory is insufficient ({total_memory_gb:.1f}GB) for transformer training.")
+            return None
+        elif total_memory_gb < 8:
+            logger.warning(f"GPU memory is on the lower side ({total_memory_gb:.1f}GB). Using conservative settings.")
+            # Use conservative settings but continue
+            if max_samples_per_source is None:
+                max_samples_per_source = 5000  # Moderate dataset size
+                logger.info(f"Limiting to {max_samples_per_source} samples per source for memory efficiency")
+    else:
+        logger.error("No GPU detected.")
+        logger.error("Exiting.")
+        return None
+    
+    for retry_count in range(max_retries):
+        try:
+            logger.info(f"{'='*60}")
+            logger.info(f"TRAINING ATTEMPT {retry_count + 1}/{max_retries}")
+            logger.info(f"{'='*60}")
+            
+            return main_single_attempt(model_name, max_epochs, batch_size, dataset_sources, 
+                                     max_samples_per_source, target_accuracy, patience, 
+                                     enable_auto_optimization, retry_count)
+                                     
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            error_msg = str(e).lower()
+            if "out of memory" in error_msg or "cuda out of memory" in error_msg:
+                logger.error(f"OOM Error on attempt {retry_count + 1}: {e}")
+                
+                # Clear GPU memory
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+                
+                if retry_count < max_retries - 1:
+                    logger.info(f"Retrying with more conservative memory settings...")
+                    time.sleep(5)  # Wait before retry
+                else:
+                    logger.error("All retry attempts failed due to memory issues")
+                    raise
+            else:
+                # Non-memory related error, don't retry
+                raise
+        except Exception as e:
+            logger.error(f"Non-memory error on attempt {retry_count + 1}: {e}")
+            if "killed" in str(e).lower() or isinstance(e, KeyboardInterrupt):
+                # Process was killed, likely due to memory
+                logger.error("Process was killed, likely due to memory constraints")
+                if retry_count < max_retries - 1:
+                    logger.info("Retrying with more conservative settings...")
+                    time.sleep(5)
+                    continue
+            raise
+    
+    logger.error("All attempts failed")
+    return None
+
+def main(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True):
+    """Main function wrapper that calls the OOM recovery version."""
+    return main_with_oom_recovery(model_name, max_epochs, batch_size, dataset_sources, max_samples_per_source, target_accuracy, patience, enable_auto_optimization)
+
+def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=16, dataset_sources=None, max_samples_per_source=None, target_accuracy=0.95, patience=3, enable_auto_optimization=True, retry_count=0):
     """Main function to demonstrate jailbreak classification fine-tuning with accuracy-based early stopping."""
     
-    # Validate model name
+    # Validate model name and apply model downgrading on retries for memory conservation
     if model_name not in MODEL_CONFIGS:
         logger.error(f"Unknown model: {model_name}. Available models: {list(MODEL_CONFIGS.keys())}")
         return
     
-    # Set up device (GPU if available)
+    # Progressive model downgrading on retries to fit in memory
+    original_model = model_name
+    if retry_count >= 1:
+        # More aggressive downgrading - start earlier
+        if model_name in ['modernbert-large', 'bert-large', 'roberta-large', 'deberta-v3-large']:
+            model_name = 'minilm'  # Switch to smallest model immediately
+            logger.info(f"Retry {retry_count}: Downgrading from {original_model} to {model_name} to save memory")
+        elif retry_count >= 2 and model_name in ['modernbert-base', 'bert-base', 'roberta-base', 'deberta-v3-base']:
+            model_name = 'minilm'  # Switch to smallest model  
+            logger.info(f"Retry {retry_count}: Downgrading from {original_model} to {model_name} to save memory")
+    
+    # Set up device (GPU only, no CPU fallback)
     device = get_device()
     
     model_path = MODEL_CONFIGS[model_name]
     logger.info(f"Using model: {model_name} ({model_path})")
     logger.info(f"Training configuration: max {max_epochs} epochs, batch size {batch_size}")
     logger.info(f"Early stopping: target accuracy {target_accuracy:.4f}, patience {patience}")
+    logger.info(f"Auto-optimization: {'enabled' if enable_auto_optimization else 'disabled'}")
     
     if dataset_sources:
         logger.info(f"Using dataset sources: {dataset_sources}")
@@ -564,7 +1288,17 @@ def main(model_name="minilm", max_epochs=10, batch_size=16, dataset_sources=None
         logger.info(f"Max samples per source: {max_samples_per_source}")
     
     logger.info("Loading jailbreak classification dataset...")
-    dataset_loader = Jailbreak_Dataset(dataset_sources=dataset_sources, max_samples_per_source=max_samples_per_source)
+    
+    # Apply progressive dataset size limiting on retries to prevent memory issues
+    if retry_count >= 1 and max_samples_per_source is None:
+        # Ultra-aggressive dataset size limits for memory conservation
+        retry_limits = [None, 500, 200, 100]  # None, 500, 200, 100 samples per source
+        effective_limit = retry_limits[min(retry_count, len(retry_limits)-1)]
+        logger.info(f"Retry {retry_count}: Limiting to {effective_limit} samples per source to conserve memory")
+        dataset_loader = Jailbreak_Dataset(dataset_sources=dataset_sources, max_samples_per_source=effective_limit)
+    else:
+        dataset_loader = Jailbreak_Dataset(dataset_sources=dataset_sources, max_samples_per_source=max_samples_per_source)
+    
     datasets = dataset_loader.prepare_datasets()
     
     train_texts, train_categories = datasets['train']
@@ -608,44 +1342,229 @@ def main(model_name="minilm", max_epochs=10, batch_size=16, dataset_sources=None
     # Move model to device
     model.to(device)
     
-    # Tokenize datasets
+    # Initialize GPU optimizer and get optimization configuration
+    optimization_config = None
+    if enable_auto_optimization:
+        try:
+            logger.info("="*60)
+            logger.info("AUTO-OPTIMIZATION PHASE")
+            logger.info("="*60)
+            
+            # Clear memory before optimization
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            gpu_optimizer = GPUOptimizer()
+            optimization_config = gpu_optimizer.create_optimization_config(
+                model, tokenizer, train_texts, max_batch_size=max(batch_size * 4, 64), retry_count=retry_count
+            )
+            
+            # Apply optimizations
+            batch_size = optimization_config.batch_size
+            max_sequence_length = optimization_config.max_sequence_length
+            
+            # Clear memory before applying optimizations
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            # Enable gradient checkpointing if recommended
+            if optimization_config.enable_gradient_checkpointing:
+                logger.info("Enabling gradient checkpointing...")
+                model.gradient_checkpointing_enable()
+            
+            # Enable torch compile if recommended and available (skip on retries)
+            if optimization_config.use_torch_compile and retry_count == 0:
+                try:
+                    logger.info("Enabling torch compile...")
+                    model = torch.compile(model)
+                    
+                    # Clear memory after compilation
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to compile model: {e}")
+            elif optimization_config.use_torch_compile and retry_count > 0:
+                logger.info("Skipping torch compile on retry to save memory")
+            
+            logger.info("="*60)
+            logger.info("OPTIMIZATION COMPLETE")
+            logger.info("="*60)
+            
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+            logger.error(f"OOM during optimization phase: {e}")
+            # Clear memory and use fallback settings
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            # Use ultra-conservative fallback settings
+            batch_size = 1
+            max_sequence_length = 128 if retry_count >= 1 else 256
+            logger.warning(f"Using fallback settings: batch_size={batch_size}, seq_length={max_sequence_length}")
+            
+        except Exception as e:
+            logger.error(f"Error during optimization phase: {e}")
+            # Use conservative fallback settings
+            batch_size = 2 if retry_count == 0 else 1
+            max_sequence_length = 256 if retry_count == 0 else 128
+            logger.warning(f"Using fallback settings due to error: batch_size={batch_size}, seq_length={max_sequence_length}")
+    else:
+        max_sequence_length = 512
+    
+    # Tokenize datasets with memory protection
     def tokenize_function(examples):
-        return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=512)
+        # Tokenize (this happens on CPU - which is normal and efficient)
+        # Keep everything on CPU during tokenization to avoid CUDA multiprocessing issues
+        tokens = tokenizer(
+            examples["text"], 
+            truncation=True, 
+            padding="max_length", 
+            max_length=max_sequence_length,
+            return_tensors="pt"
+        )
+        
+        # Convert to lists for HF datasets compatibility
+        # GPU transfer will happen automatically during training via DataLoader
+        return {
+            'input_ids': tokens['input_ids'].tolist(),
+            'attention_mask': tokens['attention_mask'].tolist()
+        }
     
-    # Create datasets
-    train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
-    val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
-    test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
-    
-    # Tokenize datasets
-    train_dataset = train_dataset.map(tokenize_function, batched=True)
-    val_dataset = val_dataset.map(tokenize_function, batched=True)
-    test_dataset = test_dataset.map(tokenize_function, batched=True)
+    try:
+        # Create datasets
+        logger.info("Creating datasets...")
+        train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
+        val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
+        test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
+        
+        # Clear memory before tokenization
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        # Use larger batch sizes for faster tokenization (tensors moved to GPU)
+        tokenize_batch_size = 4000 if retry_count == 0 else (2000 if retry_count == 1 else 1000)
+        logger.info(f"Tokenizing datasets with GPU tensor optimization (batch_size={tokenize_batch_size})...")
+        
+        # Disable multiprocessing when using CUDA to avoid forking issues
+        # CUDA doesn't work well with multiprocessing fork method
+        num_proc = 1 if torch.cuda.is_available() else min(4, os.cpu_count())
+        if retry_count > 0:
+            num_proc = 1  # Always single process on retries
+        
+        train_dataset = train_dataset.map(
+            tokenize_function, 
+            batched=True, 
+            batch_size=tokenize_batch_size,
+            num_proc=num_proc,
+            remove_columns=["text"]  # Remove original text to save memory
+        )
+        
+        # Clear memory between dataset tokenizations
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        val_dataset = val_dataset.map(
+            tokenize_function, 
+            batched=True, 
+            batch_size=tokenize_batch_size,
+            num_proc=num_proc,
+            remove_columns=["text"]
+        )
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        test_dataset = test_dataset.map(
+            tokenize_function, 
+            batched=True, 
+            batch_size=tokenize_batch_size,
+            num_proc=num_proc,
+            remove_columns=["text"]
+        )
+        
+        logger.info("Dataset tokenization completed successfully")
+        
+    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        logger.error(f"OOM during dataset tokenization: {e}")
+        # Clear memory and try with minimal batch size
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        logger.warning("Retrying tokenization with minimal batch size...")
+        train_dataset = train_dataset.map(tokenize_function, batched=True, batch_size=1)
+        val_dataset = val_dataset.map(tokenize_function, batched=True, batch_size=1)
+        test_dataset = test_dataset.map(tokenize_function, batched=True, batch_size=1)
+        
+    except Exception as e:
+        logger.error(f"Error during dataset tokenization: {e}")
+        raise
     
     # Check transformers version compatibility
     eval_strategy_param = check_transformers_compatibility()
     
     # Training arguments
     output_model_path = f"jailbreak_classifier_{model_name}_model"
-    # Training args with early stopping support
+    
+    # Apply optimization configuration to training arguments
+    if optimization_config:
+        effective_batch_size = optimization_config.batch_size
+        gradient_accumulation_steps = optimization_config.gradient_accumulation_steps
+        dataloader_num_workers = optimization_config.num_workers
+        dataloader_pin_memory = optimization_config.pin_memory
+        dataloader_drop_last = optimization_config.dataloader_drop_last
+        
+        # Mixed precision settings
+        fp16 = optimization_config.use_mixed_precision and optimization_config.precision_type == "fp16"
+        bf16 = optimization_config.use_mixed_precision and optimization_config.precision_type == "bf16"
+        
+        logger.info(f"Using optimized training configuration:")
+        logger.info(f"  Effective batch size: {effective_batch_size * gradient_accumulation_steps}")
+        logger.info(f"  Per-device batch size: {effective_batch_size}")
+        logger.info(f"  Gradient accumulation steps: {gradient_accumulation_steps}")
+        logger.info(f"  Mixed precision: {optimization_config.precision_type if optimization_config.use_mixed_precision else 'disabled'}")
+        logger.info(f"  DataLoader workers: {dataloader_num_workers}")
+    else:
+        effective_batch_size = min(batch_size, 8)
+        gradient_accumulation_steps = 1
+        dataloader_num_workers = 0
+        dataloader_pin_memory = False
+        dataloader_drop_last = False
+        fp16 = False
+        bf16 = False
+    
+    # Training args with optimization support
     training_args_dict = {
         "output_dir": output_model_path,
         "num_train_epochs": max_epochs,  # Maximum epochs (will stop early if target accuracy reached)
-        "per_device_train_batch_size": min(batch_size, 8),  # Smaller batches
-        "per_device_eval_batch_size": min(batch_size, 8),
+        "per_device_train_batch_size": effective_batch_size,
+        "per_device_eval_batch_size": effective_batch_size,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
         "learning_rate": 2e-5,  # Lower learning rate for small datasets
-        "warmup_steps": min(100, len(train_texts) // (batch_size * 2)),  # Adaptive warmup
+        "warmup_steps": min(100, len(train_texts) // (effective_batch_size * gradient_accumulation_steps * 2)),  # Adaptive warmup
         "weight_decay": 0.1,  # Higher regularization
         "logging_dir": f"{output_model_path}/logs",
         "logging_steps": 50,
         eval_strategy_param: "epoch",  # Evaluate every epoch to check accuracy
         "save_strategy": "epoch",
         "load_best_model_at_end": True,
-        "metric_for_best_model": "accuracy",  # Use accuracy as the primary metric
+        "metric_for_best_model": "eval_accuracy",  # Use accuracy as the primary metric
         "save_total_limit": 3,  # Keep more checkpoints
         "report_to": [],
-        "dataloader_drop_last": False,  # Don't drop incomplete batches with small datasets
+        "dataloader_drop_last": dataloader_drop_last,
         "eval_steps": 50,  # More frequent evaluation
+        "dataloader_num_workers": dataloader_num_workers,
+        "dataloader_pin_memory": dataloader_pin_memory,
+        "fp16": fp16,
+        "bf16": bf16,
+        "remove_unused_columns": False,  # Keep all columns to avoid forward method signature issues
     }
     
     training_args = TrainingArguments(**training_args_dict)
@@ -668,10 +1587,35 @@ def main(model_name="minilm", max_epochs=10, batch_size=16, dataset_sources=None
 
     logger.info(f"Starting jailbreak classification fine-tuning with {model_name}...")
 
-    # Train the model with error handling
+    # Train the model with error handling and memory monitoring
     try:
+        # Clear memory before training
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        # Log memory status before training
+        if torch.cuda.is_available():
+            memory_allocated = torch.cuda.memory_allocated() / 1024**3
+            memory_reserved = torch.cuda.memory_reserved() / 1024**3
+            logger.info(f"Pre-training GPU memory - Allocated: {memory_allocated:.2f}GB, Reserved: {memory_reserved:.2f}GB")
+        
         trainer.train()
         logger.info("Training completed successfully!")
+        
+    except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
+        error_msg = str(e).lower()
+        if "out of memory" in error_msg or "cuda out of memory" in error_msg:
+            logger.error(f"GPU OOM during training: {e}")
+            # Log memory status for debugging
+            if torch.cuda.is_available():
+                memory_allocated = torch.cuda.memory_allocated() / 1024**3
+                memory_reserved = torch.cuda.memory_reserved() / 1024**3
+                logger.error(f"OOM GPU memory - Allocated: {memory_allocated:.2f}GB, Reserved: {memory_reserved:.2f}GB")
+        else:
+            logger.error(f"Training failed with runtime error: {e}")
+        logger.info("Training failed but checkpoints may be saved for resuming")
+        raise
     except Exception as e:
         logger.error(f"Training failed with error: {e}")
         logger.info("Training may have been interrupted but checkpoints are saved for resuming")
@@ -736,7 +1680,7 @@ def main(model_name="minilm", max_epochs=10, batch_size=16, dataset_sources=None
     
     return model, tokenizer, idx_to_category
 
-def demo_inference(model_name="minilm"):
+def demo_inference(model_name="modernbert-base"):
     """Demonstrate inference with the trained model."""
     
     # Set up device (GPU if available)
@@ -852,7 +1796,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Jailbreak Classification Fine-tuning with Multiple Datasets")
     parser.add_argument("--mode", choices=["train", "test"], default="train", 
                        help="Mode: 'train' to fine-tune model, 'test' to run inference")
-    parser.add_argument("--model", choices=MODEL_CONFIGS.keys(), default="minilm", 
+    parser.add_argument("--model", choices=MODEL_CONFIGS.keys(), default="modernbert-base", 
                        help="Model to use for fine-tuning (e.g., bert-base, roberta-base, modernbert-base, etc.)")
     parser.add_argument("--max-epochs", type=int, default=10,
                        help="Maximum number of training epochs (default: 10, training will stop early if target accuracy reached)")
@@ -872,6 +1816,8 @@ if __name__ == "__main__":
                        help="Maximum number of samples to load per dataset source (default: no limit)")
     parser.add_argument("--list-datasets", action="store_true",
                        help="List available datasets and their descriptions")
+    parser.add_argument("--disable-auto-optimization", action="store_true",
+                       help="Disable automatic GPU optimization (use manual batch size and settings)")
     
     args = parser.parse_args()
     
@@ -905,16 +1851,20 @@ if __name__ == "__main__":
             print()
         
         print("\nUsage Examples:")
-        print("  # Use default datasets (default):")
+        print("  # Use default datasets with auto-optimization (recommended):")
         print("  python jailbreak_bert_finetuning.py --mode train --datasets default")
-        print("\n  # Use specific datasets:")
+        print("\n  # Use specific datasets with auto-optimization:")
         print("  python jailbreak_bert_finetuning.py --mode train --datasets salad-data chatbot-instructions")
         print("\n  # Limit samples per dataset:")
         print("  python jailbreak_bert_finetuning.py --mode train --max-samples-per-source 5000")
+        print("\n  # Disable auto-optimization for manual control:")
+        print("  python jailbreak_bert_finetuning.py --mode train --batch-size 16 --disable-auto-optimization")
+        print("\n  # Auto-optimized training with ModernBERT:")
+        print("  python jailbreak_bert_finetuning.py --mode train --model modernbert-base")
         
         exit(0)
     
     if args.mode == "train":
-        main(args.model, args.max_epochs, args.batch_size, args.datasets, args.max_samples_per_source, args.target_accuracy, args.patience)
+        main(args.model, args.max_epochs, args.batch_size, args.datasets, args.max_samples_per_source, args.target_accuracy, args.patience, not args.disable_auto_optimization)
     elif args.mode == "test":
         demo_inference(args.model) 
