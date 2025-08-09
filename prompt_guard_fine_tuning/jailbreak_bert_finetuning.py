@@ -111,7 +111,7 @@ from transformers import (
     TrainerCallback,
     __version__ as transformers_version
 )
-from datasets import Dataset, load_dataset
+from datasets import Dataset, load_dataset, load_from_disk
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, accuracy_score, classification_report, confusion_matrix
 from collections import Counter
@@ -228,7 +228,7 @@ class DatasetCache:
         return self.cache_dir / f"dataset_{cache_key}.pkl"
     
     def _get_tokenized_cache_path(self, dataset_sources, max_samples_per_source, model_name, max_length):
-        """Get cache path for tokenized dataset."""
+        """Get cache directory path for tokenized dataset (HF-native on-disk cache)."""
         cache_key = self._get_cache_key(
             dataset_sources=dataset_sources,
             max_samples_per_source=max_samples_per_source,
@@ -236,7 +236,7 @@ class DatasetCache:
             max_length=max_length,
             cache_type="tokenized_dataset"
         )
-        return self.cache_dir / f"tokenized_{cache_key}.pkl"
+        return self.cache_dir / f"tokenized_{cache_key}"
     
     def save_raw_dataset(self, datasets, dataset_sources, max_samples_per_source, label_mappings):
         """Save raw dataset to cache."""
@@ -277,41 +277,37 @@ class DatasetCache:
     
     def save_tokenized_datasets(self, train_dataset, val_dataset, test_dataset, 
                                dataset_sources, max_samples_per_source, model_name, max_length):
-        """Save tokenized datasets to cache."""
-        cache_path = self._get_tokenized_cache_path(dataset_sources, max_samples_per_source, model_name, max_length)
-        
-        cache_data = {
-            'train_dataset': train_dataset,
-            'val_dataset': val_dataset,
-            'test_dataset': test_dataset,
-            'timestamp': time.time(),
-            'dataset_sources': dataset_sources,
-            'max_samples_per_source': max_samples_per_source,
-            'model_name': model_name,
-            'max_length': max_length
-        }
-        
+        """Save tokenized datasets to cache using Hugging Face save_to_disk (avoids pickling huge objects)."""
+        cache_dir = self._get_tokenized_cache_path(dataset_sources, max_samples_per_source, model_name, max_length)
         try:
-            with open(cache_path, 'wb') as f:
-                pickle.dump(cache_data, f)
-            logger.info(f"Tokenized datasets cached to: {cache_path}")
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / 'meta.json').write_text(json.dumps({
+                'timestamp': time.time(),
+                'dataset_sources': dataset_sources,
+                'max_samples_per_source': max_samples_per_source,
+                'model_name': model_name,
+                'max_length': max_length
+            }))
+            train_dataset.save_to_disk(str(cache_dir / 'train'))
+            val_dataset.save_to_disk(str(cache_dir / 'val'))
+            test_dataset.save_to_disk(str(cache_dir / 'test'))
+            logger.info(f"Tokenized datasets cached to: {cache_dir}")
         except Exception as e:
             logger.warning(f"Failed to cache tokenized datasets: {e}")
     
     def load_tokenized_datasets(self, dataset_sources, max_samples_per_source, model_name, max_length):
-        """Load tokenized datasets from cache if available."""
-        cache_path = self._get_tokenized_cache_path(dataset_sources, max_samples_per_source, model_name, max_length)
+        """Load tokenized datasets from cache if available (HF load_from_disk)."""
+        cache_dir = self._get_tokenized_cache_path(dataset_sources, max_samples_per_source, model_name, max_length)
         
-        if not cache_path.exists():
+        if not cache_dir.exists():
             return None, None, None
         
         try:
-            with open(cache_path, 'rb') as f:
-                cache_data = pickle.load(f)
-            
-            logger.info(f"Loaded tokenized datasets from cache: {cache_path}")
-            return cache_data['train_dataset'], cache_data['val_dataset'], cache_data['test_dataset']
-            
+            train_dataset = load_from_disk(str(cache_dir / 'train'))
+            val_dataset = load_from_disk(str(cache_dir / 'val'))
+            test_dataset = load_from_disk(str(cache_dir / 'test'))
+            logger.info(f"Loaded tokenized datasets from cache: {cache_dir}")
+            return train_dataset, val_dataset, test_dataset
         except Exception as e:
             logger.warning(f"Failed to load tokenized dataset cache: {e}")
             return None, None, None
@@ -319,8 +315,21 @@ class DatasetCache:
     def clear_cache(self):
         """Clear all cached data."""
         try:
+            # Remove legacy pickle caches
             for cache_file in self.cache_dir.glob("*.pkl"):
                 cache_file.unlink()
+            # Remove HF on-disk tokenized dataset caches
+            for cache_dir in self.cache_dir.glob("tokenized_*"):
+                if cache_dir.is_dir():
+                    for sub in cache_dir.rglob('*'):
+                        if sub.is_file():
+                            sub.unlink()
+                    # Remove empty directories bottom-up
+                    for subdir in sorted({p.parent for p in cache_dir.rglob('*')}, reverse=True):
+                        if subdir.exists() and not any(subdir.iterdir()):
+                            subdir.rmdir()
+                    if cache_dir.exists():
+                        cache_dir.rmdir()
             logger.info("Dataset cache cleared")
         except Exception as e:
             logger.warning(f"Failed to clear cache: {e}")
@@ -328,7 +337,11 @@ class DatasetCache:
     def get_cache_info(self):
         """Get information about cached data."""
         cache_files = list(self.cache_dir.glob("*.pkl"))
-        total_size = sum(f.stat().st_size for f in cache_files) / (1024**2)  # MB
+        # Include HF on-disk directories in size calculation
+        for dirpath in self.cache_dir.glob("tokenized_*"):
+            if dirpath.is_dir():
+                cache_files.extend(list(dirpath.rglob('*')))
+        total_size = sum(f.stat().st_size for f in cache_files if f.is_file()) / (1024**2)  # MB
         
         logger.info(f"Cache directory: {self.cache_dir}")
         logger.info(f"Cache files: {len(cache_files)}")
@@ -1610,26 +1623,22 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
         logger.info("Using cached tokenized datasets - skipping tokenization!")
         train_dataset, val_dataset, test_dataset = cached_train, cached_val, cached_test
     else:
-        logger.info("No valid tokenized cache found, proceeding with tokenization...")
+            logger.info("No valid tokenized cache found, proceeding with tokenization...")
         
         # Tokenize datasets with memory protection
         def tokenize_function(examples):
-            # Tokenize (this happens on CPU - which is normal and efficient)
-            # Keep everything on CPU during tokenization to avoid CUDA multiprocessing issues
+            # Tokenize on CPU and return plain Python lists to minimize peak memory
             tokens = tokenizer(
-                examples["text"], 
-                truncation=True, 
-                padding="max_length", 
+                examples["text"],
+                truncation=True,
+                padding="max_length",
                 max_length=max_sequence_length,
-                return_tensors="pt"
+                return_attention_mask=True
             )
-            
-            # Convert to lists for HF datasets compatibility
-            # GPU transfer will happen automatically during training via DataLoader
             return {
-                'input_ids': tokens['input_ids'].tolist(),
-                'attention_mask': tokens['attention_mask'].tolist(),
-                'labels': examples["labels"]  # Ensure labels are included
+                'input_ids': tokens['input_ids'],
+                'attention_mask': tokens['attention_mask'],
+                'labels': examples['labels']
             }
         
         try:
@@ -1644,13 +1653,14 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 torch.cuda.empty_cache()
             gc.collect()
             
-            # Use larger batch sizes for faster tokenization (tensors moved to GPU)
-            tokenize_batch_size = 4000 if retry_count == 0 else (2000 if retry_count == 1 else 1000)
-            logger.info(f"Tokenizing datasets with GPU tensor optimization (batch_size={tokenize_batch_size})...")
+            # Use conservative batch sizes and frequent disk flushes to avoid OOM
+            tokenize_batch_size = 256 if retry_count == 0 else (128 if retry_count == 1 else 64)
+            writer_batch_size = 1000 if retry_count == 0 else (500 if retry_count == 1 else 200)
+            logger.info(f"Tokenizing datasets (batch_size={tokenize_batch_size}, writer_batch_size={writer_batch_size})...")
             
             # Disable multiprocessing when using CUDA to avoid forking issues
             # CUDA doesn't work well with multiprocessing fork method
-            num_proc = 1 if torch.cuda.is_available() else min(4, os.cpu_count())
+            num_proc = 1 if torch.cuda.is_available() else min(2, os.cpu_count())
             if retry_count > 0:
                 num_proc = 1  # Always single process on retries
             
@@ -1659,7 +1669,10 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 batched=True, 
                 batch_size=tokenize_batch_size,
                 num_proc=num_proc,
-                remove_columns=["text"]  # Remove original text to save memory, keep labels
+                writer_batch_size=writer_batch_size,
+                remove_columns=["text"],  # Remove original text to save memory, keep labels
+                load_from_cache_file=False,
+                keep_in_memory=False
             )
             
             # Clear memory between dataset tokenizations
@@ -1672,7 +1685,10 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 batched=True, 
                 batch_size=tokenize_batch_size,
                 num_proc=num_proc,
-                remove_columns=["text"]  # Remove original text to save memory, keep labels
+                writer_batch_size=writer_batch_size,
+                remove_columns=["text"],  # Remove original text to save memory, keep labels
+                load_from_cache_file=False,
+                keep_in_memory=False
             )
             
             if torch.cuda.is_available():
@@ -1684,7 +1700,10 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 batched=True, 
                 batch_size=tokenize_batch_size,
                 num_proc=num_proc,
-                remove_columns=["text"]  # Remove original text to save memory, keep labels
+                writer_batch_size=writer_batch_size,
+                remove_columns=["text"],  # Remove original text to save memory, keep labels
+                load_from_cache_file=False,
+                keep_in_memory=False
             )
             
             logger.info("Dataset tokenization completed successfully")
@@ -1703,10 +1722,19 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 torch.cuda.empty_cache()
             gc.collect()
             
-            logger.warning("Retrying tokenization with minimal batch size...")
-            train_dataset = train_dataset.map(tokenize_function, batched=True, batch_size=1, remove_columns=["text"])
-            val_dataset = val_dataset.map(tokenize_function, batched=True, batch_size=1, remove_columns=["text"])
-            test_dataset = test_dataset.map(tokenize_function, batched=True, batch_size=1, remove_columns=["text"])
+            logger.warning("Retrying tokenization with minimal batch size and on-disk writes...")
+            train_dataset = train_dataset.map(
+                tokenize_function, batched=True, batch_size=16, writer_batch_size=128,
+                remove_columns=["text"], load_from_cache_file=False, keep_in_memory=False
+            )
+            val_dataset = val_dataset.map(
+                tokenize_function, batched=True, batch_size=16, writer_batch_size=128,
+                remove_columns=["text"], load_from_cache_file=False, keep_in_memory=False
+            )
+            test_dataset = test_dataset.map(
+                tokenize_function, batched=True, batch_size=16, writer_batch_size=128,
+                remove_columns=["text"], load_from_cache_file=False, keep_in_memory=False
+            )
             
         except Exception as e:
             logger.error(f"Error during dataset tokenization: {e}")
