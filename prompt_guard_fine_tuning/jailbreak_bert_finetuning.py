@@ -1623,7 +1623,7 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
         logger.info("Using cached tokenized datasets - skipping tokenization!")
         train_dataset, val_dataset, test_dataset = cached_train, cached_val, cached_test
     else:
-            logger.info("No valid tokenized cache found, proceeding with tokenization...")
+        logger.info("No valid tokenized cache found, proceeding with tokenization...")
         
         # Tokenize datasets with memory protection
         def tokenize_function(examples):
