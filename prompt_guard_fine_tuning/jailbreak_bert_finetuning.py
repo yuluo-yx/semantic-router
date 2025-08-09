@@ -738,10 +738,13 @@ MODEL_CONFIGS = {
 # Metrics computation function for Trainer
 def compute_metrics(eval_pred):
     """Compute F1 score and accuracy for evaluation."""
+    logger.info("compute_metrics function called!")
     predictions, labels = eval_pred
+    logger.info(f"Predictions shape: {predictions.shape}, Labels shape: {labels.shape}")
     predictions = np.argmax(predictions, axis=1)
     f1 = f1_score(labels, predictions, average="weighted")
     accuracy = accuracy_score(labels, predictions)
+    logger.info(f"Computed metrics - F1: {f1:.4f}, Accuracy: {accuracy:.4f}")
     return {"f1": f1, "accuracy": accuracy}
 
 # Custom early stopping callback based on accuracy
@@ -767,7 +770,17 @@ class AccuracyEarlyStoppingCallback(TrainerCallback):
         if logs is None:
             return
             
-        current_accuracy = logs.get("eval_accuracy", 0.0)
+        # Use accuracy if available, otherwise fall back to F1 score, then to loss-based metric
+        current_accuracy = logs.get("eval_accuracy", logs.get("eval_f1", 0.0))
+        
+        # If no custom metrics available, use loss as inverse metric (lower loss = higher "accuracy")
+        if current_accuracy == 0.0 and "eval_loss" in logs:
+            # Convert loss to a pseudo-accuracy metric (1 - normalized_loss)
+            # This is a rough approximation for early stopping purposes
+            eval_loss = logs["eval_loss"]
+            # Use a simple transformation: accuracy_like = max(0, 1 - loss)
+            current_accuracy = max(0.0, 1.0 - eval_loss)
+            logger.info(f"Using loss-based metric: eval_loss={eval_loss:.4f}, pseudo_accuracy={current_accuracy:.4f}")
         
         # Update best accuracy
         if current_accuracy > self.best_accuracy:
@@ -776,7 +789,8 @@ class AccuracyEarlyStoppingCallback(TrainerCallback):
         # Check if target accuracy is reached
         if current_accuracy >= self.target_accuracy:
             if not self.target_reached:
-                logger.info(f"Target accuracy {self.target_accuracy:.4f} reached! Current accuracy: {current_accuracy:.4f}")
+                metric_name = "accuracy" if "eval_accuracy" in logs else "F1 score"
+                logger.info(f"Target {metric_name} {self.target_accuracy:.4f} reached! Current {metric_name}: {current_accuracy:.4f}")
                 self.target_reached = True
                 self.wait_count = 0
             else:
@@ -784,12 +798,14 @@ class AccuracyEarlyStoppingCallback(TrainerCallback):
                 
             # Stop training after patience evaluations at target accuracy
             if self.wait_count >= self.patience:
-                logger.info(f"Stopping training - target accuracy maintained for {self.patience} evaluations")
+                metric_name = "accuracy" if "eval_accuracy" in logs else "F1 score"
+                logger.info(f"Stopping training - target {metric_name} maintained for {self.patience} evaluations")
                 control.should_training_stop = True
         else:
             # Reset if we drop below target
             if self.target_reached:
-                logger.info(f"Accuracy dropped below target ({current_accuracy:.4f} < {self.target_accuracy:.4f}). Continuing training...")
+                metric_name = "accuracy" if "eval_accuracy" in logs else "F1 score"
+                logger.info(f"{metric_name.capitalize()} dropped below target ({current_accuracy:.4f} < {self.target_accuracy:.4f}). Continuing training...")
                 self.target_reached = False
                 self.wait_count = 0
 
@@ -1612,7 +1628,8 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
             # GPU transfer will happen automatically during training via DataLoader
             return {
                 'input_ids': tokens['input_ids'].tolist(),
-                'attention_mask': tokens['attention_mask'].tolist()
+                'attention_mask': tokens['attention_mask'].tolist(),
+                'labels': examples["labels"]  # Ensure labels are included
             }
         
         try:
@@ -1642,7 +1659,7 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 batched=True, 
                 batch_size=tokenize_batch_size,
                 num_proc=num_proc,
-                remove_columns=["text"]  # Remove original text to save memory
+                remove_columns=["text"]  # Remove original text to save memory, keep labels
             )
             
             # Clear memory between dataset tokenizations
@@ -1655,7 +1672,7 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 batched=True, 
                 batch_size=tokenize_batch_size,
                 num_proc=num_proc,
-                remove_columns=["text"]
+                remove_columns=["text"]  # Remove original text to save memory, keep labels
             )
             
             if torch.cuda.is_available():
@@ -1667,7 +1684,7 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
                 batched=True, 
                 batch_size=tokenize_batch_size,
                 num_proc=num_proc,
-                remove_columns=["text"]
+                remove_columns=["text"]  # Remove original text to save memory, keep labels
             )
             
             logger.info("Dataset tokenization completed successfully")
@@ -1687,9 +1704,9 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
             gc.collect()
             
             logger.warning("Retrying tokenization with minimal batch size...")
-            train_dataset = train_dataset.map(tokenize_function, batched=True, batch_size=1)
-            val_dataset = val_dataset.map(tokenize_function, batched=True, batch_size=1)
-            test_dataset = test_dataset.map(tokenize_function, batched=True, batch_size=1)
+            train_dataset = train_dataset.map(tokenize_function, batched=True, batch_size=1, remove_columns=["text"])
+            val_dataset = val_dataset.map(tokenize_function, batched=True, batch_size=1, remove_columns=["text"])
+            test_dataset = test_dataset.map(tokenize_function, batched=True, batch_size=1, remove_columns=["text"])
             
         except Exception as e:
             logger.error(f"Error during dataset tokenization: {e}")
@@ -1742,8 +1759,12 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
         "logging_steps": 50,
         eval_strategy_param: "epoch",  # Evaluate every epoch to check accuracy
         "save_strategy": "epoch",
+        # Explicitly tell Trainer which column is the label to ensure eval metrics are produced
+        "label_names": ["labels"],
+        # Use accuracy for best-model selection now that metrics are ensured
         "load_best_model_at_end": True,
-        "metric_for_best_model": "eval_accuracy",  # Use accuracy as the primary metric
+        "metric_for_best_model": "eval_accuracy",
+        "greater_is_better": True,
         "save_total_limit": 3,  # Keep more checkpoints
         "report_to": [],
         "dataloader_drop_last": dataloader_drop_last,
@@ -1762,6 +1783,33 @@ def main_single_attempt(model_name="modernbert-base", max_epochs=10, batch_size=
         target_accuracy=target_accuracy,
         patience=patience
     )
+    
+    # Debug dataset structure before creating trainer
+    logger.info("Debugging dataset structure:")
+    logger.info(f"Train dataset features: {train_dataset.features}")
+    logger.info(f"Train dataset length: {len(train_dataset)}")
+    if len(train_dataset) > 0:
+        sample = train_dataset[0]
+        logger.info(f"Train dataset sample keys: {sample.keys()}")
+        logger.info(f"Train dataset sample types: {[(k, type(v)) for k, v in sample.items()]}")
+    
+    logger.info(f"Val dataset features: {val_dataset.features}")
+    logger.info(f"Val dataset length: {len(val_dataset)}")
+    if len(val_dataset) > 0:
+        sample = val_dataset[0]
+        logger.info(f"Val dataset sample keys: {sample.keys()}")
+        logger.info(f"Val dataset sample types: {[(k, type(v)) for k, v in sample.items()]}")
+    
+    # Test compute_metrics function with dummy data
+    logger.info("Testing compute_metrics function...")
+    try:
+        # Create dummy predictions and labels for testing
+        dummy_predictions = np.array([[0.1, 0.9], [0.8, 0.2], [0.3, 0.7]])  # 3 samples, 2 classes
+        dummy_labels = np.array([1, 0, 1])  # True labels
+        test_result = compute_metrics((dummy_predictions, dummy_labels))
+        logger.info(f"compute_metrics test successful: {test_result}")
+    except Exception as e:
+        logger.error(f"compute_metrics test failed: {e}")
     
     # Create trainer with early stopping callback
     trainer = Trainer(
@@ -2036,7 +2084,7 @@ if __name__ == "__main__":
         
         print("\nDefault:")
         default = ["salad-data", "toxic-chat", "spml-injection", 
-                      "chatbot-instructions", "orca-agentinstruct", "vmware-openinstruct"]
+                      "chatbot-instructions", "orca-agentinstruct", "vmware-openinstruct", "jackhhao-jailbreak"]
         for dataset_key in default:
             if dataset_key in temp_loader.dataset_configs:
                 config = temp_loader.dataset_configs[dataset_key]
