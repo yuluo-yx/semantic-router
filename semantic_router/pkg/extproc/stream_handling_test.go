@@ -46,7 +46,7 @@ var _ = Describe("Process Stream Handling", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-4", "messages": [{"role": "user", "content": "Hello"}]}`),
+							Body: []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "Hello"}]}`),
 						},
 					},
 				},
@@ -75,7 +75,7 @@ var _ = Describe("Process Stream Handling", func() {
 			// Process would normally run in a goroutine, but for testing we call it directly
 			// and expect it to return an error when the stream ends
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// Check that all requests were processed
 			Expect(len(stream.Responses)).To(Equal(len(requests)))
@@ -105,7 +105,7 @@ var _ = Describe("Process Stream Handling", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Test"}]}`),
+							Body: []byte(`{"model": "model-b", "messages": [{"role": "user", "content": "Test"}]}`),
 						},
 					},
 				},
@@ -113,7 +113,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			stream := NewMockStream(requests)
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// Check that both requests were processed
 			Expect(len(stream.Responses)).To(Equal(2))
@@ -138,7 +138,7 @@ var _ = Describe("Process Stream Handling", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-4", "messages": [{"role": "user", "content": "Context test"}]}`),
+							Body: []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "Context test"}]}`),
 						},
 					},
 				},
@@ -146,7 +146,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			stream := NewMockStream(requests)
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// Verify both requests were processed successfully
 			Expect(len(stream.Responses)).To(Equal(2))
@@ -206,7 +206,7 @@ var _ = Describe("Process Stream Handling", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-4", "messages": [{"role": "user", "content": "Test"}]}`),
+							Body: []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "Test"}]}`),
 						},
 					},
 				},
@@ -216,7 +216,7 @@ var _ = Describe("Process Stream Handling", func() {
 			
 			// Process first request successfully
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 			
 			// At least the first request should have been processed
 			Expect(len(stream.Responses)).To(BeNumerically(">=", 1))
@@ -235,7 +235,7 @@ var _ = Describe("Process Stream Handling", func() {
 			stream := NewMockStream(requests)
 
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// Should still send a response for unknown types
 			Expect(len(stream.Responses)).To(Equal(1))
@@ -265,7 +265,7 @@ var _ = Describe("Process Stream Handling", func() {
 				{
 					Request: &ext_proc.ProcessingRequest_RequestBody{
 						RequestBody: &ext_proc.HttpBody{
-							Body: []byte(`{"model": "gpt-4", "messages": [{"role": "user", "content": "Mixed test"}]}`),
+							Body: []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "Mixed test"}]}`),
 						},
 					},
 				},
@@ -273,7 +273,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			stream := NewMockStream(requests)
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// All requests should get responses
 			Expect(len(stream.Responses)).To(Equal(3))
@@ -310,7 +310,7 @@ var _ = Describe("Process Stream Handling", func() {
 					requests[i] = &ext_proc.ProcessingRequest{
 						Request: &ext_proc.ProcessingRequest_RequestBody{
 							RequestBody: &ext_proc.HttpBody{
-								Body: []byte(fmt.Sprintf(`{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Request %d"}]}`, i)),
+								Body: []byte(fmt.Sprintf(`{"model": "model-b", "messages": [{"role": "user", "content": "Request %d"}]}`, i)),
 							},
 						},
 					}
@@ -319,7 +319,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			stream := NewMockStream(requests)
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// All requests should be processed
 			Expect(len(stream.Responses)).To(Equal(numRequests))
@@ -335,7 +335,7 @@ var _ = Describe("Process Stream Handling", func() {
 		})
 
 		It("should handle large request bodies in stream", func() {
-			largeContent := fmt.Sprintf(`{"model": "gpt-4", "messages": [{"role": "user", "content": "%s"}]}`, 
+			largeContent := fmt.Sprintf(`{"model": "model-a", "messages": [{"role": "user", "content": "%s"}]}`, 
 				fmt.Sprintf("Large content: %s", strings.Repeat("x", 1000))) // 1KB content
 
 			requests := []*ext_proc.ProcessingRequest{
@@ -361,7 +361,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			stream := NewMockStream(requests)
 			err := router.Process(stream)
-			Expect(err).To(HaveOccurred()) // Should error when stream ends
+			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
 
 			// Should handle large content without issues
 			Expect(len(stream.Responses)).To(Equal(2))

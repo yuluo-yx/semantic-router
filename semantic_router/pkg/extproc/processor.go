@@ -1,7 +1,9 @@
 package extproc
 
 import (
+	"io"
 	"log"
+	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
@@ -18,6 +20,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	for {
 		req, err := stream.Recv()
 		if err != nil {
+			// Handle EOF - this indicates the client has closed the stream gracefully
+			if err == io.EOF || strings.Contains(err.Error(), "EOF") {
+				log.Println("Stream ended gracefully")
+				return nil // EOF is not an error, it's graceful completion
+			}
 			log.Printf("Error receiving request: %v", err)
 			return err
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -192,6 +193,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 
 	// Only change the model if the original model is "auto"
 	actualModel := originalModel
+	var selectedEndpoint string
 	if originalModel == "auto" && (len(nonUserMessages) > 0 || userContent != "") {
 		// Determine text to use for classification/similarity
 		var classificationText string
@@ -255,6 +257,15 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 				// Update the actual model that will be used
 				actualModel = matchedModel
 
+				// Select the best endpoint for this model
+				endpoint, endpointFound := r.Config.SelectBestEndpointForModel(matchedModel)
+				if endpointFound {
+					selectedEndpoint = endpoint
+					log.Printf("Selected endpoint: %s for model: %s", selectedEndpoint, matchedModel)
+				} else {
+					log.Printf("Warning: No endpoint found for model %s, using fallback", matchedModel)
+				}
+
 				// Modify the model in the request
 				openAIRequest.Model = matchedModel
 
@@ -272,10 +283,34 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 					},
 				}
 
-				// Also create a header mutation to remove the original content-length
+				// Create header mutation to remove content-length and add endpoint selection
 				headerMutation := &ext_proc.HeaderMutation{
 					RemoveHeaders: []string{"content-length"},
 				}
+
+				// Add endpoint and model selection headers
+				if selectedEndpoint != "" {
+					if headerMutation.SetHeaders == nil {
+						headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
+					}
+					headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
+						Header: &core.HeaderValue{
+							Key:   "x-selected-endpoint",
+							Value: selectedEndpoint,
+						},
+					})
+				}
+
+				// Always add the selected model header for logging/debugging
+				if headerMutation.SetHeaders == nil {
+					headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
+				}
+				headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
+					Header: &core.HeaderValue{
+						Key:   "x-selected-model",
+						Value: actualModel,
+					},
+				})
 
 				// Set the response with both mutations
 				response = &ext_proc.ProcessingResponse{
@@ -307,10 +342,50 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 			piiResponse := http.CreatePIIViolationResponse(originalModel, deniedPII)
 			return piiResponse, nil
 		}
+
+		// Select the best endpoint for the specified model
+		endpoint, endpointFound := r.Config.SelectBestEndpointForModel(originalModel)
+		if endpointFound {
+			selectedEndpoint = endpoint
+			log.Printf("Selected endpoint: %s for model: %s", selectedEndpoint, originalModel)
+		} else {
+			log.Printf("Warning: No endpoint found for model %s, using fallback", originalModel)
+		}
 	}
 
 	// Save the actual model that will be used for token tracking
 	ctx.RequestModel = actualModel
+
+	// If we have an endpoint selected, we need to set headers
+	if selectedEndpoint != "" {
+		var headerMutation *ext_proc.HeaderMutation
+		
+		// Get existing header mutation or create a new one
+		if response.GetRequestBody().GetResponse().GetHeaderMutation() != nil {
+			headerMutation = response.GetRequestBody().GetResponse().GetHeaderMutation()
+		} else {
+			headerMutation = &ext_proc.HeaderMutation{}
+		}
+		
+		// Add endpoint selection header
+		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:   "x-selected-endpoint",
+				Value: selectedEndpoint,
+			},
+		})
+
+		// Add selected model header for logging/debugging
+		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:   "x-selected-model",
+				Value: actualModel,
+			},
+		})
+
+		// Update the response with header mutation
+		response.GetRequestBody().GetResponse().HeaderMutation = headerMutation
+	}
 
 	// Handle tools auto-selection if tools field is "auto"
 	if openAIRequest.Tools != nil {
@@ -369,10 +444,16 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 					},
 				}
 
-				// Create header mutation to remove the original content-length
-				headerMutation := &ext_proc.HeaderMutation{
-					RemoveHeaders: []string{"content-length"},
+				// Create or get existing header mutation
+				var headerMutation *ext_proc.HeaderMutation
+				if response.GetRequestBody().GetResponse().GetHeaderMutation() != nil {
+					headerMutation = response.GetRequestBody().GetResponse().GetHeaderMutation()
+				} else {
+					headerMutation = &ext_proc.HeaderMutation{}
 				}
+				
+				// Add content-length removal if not already present
+				headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-length")
 
 				// Update the response with both mutations
 				response = &ext_proc.ProcessingResponse{

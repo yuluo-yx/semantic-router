@@ -75,9 +75,9 @@ var _ = Describe("Cache Package", func() {
 	Describe("AddEntry", func() {
 		Context("when cache is enabled", func() {
 			It("should add a complete entry successfully", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "What is the capital of France?"
-				requestBody := []byte(`{"model": "gpt-4", "messages": [{"role": "user", "content": "What is the capital of France?"}]}`)
+				requestBody := []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "What is the capital of France?"}]}`)
 				responseBody := []byte(`{"choices": [{"message": {"content": "Paris"}}]}`)
 
 				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
@@ -85,9 +85,9 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should handle empty query gracefully", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := ""
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 				responseBody := []byte(`{"choices": []}`)
 
 				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
@@ -111,7 +111,7 @@ var _ = Describe("Cache Package", func() {
 					// Add entries beyond the limit
 					for i := 0; i < 5; i++ {
 						query := fmt.Sprintf("Query %d", i)
-						model := "gpt-4"
+						model := "model-a"
 						requestBody := []byte(fmt.Sprintf(`{"query": "%s"}`, query))
 						responseBody := []byte(fmt.Sprintf(`{"response": "Response %d"}`, i))
 
@@ -136,7 +136,7 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should return immediately without error", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "Test query"
 				requestBody := []byte(`{"test": "data"}`)
 				responseBody := []byte(`{"result": "success"}`)
@@ -150,9 +150,9 @@ var _ = Describe("Cache Package", func() {
 	Describe("AddPendingRequest", func() {
 		Context("when cache is enabled", func() {
 			It("should add a pending request and return the query", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "What is machine learning?"
-				requestBody := []byte(`{"model": "gpt-4", "messages": [{"role": "user", "content": "What is machine learning?"}]}`)
+				requestBody := []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "What is machine learning?"}]}`)
 
 				returnedQuery, err := semanticCache.AddPendingRequest(model, query, requestBody)
 				Expect(err).To(Or(BeNil(), HaveOccurred())) // Embedding generation might fail
@@ -162,9 +162,9 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should handle empty query", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := ""
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 
 				returnedQuery, err := semanticCache.AddPendingRequest(model, query, requestBody)
 				// Should handle empty query gracefully
@@ -182,7 +182,7 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should return the query without processing", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "Test query"
 				requestBody := []byte(`{"test": "data"}`)
 
@@ -196,9 +196,9 @@ var _ = Describe("Cache Package", func() {
 	Describe("UpdateWithResponse", func() {
 		Context("when cache is enabled", func() {
 			It("should update a pending request with response", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "Test query for update"
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 				responseBody := []byte(`{"response": "test response"}`)
 
 				// First add a pending request
@@ -239,7 +239,7 @@ var _ = Describe("Cache Package", func() {
 	Describe("FindSimilar", func() {
 		Context("when cache is enabled", func() {
 			It("should return cache miss for empty cache", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "What is AI?"
 
 				response, found, err := semanticCache.FindSimilar(model, query)
@@ -249,7 +249,7 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should handle empty query gracefully", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := ""
 
 				response, found, err := semanticCache.FindSimilar(model, query)
@@ -264,9 +264,9 @@ var _ = Describe("Cache Package", func() {
 			Context("with entries in cache", func() {
 				BeforeEach(func() {
 					// Add some test entries if possible
-					model := "gpt-4"
+					model := "model-a"
 					query := "What is the weather?"
-					requestBody := []byte(`{"model": "gpt-4"}`)
+					requestBody := []byte(`{"model": "model-a"}`)
 					responseBody := []byte(`{"weather": "sunny"}`)
 
 					err := semanticCache.AddEntry(model, query, requestBody, responseBody)
@@ -276,7 +276,7 @@ var _ = Describe("Cache Package", func() {
 				})
 
 				It("should find similar entries based on model matching", func() {
-					model := "gpt-4"
+					model := "model-a"
 					query := "Weather information"
 
 									_, _, err := semanticCache.FindSimilar(model, query)
@@ -285,7 +285,7 @@ var _ = Describe("Cache Package", func() {
 				})
 
 				It("should not find entries for different models", func() {
-					model := "gpt-3.5-turbo" // Different model
+					model := "model-b" // Different model
 					query := "What is the weather?"
 
 					response, found, err := semanticCache.FindSimilar(model, query)
@@ -303,7 +303,7 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should return cache miss immediately", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "Any query"
 
 				response, found, err := semanticCache.FindSimilar(model, query)
@@ -327,9 +327,9 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should expire entries after TTL", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "TTL test query"
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 				responseBody := []byte(`{"response": "test"}`)
 
 				// Add entry
@@ -360,9 +360,9 @@ var _ = Describe("Cache Package", func() {
 			})
 
 			It("should not expire entries", func() {
-				model := "gpt-4"
+				model := "model-a"
 				query := "No TTL test query"
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 				responseBody := []byte(`{"response": "test"}`)
 
 				// Add entry
@@ -392,7 +392,7 @@ var _ = Describe("Cache Package", func() {
 			for i := 0; i < numGoroutines; i++ {
 				go func(index int) {
 					defer wg.Done()
-					model := "gpt-4"
+					model := "model-a"
 					query := fmt.Sprintf("Concurrent query %d", index)
 					requestBody := []byte(fmt.Sprintf(`{"index": %d}`, index))
 					responseBody := []byte(fmt.Sprintf(`{"result": %d}`, index))
@@ -422,7 +422,7 @@ var _ = Describe("Cache Package", func() {
 			for i := 0; i < numGoroutines; i++ {
 				go func(index int) {
 					defer wg.Done()
-					model := "gpt-4"
+					model := "model-a"
 					query := fmt.Sprintf("Search query %d", index)
 
 					_, found, err := semanticCache.FindSimilar(model, query)
@@ -448,7 +448,7 @@ var _ = Describe("Cache Package", func() {
 			for i := 0; i < numGoroutines; i++ {
 				go func(index int) {
 					defer wg.Done()
-					model := "gpt-4"
+					model := "model-a"
 					query := fmt.Sprintf("Mixed operation query %d", index)
 
 					if index%2 == 0 {
@@ -471,7 +471,7 @@ var _ = Describe("Cache Package", func() {
 	Describe("ExtractQueryFromOpenAIRequest", func() {
 		It("should extract model and query from valid OpenAI request", func() {
 			request := cache.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []cache.ChatMessage{
 					{Role: "system", Content: "You are a helpful assistant."},
 					{Role: "user", Content: "What is the capital of France?"},
@@ -485,13 +485,13 @@ var _ = Describe("Cache Package", func() {
 
 			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("gpt-4"))
+			Expect(model).To(Equal("model-a"))
 			Expect(query).To(Equal("What about Germany?")) // Should get the last user message
 		})
 
 		It("should handle request with only system messages", func() {
 			request := cache.OpenAIRequest{
-				Model: "gpt-3.5-turbo",
+				Model: "model-b",
 				Messages: []cache.ChatMessage{
 					{Role: "system", Content: "You are a helpful assistant."},
 				},
@@ -502,13 +502,13 @@ var _ = Describe("Cache Package", func() {
 
 			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("gpt-3.5-turbo"))
+			Expect(model).To(Equal("model-b"))
 			Expect(query).To(BeEmpty()) // No user messages
 		})
 
 		It("should handle request with multiple user messages", func() {
 			request := cache.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []cache.ChatMessage{
 					{Role: "user", Content: "First user message"},
 					{Role: "assistant", Content: "Assistant response"},
@@ -522,13 +522,13 @@ var _ = Describe("Cache Package", func() {
 
 			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("gpt-4"))
+			Expect(model).To(Equal("model-a"))
 			Expect(query).To(Equal("Third user message")) // Should get the last user message
 		})
 
 		It("should handle empty messages array", func() {
 			request := cache.OpenAIRequest{
-				Model:    "gpt-4",
+				Model:    "model-a",
 				Messages: []cache.ChatMessage{},
 			}
 
@@ -537,12 +537,12 @@ var _ = Describe("Cache Package", func() {
 
 			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("gpt-4"))
+			Expect(model).To(Equal("model-a"))
 			Expect(query).To(BeEmpty())
 		})
 
 		It("should return error for invalid JSON", func() {
-			invalidJSON := []byte(`{"model": "gpt-4", "messages": [invalid json}`)
+			invalidJSON := []byte(`{"model": "model-a", "messages": [invalid json}`)
 
 			model, query, err := cache.ExtractQueryFromOpenAIRequest(invalidJSON)
 			Expect(err).To(HaveOccurred())
@@ -569,7 +569,7 @@ var _ = Describe("Cache Package", func() {
 
 		It("should handle request with empty content", func() {
 			request := cache.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []cache.ChatMessage{
 					{Role: "user", Content: ""},
 					{Role: "user", Content: "Non-empty message"},
@@ -581,14 +581,14 @@ var _ = Describe("Cache Package", func() {
 
 			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("gpt-4"))
+			Expect(model).To(Equal("model-a"))
 			Expect(query).To(Equal("Non-empty message")) // Should get the last non-empty user message
 		})
 	})
 
 	Describe("Edge Cases and Error Conditions", func() {
 		It("should handle very large request/response bodies", func() {
-			model := "gpt-4"
+			model := "model-a"
 			query := "Large data test"
 			largeData := make([]byte, 1024*1024) // 1MB of data
 			for i := range largeData {
@@ -601,7 +601,7 @@ var _ = Describe("Cache Package", func() {
 		})
 
 		It("should handle special characters in queries", func() {
-			model := "gpt-4"
+			model := "model-a"
 			query := "Query with special chars: 你好, émoji 🚀, and unicode ∀∃∅"
 			requestBody := []byte(`{"special": "chars"}`)
 			responseBody := []byte(`{"response": "special"}`)
@@ -611,7 +611,7 @@ var _ = Describe("Cache Package", func() {
 		})
 
 		It("should handle very long queries", func() {
-			model := "gpt-4"
+			model := "model-a"
 			query := string(make([]byte, 10000)) // Very long query
 			for i := range query {
 				query = query[:i] + "a"
@@ -624,7 +624,7 @@ var _ = Describe("Cache Package", func() {
 		})
 
 		It("should handle nil request/response bodies", func() {
-			model := "gpt-4"
+			model := "model-a"
 			query := "Nil test"
 
 			err := semanticCache.AddEntry(model, query, nil, nil)
@@ -646,9 +646,9 @@ var _ = Describe("Cache Package", func() {
 
 			It("should potentially match more entries", func() {
 				// Add an entry
-				model := "gpt-4"
+				model := "model-a"
 				query1 := "What is AI?"
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 				responseBody := []byte(`{"response": "AI info"}`)
 
 				err := semanticCache.AddEntry(model, query1, requestBody, responseBody)
@@ -677,9 +677,9 @@ var _ = Describe("Cache Package", func() {
 
 			It("should rarely match entries", func() {
 				// Add an entry
-				model := "gpt-4"
+				model := "model-a"
 				query1 := "What is AI?"
-				requestBody := []byte(`{"model": "gpt-4"}`)
+				requestBody := []byte(`{"model": "model-a"}`)
 				responseBody := []byte(`{"response": "AI info"}`)
 
 				err := semanticCache.AddEntry(model, query1, requestBody, responseBody)

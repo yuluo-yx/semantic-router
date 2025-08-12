@@ -41,7 +41,7 @@ var _ = Describe("Caching Functionality", func() {
 
 	It("should handle cache miss scenario", func() {
 		request := openai.OpenAIRequest{
-			Model: "gpt-4",
+			Model: "model-a",
 			Messages: []openai.ChatMessage{
 				{Role: "user", Content: "What is artificial intelligence?"},
 			},
@@ -75,7 +75,7 @@ var _ = Describe("Caching Functionality", func() {
 		ctx := &extproc.RequestContext{
 			Headers:      make(map[string]string),
 			RequestID:    "cache-test-request",
-			RequestModel: "gpt-4",
+			RequestModel: "model-a",
 			RequestQuery: "test query for caching",
 			StartTime:    time.Now(),
 		}
@@ -114,7 +114,7 @@ var _ = Describe("Caching Functionality", func() {
 		It("should attempt to cache successful responses", func() {
 			// Create a request
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: "Tell me about machine learning"},
 				},
@@ -164,7 +164,7 @@ var _ = Describe("Caching Functionality", func() {
 				},
 			}
 
-			ctx.RequestModel = "gpt-4"
+			ctx.RequestModel = "model-a"
 			ctx.RequestQuery = "Tell me about machine learning"
 
 			response, err := router.HandleResponseBody(bodyResponse, ctx)
@@ -175,7 +175,7 @@ var _ = Describe("Caching Functionality", func() {
 		It("should handle cache errors gracefully", func() {
 			// Test with a potentially problematic query
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: ""},  // Empty content might cause issues
 				},
@@ -219,7 +219,7 @@ var _ = Describe("Caching Functionality", func() {
 
 		It("should process requests normally without caching", func() {
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: "What is the weather?"},
 				},

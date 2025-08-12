@@ -141,7 +141,7 @@ var _ = Describe("Request Processing", func() {
 
 			It("should handle non-auto model without modification", func() {
 				request := openai.OpenAIRequest{
-					Model: "gpt-4",
+					Model: "model-a",
 					Messages: []openai.ChatMessage{
 						{Role: "user", Content: "Hello world"},
 					},
@@ -203,7 +203,7 @@ var _ = Describe("Request Processing", func() {
 			It("should return error for malformed JSON", func() {
 				bodyRequest := &ext_proc.ProcessingRequest_RequestBody{
 					RequestBody: &ext_proc.HttpBody{
-						Body: []byte(`{"model": "gpt-4", "messages": [invalid json}`),
+						Body: []byte(`{"model": "model-a", "messages": [invalid json}`),
 					},
 				}
 
@@ -266,7 +266,7 @@ var _ = Describe("Request Processing", func() {
 
 			It("should handle tools auto-selection", func() {
 				request := openai.OpenAIRequest{
-					Model: "gpt-4",
+					Model: "model-a",
 					Messages: []openai.ChatMessage{
 						{Role: "user", Content: "Calculate the square root of 16"},
 					},
@@ -300,7 +300,7 @@ var _ = Describe("Request Processing", func() {
 				cfg.Tools.FallbackToEmpty = true
 				
 				request := openai.OpenAIRequest{
-					Model: "gpt-4",
+					Model: "model-a",
 					Messages: []openai.ChatMessage{
 						{Role: "user", Content: "Test query"},
 					},
@@ -358,7 +358,7 @@ var _ = Describe("Request Processing", func() {
 				"id":      "chatcmpl-123",
 				"object":  "chat.completion",
 				"created": time.Now().Unix(),
-				"model":   "gpt-4",
+				"model":   "model-a",
 				"usage": map[string]interface{}{
 					"prompt_tokens":     150,
 					"completion_tokens": 50,
@@ -387,7 +387,7 @@ var _ = Describe("Request Processing", func() {
 			ctx := &extproc.RequestContext{
 				Headers:      make(map[string]string),
 				RequestID:    "test-request",
-				RequestModel: "gpt-4",
+				RequestModel: "model-a",
 				RequestQuery: "test query",
 				StartTime:    time.Now().Add(-2 * time.Second),
 			}
@@ -411,7 +411,7 @@ var _ = Describe("Request Processing", func() {
 			ctx := &extproc.RequestContext{
 				Headers:      make(map[string]string),
 				RequestID:    "test-request",
-				RequestModel: "gpt-4",
+				RequestModel: "model-a",
 				StartTime:    time.Now(),
 			}
 
