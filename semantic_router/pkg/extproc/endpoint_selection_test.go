@@ -346,7 +346,8 @@ var _ = Describe("Endpoint Selection", func() {
 
 	Describe("Request Context Processing", func() {
 				It("should handle request headers properly", func() {
-						// Create request headers
+		It("should handle request headers properly", func() {
+			// Create request headers
 			requestHeaders := &ext_proc.ProcessingRequest{
 				Request: &ext_proc.ProcessingRequest_RequestHeaders{
 					RequestHeaders: &ext_proc.HttpHeaders{
