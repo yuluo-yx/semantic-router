@@ -177,7 +177,36 @@ var _ = Describe("Endpoint Selection", func() {
 						// model-a should be routed to test-endpoint1 based on preferred endpoints
 						Expect(selectedEndpoint).To(Equal("test-endpoint1"))
 					}
+			// Process the request
+			err = router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify response was sent
+			Expect(stream.Responses).To(HaveLen(1))
+			response := stream.Responses[0]
+
+			// Check if headers were set for endpoint selection
+			requestBodyResponse := response.GetRequestBody()
+			Expect(requestBodyResponse).NotTo(BeNil())
+
+			headerMutation := requestBodyResponse.GetResponse().GetHeaderMutation()
+			if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
+				var endpointHeaderFound bool
+				var selectedEndpoint string
+				
+				for _, header := range headerMutation.SetHeaders {
+					if header.Header.Key == "x-selected-endpoint" {
+						endpointHeaderFound = true
+						selectedEndpoint = header.Header.Value
+						break
+					}
 				}
+				
+				if endpointHeaderFound {
+					// model-a should be routed to test-endpoint1 based on preferred endpoints
+					Expect(selectedEndpoint).To(Equal("test-endpoint1"))
+				}
+			}
 			})
 
 					It("should handle model with multiple preferred endpoints", func() {
