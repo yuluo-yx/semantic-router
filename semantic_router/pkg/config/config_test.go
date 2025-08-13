@@ -64,12 +64,12 @@ categories:
   - name: "general"
     description: "General purpose tasks"
     model_scores:
-      - model: "gpt-4"
+      - model: "model-a"
         score: 0.9
-      - model: "gpt-3.5-turbo"
+      - model: "model-b"
         score: 0.8
 
-default_model: "gpt-3.5-turbo"
+default_model: "model-b"
 
 semantic_cache:
   enabled: true
@@ -85,20 +85,38 @@ prompt_guard:
   use_modernbert: true
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "192.168.1.10"
+    port: 8000
+    models:
+      - "model-a"
+      - "model-b"
+    weight: 1
+    health_check_path: "/health"
+  - name: "endpoint2"
+    address: "192.168.1.11"
+    port: 8000
+    models:
+      - "model-b"
+    weight: 2
+
 model_config:
-  "gpt-4":
+  "model-a":
     param_count: 1000000000
     batch_size: 32
     context_size: 8192
     pii_policy:
       allow_by_default: false
       pii_types_allowed: ["NO_PII", "ORGANIZATION"]
-  "gpt-3.5-turbo":
+    preferred_endpoints: ["endpoint1"]
+  "model-b":
     param_count: 175000000
     batch_size: 64
     context_size: 4096
     pii_policy:
       allow_by_default: true
+    preferred_endpoints: ["endpoint1", "endpoint2"]
 
 gpu_config:
   flops: 312000000000000
@@ -137,7 +155,7 @@ tools:
 				Expect(cfg.Categories[0].ModelScores).To(HaveLen(2))
 
 				// Verify default model
-				Expect(cfg.DefaultModel).To(Equal("gpt-3.5-turbo"))
+				Expect(cfg.DefaultModel).To(Equal("model-b"))
 
 				// Verify semantic cache
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -151,10 +169,10 @@ tools:
 				Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
 
 				// Verify model config
-				Expect(cfg.ModelConfig).To(HaveKey("gpt-4"))
-				Expect(cfg.ModelConfig["gpt-4"].ParamCount).To(Equal(float64(1000000000)))
-				Expect(cfg.ModelConfig["gpt-4"].PIIPolicy.AllowByDefault).To(BeFalse())
-				Expect(cfg.ModelConfig["gpt-4"].PIIPolicy.PIITypes).To(ContainElements("NO_PII", "ORGANIZATION"))
+				Expect(cfg.ModelConfig).To(HaveKey("model-a"))
+				Expect(cfg.ModelConfig["model-a"].ParamCount).To(Equal(float64(1000000000)))
+				Expect(cfg.ModelConfig["model-a"].PIIPolicy.AllowByDefault).To(BeFalse())
+				Expect(cfg.ModelConfig["model-a"].PIIPolicy.PIITypes).To(ContainElements("NO_PII", "ORGANIZATION"))
 
 				// Verify GPU config
 				Expect(cfg.GPUConfig.FLOPS).To(Equal(float64(312000000000000)))
@@ -164,6 +182,23 @@ tools:
 				Expect(cfg.Tools.Enabled).To(BeTrue())
 				Expect(cfg.Tools.TopK).To(Equal(5))
 				Expect(*cfg.Tools.SimilarityThreshold).To(Equal(float32(0.8)))
+
+				// Verify vLLM endpoints config
+				Expect(cfg.VLLMEndpoints).To(HaveLen(2))
+				Expect(cfg.VLLMEndpoints[0].Name).To(Equal("endpoint1"))
+				Expect(cfg.VLLMEndpoints[0].Address).To(Equal("192.168.1.10"))
+				Expect(cfg.VLLMEndpoints[0].Port).To(Equal(8000))
+				Expect(cfg.VLLMEndpoints[0].Models).To(ContainElements("model-a", "model-b"))
+				Expect(cfg.VLLMEndpoints[0].Weight).To(Equal(1))
+				Expect(cfg.VLLMEndpoints[0].HealthCheckPath).To(Equal("/health"))
+				
+				Expect(cfg.VLLMEndpoints[1].Name).To(Equal("endpoint2"))
+				Expect(cfg.VLLMEndpoints[1].Address).To(Equal("192.168.1.11"))
+				Expect(cfg.VLLMEndpoints[1].Weight).To(Equal(2))
+				
+				// Verify model preferred endpoints
+				Expect(cfg.ModelConfig["model-a"].PreferredEndpoints).To(ContainElement("endpoint1"))
+				Expect(cfg.ModelConfig["model-b"].PreferredEndpoints).To(ContainElements("endpoint1", "endpoint2"))
 			})
 
 			It("should return the same config instance on subsequent calls (singleton)", func() {
@@ -226,7 +261,7 @@ bert_model:
 bert_model:
   model_id: "test-model"
   threshold: 0.8
-default_model: "gpt-3.5-turbo"
+default_model: "model-b"
 `
 				err := os.WriteFile(configFile, []byte(validConfig), 0644)
 				Expect(err).NotTo(HaveOccurred())
@@ -799,6 +834,223 @@ categories:
 			Expect(cfg.BertModel.ModelID).To(Equal("model/with/slashes"))
 			Expect(cfg.DefaultModel).To(Equal("model-with-hyphens_and_underscores"))
 			Expect(cfg.Categories[0].Name).To(Equal("category with spaces"))
+		})
+	})
+
+	Describe("vLLM Endpoints Functions", func() {
+		BeforeEach(func() {
+			configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "192.168.1.10"
+    port: 8000
+    models:
+      - "model-a"
+      - "model-b"
+    weight: 1
+    health_check_path: "/health"
+  - name: "endpoint2"
+    address: "192.168.1.11"
+    port: 8000
+    models:
+      - "model-b"
+      - "model-c"
+    weight: 2
+  - name: "endpoint3"
+    address: "192.168.1.12"
+    port: 8000
+    models:
+      - "model-a"
+    weight: 1
+
+model_config:
+  "model-a":
+    preferred_endpoints: ["endpoint1", "endpoint3"]
+  "model-b":
+    preferred_endpoints: ["endpoint2"]
+  "model-c":
+    # No preferred endpoints configured
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "model-a"
+        score: 0.9
+      - model: "model-b"
+        score: 0.8
+
+default_model: "model-b"
+`
+			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Describe("GetEndpointsForModel", func() {
+			It("should return preferred endpoints when configured", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpoints := cfg.GetEndpointsForModel("model-a")
+				Expect(endpoints).To(HaveLen(2))
+				endpointNames := []string{endpoints[0].Name, endpoints[1].Name}
+				Expect(endpointNames).To(ContainElements("endpoint1", "endpoint3"))
+			})
+
+			It("should return all available endpoints when no preferences configured", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpoints := cfg.GetEndpointsForModel("model-c")
+				Expect(endpoints).To(HaveLen(1))
+				Expect(endpoints[0].Name).To(Equal("endpoint2"))
+			})
+
+			It("should return empty slice for non-existent model", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpoints := cfg.GetEndpointsForModel("non-existent-model")
+				Expect(endpoints).To(BeEmpty())
+			})
+
+			It("should fallback to all available endpoints if preferred endpoints don't exist", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-b has preferred endpoint2, which serves it
+				endpoints := cfg.GetEndpointsForModel("model-b")
+				Expect(endpoints).To(HaveLen(1))
+				Expect(endpoints[0].Name).To(Equal("endpoint2"))
+			})
+		})
+
+		Describe("GetEndpointByName", func() {
+			It("should return endpoint when it exists", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpoint, found := cfg.GetEndpointByName("endpoint1")
+				Expect(found).To(BeTrue())
+				Expect(endpoint.Name).To(Equal("endpoint1"))
+				Expect(endpoint.Address).To(Equal("192.168.1.10"))
+				Expect(endpoint.Port).To(Equal(8000))
+				Expect(endpoint.Models).To(ContainElements("model-a", "model-b"))
+			})
+
+			It("should return false when endpoint doesn't exist", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpoint, found := cfg.GetEndpointByName("non-existent")
+				Expect(found).To(BeFalse())
+				Expect(endpoint).To(BeNil())
+			})
+		})
+
+		Describe("GetAllModels", func() {
+			It("should return all unique models across endpoints", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				models := cfg.GetAllModels()
+				Expect(models).To(HaveLen(3))
+				Expect(models).To(ContainElements("model-a", "model-b", "model-c"))
+			})
+		})
+
+		Describe("SelectBestEndpointForModel", func() {
+			It("should select endpoint with highest weight when multiple available", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-a is available on endpoint1 (weight 1) and endpoint3 (weight 1)
+				// Since they have the same weight, it should return the first one found
+				endpointName, found := cfg.SelectBestEndpointForModel("model-a")
+				Expect(found).To(BeTrue())
+				Expect(endpointName).To(BeElementOf("endpoint1", "endpoint3"))
+			})
+
+			It("should return false for non-existent model", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpointName, found := cfg.SelectBestEndpointForModel("non-existent-model")
+				Expect(found).To(BeFalse())
+				Expect(endpointName).To(BeEmpty())
+			})
+
+			It("should select single endpoint when only one available", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				endpointName, found := cfg.SelectBestEndpointForModel("model-c")
+				Expect(found).To(BeTrue())
+				Expect(endpointName).To(Equal("endpoint2"))
+			})
+		})
+
+		Describe("ValidateEndpoints", func() {
+			It("should pass validation when all models have endpoints", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cfg.ValidateEndpoints()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should fail validation when a category model has no endpoints", func() {
+				// Add a model to categories that doesn't exist in any endpoint
+				configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "192.168.1.10"
+    port: 8000
+    models:
+      - "existing-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "missing-model"
+        score: 0.9
+
+default_model: "existing-model"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cfg.ValidateEndpoints()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("missing-model"))
+				Expect(err.Error()).To(ContainSubstring("no available endpoints"))
+			})
+
+			It("should fail validation when default model has no endpoints", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "192.168.1.10"
+    port: 8000
+    models:
+      - "existing-model"
+    weight: 1
+
+default_model: "missing-default-model"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = cfg.ValidateEndpoints()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("missing-default-model"))
+			})
 		})
 	})
 

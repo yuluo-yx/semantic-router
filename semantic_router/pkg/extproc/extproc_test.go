@@ -20,7 +20,7 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
 			Expect(cfg.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
-			Expect(cfg.DefaultModel).To(Equal("gpt-3.5-turbo"))
+			Expect(cfg.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.Categories)).To(Equal(1))
 			Expect(cfg.Categories[0].Name).To(Equal("coding"))
 		})
@@ -55,8 +55,8 @@ var _ = Describe("ExtProc Package", func() {
 			Expect(cfg.BertModel.ModelID).NotTo(BeEmpty())
 			Expect(cfg.DefaultModel).NotTo(BeEmpty())
 			Expect(cfg.ModelConfig).NotTo(BeEmpty())
-			Expect(cfg.ModelConfig).To(HaveKey("gpt-4"))
-			Expect(cfg.ModelConfig).To(HaveKey("gpt-3.5-turbo"))
+			Expect(cfg.ModelConfig).To(HaveKey("model-a"))
+			Expect(cfg.ModelConfig).To(HaveKey("model-b"))
 		})
 
 		It("should have valid cache configuration", func() {

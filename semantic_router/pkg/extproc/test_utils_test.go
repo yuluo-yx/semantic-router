@@ -130,11 +130,7 @@ func CreateTestConfig() *config.RouterConfig {
 				},
 			},
 		},
-					{Model: TestModelB, Score: 0.8},
-				},
-			},
-		},
-		DefaultModel: TestModelB,
+		DefaultModel: "model-b",
 		SemanticCache: config.SemanticCacheConfig{
 			Enabled:             false, // Disable for most tests
 			SimilarityThreshold: &[]float32{0.9}[0],
@@ -151,11 +147,13 @@ func CreateTestConfig() *config.RouterConfig {
 				PIIPolicy: config.PIIPolicy{
 					AllowByDefault: true,
 				},
+				PreferredEndpoints: []string{"test-endpoint1"},
 			},
 			"model-b": {
 				PIIPolicy: config.PIIPolicy{
 					AllowByDefault: true,
 				},
+				PreferredEndpoints: []string{"test-endpoint1", "test-endpoint2"},
 			},
 		},
 		Tools: config.ToolsConfig{
@@ -163,6 +161,24 @@ func CreateTestConfig() *config.RouterConfig {
 			TopK:            3,
 			ToolsDBPath:     "",
 			FallbackToEmpty: true,
+		},
+		VLLMEndpoints: []config.VLLMEndpoint{
+			{
+				Name:            "test-endpoint1",
+				Address:         "127.0.0.1",
+				Port:            8000,
+				Models:          []string{"model-a", "model-b"},
+				Weight:          1,
+				HealthCheckPath: "/health",
+			},
+			{
+				Name:            "test-endpoint2",
+				Address:         "127.0.0.1",
+				Port:            8001,
+				Models:          []string{"model-b"},
+				Weight:          2,
+				HealthCheckPath: "/health",
+			},
 		},
 	}
 }

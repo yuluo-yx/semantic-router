@@ -55,6 +55,9 @@ type RouterConfig struct {
 
 	// Tools configuration for automatic tool selection
 	Tools ToolsConfig `yaml:"tools"`
+
+	// vLLM endpoints configuration for multiple backend support
+	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
 }
 
 // SemanticCacheConfig represents configuration for the semantic cache
@@ -113,6 +116,27 @@ type ToolsConfig struct {
 	FallbackToEmpty bool `yaml:"fallback_to_empty"`
 }
 
+// VLLMEndpoint represents a vLLM backend endpoint configuration
+type VLLMEndpoint struct {
+	// Name identifier for the endpoint
+	Name string `yaml:"name"`
+
+	// Address of the vLLM endpoint
+	Address string `yaml:"address"`
+
+	// Port of the vLLM endpoint
+	Port int `yaml:"port"`
+
+	// List of models served by this endpoint
+	Models []string `yaml:"models"`
+
+	// Load balancing weight for this endpoint
+	Weight int `yaml:"weight,omitempty"`
+
+	// Health check path for this endpoint
+	HealthCheckPath string `yaml:"health_check_path,omitempty"`
+}
+
 // ModelParams represents configuration for model-specific parameters
 type ModelParams struct {
 	// Number of parameters in the model
@@ -126,6 +150,9 @@ type ModelParams struct {
 
 	// PII policy configuration for this model
 	PIIPolicy PIIPolicy `yaml:"pii_policy,omitempty"`
+
+	// Preferred endpoints for this model (optional)
+	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
 }
 
 // PIIPolicy represents the PII (Personally Identifiable Information) policy for a model
@@ -341,4 +368,116 @@ func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
 // IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled
 func (c *RouterConfig) IsPromptGuardEnabled() bool {
 	return c.PromptGuard.Enabled && c.PromptGuard.ModelID != "" && c.PromptGuard.JailbreakMappingPath != ""
+}
+
+// GetEndpointsForModel returns all endpoints that can serve the specified model
+// If the model has preferred endpoints configured, returns only those endpoints that are available
+// Otherwise, returns all endpoints that list the model in their Models array
+func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
+	var availableEndpoints []VLLMEndpoint
+	
+	// First, find all endpoints that can serve this model
+	for _, endpoint := range c.VLLMEndpoints {
+		for _, model := range endpoint.Models {
+			if model == modelName {
+				availableEndpoints = append(availableEndpoints, endpoint)
+				break
+			}
+		}
+	}
+	
+	// Check if model has preferred endpoints configured
+	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
+		var preferredEndpoints []VLLMEndpoint
+		for _, endpoint := range availableEndpoints {
+			for _, preferredName := range modelConfig.PreferredEndpoints {
+				if endpoint.Name == preferredName {
+					preferredEndpoints = append(preferredEndpoints, endpoint)
+					break
+				}
+			}
+		}
+		if len(preferredEndpoints) > 0 {
+			return preferredEndpoints
+		}
+	}
+	
+	return availableEndpoints
+}
+
+// GetEndpointByName returns the endpoint with the specified name
+func (c *RouterConfig) GetEndpointByName(name string) (*VLLMEndpoint, bool) {
+	for _, endpoint := range c.VLLMEndpoints {
+		if endpoint.Name == name {
+			return &endpoint, true
+		}
+	}
+	return nil, false
+}
+
+// GetAllModels returns a list of all models available across all endpoints
+func (c *RouterConfig) GetAllModels() []string {
+	modelSet := make(map[string]bool)
+	var models []string
+	
+	for _, endpoint := range c.VLLMEndpoints {
+		for _, model := range endpoint.Models {
+			if !modelSet[model] {
+				modelSet[model] = true
+				models = append(models, model)
+			}
+		}
+	}
+	
+	return models
+}
+
+// SelectBestEndpointForModel selects the best endpoint for a model based on weights and availability
+// Returns the endpoint name and whether selection was successful
+func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, bool) {
+	endpoints := c.GetEndpointsForModel(modelName)
+	if len(endpoints) == 0 {
+		return "", false
+	}
+	
+	// If only one endpoint, return it
+	if len(endpoints) == 1 {
+		return endpoints[0].Name, true
+	}
+	
+	// Select endpoint with highest weight
+	bestEndpoint := endpoints[0]
+	for _, endpoint := range endpoints[1:] {
+		if endpoint.Weight > bestEndpoint.Weight {
+			bestEndpoint = endpoint
+		}
+	}
+	
+	return bestEndpoint.Name, true
+}
+
+// ValidateEndpoints validates that all configured models have at least one endpoint
+func (c *RouterConfig) ValidateEndpoints() error {
+	// Get all models from categories
+	allCategoryModels := make(map[string]bool)
+	for _, category := range c.Categories {
+		for _, modelScore := range category.ModelScores {
+			allCategoryModels[modelScore.Model] = true
+		}
+	}
+	
+	// Add default model
+	if c.DefaultModel != "" {
+		allCategoryModels[c.DefaultModel] = true
+	}
+	
+	// Check that each model has at least one endpoint
+	for model := range allCategoryModels {
+		endpoints := c.GetEndpointsForModel(model)
+		if len(endpoints) == 0 {
+			return fmt.Errorf("model '%s' has no available endpoints", model)
+		}
+	}
+	
+	return nil
 }

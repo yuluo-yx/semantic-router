@@ -24,6 +24,32 @@ gpu_config:
   flops: 312000000000000  # 312e12 fp16
   hbm: 2000000000000      # 2e12 (2 TB/s)
   description: "A100-80G" # https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf
+
+# vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "192.168.12.90"
+    port: 11434
+    models:
+      - "phi4"
+      - "gemma3:27b"
+    weight: 1  # Load balancing weight
+    health_check_path: "/health"  # Optional health check endpoint
+  - name: "endpoint2"
+    address: "192.168.12.91"
+    port: 11434
+    models:
+      - "mistral-small3.1"
+    weight: 1
+    health_check_path: "/health"
+  - name: "endpoint3"
+    address: "192.168.12.92"
+    port: 11434
+    models:
+      - "phi4"  # Same model can be served by multiple endpoints for redundancy
+      - "mistral-small3.1"
+    weight: 2  # Higher weight for more powerful endpoint
+
 model_config:
   phi4:
     param_count: 14000000000  # 14B parameters https://huggingface.co/microsoft/phi-4
@@ -32,6 +58,8 @@ model_config:
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+    # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
+    preferred_endpoints: ["endpoint1", "endpoint3"]
   gemma3:27b:
     param_count: 27000000000  # 27B parameters (base version)
     batch_size: 512.0
@@ -39,6 +67,7 @@ model_config:
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+    preferred_endpoints: ["endpoint1"]
   "mistral-small3.1":
     param_count: 22000000000
     batch_size: 512.0
@@ -46,6 +75,8 @@ model_config:
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+    preferred_endpoints: ["endpoint2", "endpoint3"]
+
 # Classifier configuration for text classification
 classifier:
   category_model:

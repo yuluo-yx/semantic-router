@@ -33,7 +33,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should handle very large request bodies", func() {
 			largeContent := strings.Repeat("a", 10*1024) // 10KB content (reduced from 1MB to avoid memory issues)
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: largeContent},
 				},
@@ -64,7 +64,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 		It("should handle requests with special characters", func() {
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: "Hello 🌍! What about ñoño and émojis? 你好"},
 				},
@@ -93,7 +93,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should handle malformed OpenAI requests gracefully", func() {
 			// Missing required fields
 			malformedRequest := map[string]interface{}{
-				"model": "gpt-4",
+				"model": "model-a",
 				// Missing messages field
 			}
 
@@ -162,7 +162,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			}
 
 			request := openai.OpenAIRequest{
-				Model:    "gpt-3.5-turbo",
+				Model:    "model-b",
 				Messages: messages,
 			}
 
@@ -196,7 +196,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			for i := 0; i < numRequests; i++ {
 				go func(index int) {
 					request := openai.OpenAIRequest{
-						Model: "gpt-4",
+						Model: "model-a",
 						Messages: []openai.ChatMessage{
 							{Role: "user", Content: fmt.Sprintf("Request %d", index)},
 						},
@@ -244,7 +244,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			
 			for i := 0; i < numRequests; i++ {
 				request := openai.OpenAIRequest{
-					Model: "gpt-3.5-turbo",
+					Model: "model-b",
 					Messages: []openai.ChatMessage{
 						{Role: "user", Content: fmt.Sprintf("Sequential request %d", i)},
 					},
@@ -286,7 +286,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			nestedContent += "}"
 
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: "Process this nested structure: " + nestedContent},
 				},
@@ -317,7 +317,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			repeatedPattern := strings.Repeat("The quick brown fox jumps over the lazy dog. ", 100)
 			
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: repeatedPattern},
 				},
@@ -347,7 +347,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 	Context("Boundary conditions", func() {
 		It("should handle empty messages array", func() {
 			request := openai.OpenAIRequest{
-				Model:    "gpt-4",
+				Model:    "model-a",
 				Messages: []openai.ChatMessage{}, // Empty messages
 			}
 
@@ -373,7 +373,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 		It("should handle messages with empty content", func() {
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: ""},     // Empty content
 					{Role: "assistant", Content: ""}, // Empty content
@@ -403,7 +403,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 		It("should handle messages with only whitespace content", func() {
 			request := openai.OpenAIRequest{
-				Model: "gpt-4",
+				Model: "model-a",
 				Messages: []openai.ChatMessage{
 					{Role: "user", Content: "   \n\t  "}, // Only whitespace
 					{Role: "user", Content: "What is AI?"},

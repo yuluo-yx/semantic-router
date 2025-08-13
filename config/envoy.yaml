@@ -30,16 +30,47 @@ static_resources:
                   upstream_cluster: "%UPSTREAM_CLUSTER%"
                   upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                   request_id: "%REQ(X-REQUEST-ID)%"
+                  selected_model: "%REQ(X-SELECTED-MODEL)%"
+                  selected_endpoint: "%REQ(X-SELECTED-ENDPOINT)%"
           route_config:
             name: local_route
             virtual_hosts:
             - name: local_service
               domains: ["*"]
               routes:
+              # Dynamic routing based on selected endpoint header
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: "x-selected-endpoint"
+                    string_match:
+                      exact: "endpoint1"
+                route:
+                  cluster: vllm_endpoint1
+                  timeout: 300s
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: "x-selected-endpoint"
+                    string_match:
+                      exact: "endpoint2"
+                route:
+                  cluster: vllm_endpoint2
+                  timeout: 300s
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: "x-selected-endpoint"
+                    string_match:
+                      exact: "endpoint3"
+                route:
+                  cluster: vllm_endpoint3
+                  timeout: 300s
+              # Fallback route - will be routed by the external processor
               - match:
                   prefix: "/"
                 route:
-                  cluster: vllm_backend
+                  cluster: vllm_endpoint1  # Default fallback
                   timeout: 300s
           http_filters:
           - name: envoy.filters.http.ext_proc
@@ -84,17 +115,28 @@ static_resources:
                 address: 127.0.0.1
                 port_value: 50051
   
-  - name: vllm_backend
+  # Multiple vLLM backend clusters
+  - name: vllm_endpoint1
     connect_timeout: 300s
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: "/health"
+        expected_statuses:
+        - start: 200
+          end: 299
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
         explicit_http_config:
           http_protocol_options: {}
     load_assignment:
-      cluster_name: vllm_backend
+      cluster_name: vllm_endpoint1
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -102,3 +144,64 @@ static_resources:
               socket_address:
                 address: 192.168.12.90
                 port_value: 11434
+          load_balancing_weight: 1
+
+  - name: vllm_endpoint2
+    connect_timeout: 300s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: "/health"
+        expected_statuses:
+        - start: 200
+          end: 299
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http_protocol_options: {}
+    load_assignment:
+      cluster_name: vllm_endpoint2
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 192.168.12.90
+                port_value: 11434
+          load_balancing_weight: 1
+
+  - name: vllm_endpoint3
+    connect_timeout: 300s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: "/health"
+        expected_statuses:
+        - start: 200
+          end: 299
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http_protocol_options: {}
+    load_assignment:
+      cluster_name: vllm_endpoint3
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 192.168.12.90
+                port_value: 11434
+          load_balancing_weight: 2  # Higher weight for more powerful endpoint
