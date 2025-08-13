@@ -121,7 +121,34 @@ var _ = Describe("Endpoint Selection", func() {
 			// Create mock stream
 			stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
 
-							// Process the request
+			It("should select appropriate endpoint for specified model", func() {
+				// Create a request with explicit model
+				openAIRequest := map[string]interface{}{
+					"model": "model-a",
+					"messages": []map[string]interface{}{
+						{
+							"role":    "user",
+							"content": "Hello, world!",
+						},
+					},
+				}
+
+				requestBody, err := json.Marshal(openAIRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create processing request
+				processingRequest := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				// Create mock stream
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
+
+				// Process the request
 				err = router.Process(stream)
 				Expect(err).NotTo(HaveOccurred())
 
