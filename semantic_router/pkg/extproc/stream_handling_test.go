@@ -1,17 +1,20 @@
 package extproc_test
 
 import (
-	"fmt"
-	"strings"
+    "context"
+    "fmt"
+    "strings"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+    . "github.com/onsi/ginkgo/v2"
+    . "github.com/onsi/gomega"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+    core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+    ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+    "google.golang.org/grpc/codes"
+    "google.golang.org/grpc/status"
 
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
 )
 
 var _ = Describe("Process Stream Handling", func() {
@@ -189,6 +192,22 @@ var _ = Describe("Process Stream Handling", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("send failed"))
 		})
+
+        It("should handle context cancellation gracefully", func() {
+            stream := NewMockStream([]*ext_proc.ProcessingRequest{})
+            stream.RecvError = context.Canceled
+
+            err := router.Process(stream)
+            Expect(err).NotTo(HaveOccurred()) // Context cancellation should be handled gracefully
+        })
+
+        It("should handle gRPC cancellation gracefully", func() {
+            stream := NewMockStream([]*ext_proc.ProcessingRequest{})
+            stream.RecvError = status.Error(codes.Canceled, "context canceled")
+
+            err := router.Process(stream)
+            Expect(err).NotTo(HaveOccurred()) // Context cancellation should be handled gracefully
+        })
 
 		It("should handle intermittent errors gracefully", func() {
 			requests := []*ext_proc.ProcessingRequest{
