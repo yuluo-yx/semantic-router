@@ -1,20 +1,21 @@
 package extproc_test
 
 import (
-	"context"
-	"fmt"
-	"log"
+    "context"
+    "fmt"
+    "io"
+    "log"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"google.golang.org/grpc/metadata"
+    ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+    "google.golang.org/grpc/metadata"
 
-	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/classification"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
+    candle_binding "github.com/redhat-et/semantic_route/candle-binding"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/utils/classification"
+    "github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
 )
 
 // MockStream implements the ext_proc.ExternalProcessor_ProcessServer interface for testing
@@ -49,7 +50,7 @@ func (m *MockStream) Recv() (*ext_proc.ProcessingRequest, error) {
 		return nil, m.RecvError
 	}
 	if m.RecvIndex >= len(m.Requests) {
-		return nil, fmt.Errorf("EOF") // Simulate end of stream
+        return nil, io.EOF // Simulate end of stream
 	}
 	req := m.Requests[m.RecvIndex]
 	m.RecvIndex++

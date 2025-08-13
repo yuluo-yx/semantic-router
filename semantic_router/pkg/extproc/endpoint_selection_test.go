@@ -94,33 +94,6 @@ var _ = Describe("Endpoint Selection", func() {
 		})
 
 		Context("when model is explicitly specified", func() {
-					It("should select appropriate endpoint for specified model", func() {
-			// Create a request with explicit model
-			openAIRequest := map[string]interface{}{
-				"model": "model-a",
-				"messages": []map[string]interface{}{
-					{
-						"role":    "user",
-						"content": "Hello, world!",
-					},
-				},
-			}
-
-			requestBody, err := json.Marshal(openAIRequest)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create processing request
-			processingRequest := &ext_proc.ProcessingRequest{
-				Request: &ext_proc.ProcessingRequest_RequestBody{
-					RequestBody: &ext_proc.HttpBody{
-						Body: requestBody,
-					},
-				},
-			}
-
-			// Create mock stream
-			stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
-
 			It("should select appropriate endpoint for specified model", func() {
 				// Create a request with explicit model
 				openAIRequest := map[string]interface{}{
@@ -177,36 +150,7 @@ var _ = Describe("Endpoint Selection", func() {
 						// model-a should be routed to test-endpoint1 based on preferred endpoints
 						Expect(selectedEndpoint).To(Equal("test-endpoint1"))
 					}
-			// Process the request
-			err = router.Process(stream)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify response was sent
-			Expect(stream.Responses).To(HaveLen(1))
-			response := stream.Responses[0]
-
-			// Check if headers were set for endpoint selection
-			requestBodyResponse := response.GetRequestBody()
-			Expect(requestBodyResponse).NotTo(BeNil())
-
-			headerMutation := requestBodyResponse.GetResponse().GetHeaderMutation()
-			if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
-				var endpointHeaderFound bool
-				var selectedEndpoint string
-				
-				for _, header := range headerMutation.SetHeaders {
-					if header.Header.Key == "x-selected-endpoint" {
-						endpointHeaderFound = true
-						selectedEndpoint = header.Header.Value
-						break
-					}
 				}
-				
-				if endpointHeaderFound {
-					// model-a should be routed to test-endpoint1 based on preferred endpoints
-					Expect(selectedEndpoint).To(Equal("test-endpoint1"))
-				}
-			}
 			})
 
 			It("should handle model with multiple preferred endpoints", func() {
@@ -236,35 +180,6 @@ var _ = Describe("Endpoint Selection", func() {
 			// Create mock stream
 			stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
 
-							// Process the request
-				err = router.Process(stream)
-				Expect(err).NotTo(HaveOccurred())
-
-				// Verify response was sent
-				Expect(stream.Responses).To(HaveLen(1))
-				response := stream.Responses[0]
-
-				// Check if headers were set for endpoint selection
-				requestBodyResponse := response.GetRequestBody()
-				Expect(requestBodyResponse).NotTo(BeNil())
-
-				headerMutation := requestBodyResponse.GetResponse().GetHeaderMutation()
-				if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
-					var endpointHeaderFound bool
-					var selectedEndpoint string
-					
-					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-selected-endpoint" {
-							endpointHeaderFound = true
-							selectedEndpoint = header.Header.Value
-							break
-						}
-					}
-					
-					if endpointHeaderFound {
-						// model-b should be routed to test-endpoint2 (higher weight) or test-endpoint1
-						Expect(selectedEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
-					}
 			// Process the request
 			err = router.Process(stream)
 			Expect(err).NotTo(HaveOccurred())
@@ -295,7 +210,7 @@ var _ = Describe("Endpoint Selection", func() {
 					Expect(selectedEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
 				}
 			}
-			})
+		})
 		})
 	})
 
@@ -345,7 +260,6 @@ var _ = Describe("Endpoint Selection", func() {
 	})
 
 	Describe("Request Context Processing", func() {
-				It("should handle request headers properly", func() {
 		It("should handle request headers properly", func() {
 			// Create request headers
 			requestHeaders := &ext_proc.ProcessingRequest{
