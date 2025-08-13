@@ -367,6 +367,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 			headerMutation = &ext_proc.HeaderMutation{}
 		}
 		
+		// Initialize SetHeaders if nil
+		if headerMutation.SetHeaders == nil {
+			headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
+		}
+
 		// Add endpoint selection header
 		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -453,6 +458,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 				}
 				
 				// Add content-length removal if not already present
+				if headerMutation.RemoveHeaders == nil {
+					headerMutation.RemoveHeaders = make([]string, 0)
+				}
 				headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-length")
 
 				// Update the response with both mutations
