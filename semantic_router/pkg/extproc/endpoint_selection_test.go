@@ -209,7 +209,7 @@ var _ = Describe("Endpoint Selection", func() {
 			}
 			})
 
-					It("should handle model with multiple preferred endpoints", func() {
+			It("should handle model with multiple preferred endpoints", func() {
 			// Create a request with model-b which has multiple preferred endpoints
 			openAIRequest := map[string]interface{}{
 				"model": "model-b",
