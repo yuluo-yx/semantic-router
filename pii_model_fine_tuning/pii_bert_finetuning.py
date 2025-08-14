@@ -1,40 +1,28 @@
 """
-PII Classification Fine-tuning with Multiple BERT Models
-Supports both sequence classification and token classification (NER-style) for PII detection.
+PII Token Classification Fine-tuning with Multiple BERT Models
+Supports token classification (NER-style) for precise PII entity detection and location.
 
 Usage:
-    # Train sequence classification (default) with MiniLM and Presidio dataset
+    # Train token classification for entity location detection (default)
     python pii_bert_finetuning.py --mode train
 
-    # Train token classification for entity location detection
-    python pii_bert_finetuning.py --mode train --task-type token
-
     # Train with BERT base and AI4Privacy dataset for token classification
-    python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --task-type token
-
-    # Train with DeBERTa v3 and AI4Privacy dataset for sequence classification
-    python pii_bert_finetuning.py --mode train --model deberta-v3-base --dataset ai4privacy --task-type sequence
+    python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy
 
     # Train with ModernBERT for token classification (recommended for best performance)
-    python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy --task-type token
+    python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy
 
-    # Train with custom target accuracy and batch size for token classification
-    python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy --task-type token --target-accuracy 0.98 --batch-size 32
-
-    # Quick training for testing with lower accuracy target
-    python pii_bert_finetuning.py --mode train --model distilbert --dataset presidio --target-accuracy 0.85 --batch-size 8 --task-type sequence
-
-    # Test inference with trained sequence classification model
-    python pii_bert_finetuning.py --mode test --model bert-base --dataset ai4privacy --task-type sequence
+    # Train with custom target accuracy and batch size
+    python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy --target-accuracy 0.98 --batch-size 32
 
     # Test inference with trained token classification model
-    python pii_bert_finetuning.py --mode test --model bert-base --dataset ai4privacy --task-type token
+    python pii_bert_finetuning.py --mode test --model bert-base --dataset ai4privacy
 
     # Train with custom maximum epochs and patience
-    python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --max-epochs 100 --patience 5 --task-type token
+    python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --max-epochs 100 --patience 5
 
     # Force restart training from scratch (ignore checkpoints)
-    python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --force-restart --task-type token
+    python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --force-restart
 
 Supported models:
     - bert-base, bert-large: Standard BERT models
@@ -50,9 +38,8 @@ Supported datasets:
     - ai4privacy: AI4Privacy PII masking dataset (300k samples, multilingual)
 
 Features:
-    - Dual task support: Sequence classification and Token classification (NER-style)
-    - Automatic model selection: AutoModelForSequenceClassification or AutoModelForTokenClassification
     - Token classification with BIO tagging for precise PII entity location detection
+    - Automatic model selection: AutoModelForTokenClassification
     - Simplified training with Hugging Face Trainer
     - Built-in evaluation metrics (F1 score, accuracy, precision, recall)
     - Accuracy-based early stopping with configurable target and patience
@@ -61,7 +48,7 @@ Features:
     - Automatic checkpoint resuming on training failures
     - Force restart option to ignore existing checkpoints
     - Automatic device detection (GPU/CPU)
-    - Entity extraction with confidence scores for token classification
+    - Entity extraction with confidence scores
 """
 
 import os
@@ -69,10 +56,10 @@ import json
 import torch
 import numpy as np
 import requests
+import warnings
 from pathlib import Path
 from transformers import (
     AutoTokenizer, 
-    AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     Trainer, 
     TrainingArguments,
@@ -135,14 +122,7 @@ MODEL_CONFIGS = {
     'electra-large': 'google/electra-large-discriminator'
 }
 
-# Metrics computation function for Trainer (sequence classification)
-def compute_metrics(eval_pred):
-    """Compute F1 score and accuracy for evaluation."""
-    predictions, labels = eval_pred
-    predictions = np.argmax(predictions, axis=1)
-    f1 = f1_score(labels, predictions, average="weighted")
-    accuracy = accuracy_score(labels, predictions)
-    return {"f1": f1, "accuracy": accuracy}
+
 
 # Metrics computation function for token classification
 def compute_metrics_token_classification(eval_pred):
@@ -223,20 +203,24 @@ class AccuracyEarlyStoppingCallback(TrainerCallback):
                 self.wait_count = 0
 
 class PII_Dataset:
-    """Dataset class for PII classification fine-tuning (both sequence and token classification)."""
+    """Dataset class for PII token classification fine-tuning."""
     
-    def __init__(self, data_dir="presidio_pii_data", dataset_type="presidio", task_type="sequence"):
+    def __init__(self, data_dir="presidio_pii_data", dataset_type="presidio", max_samples=None, languages=["English"]):
         """
         Initialize the dataset loader.
         
         Args:
             data_dir: Directory containing the generated PII data
             dataset_type: Type of dataset to use ("presidio" or "ai4privacy")
-            task_type: Type of task ("sequence" for classification, "token" for NER-style token classification)
+            max_samples: Maximum number of samples to load (useful for limiting large datasets like ai4privacy)
+            languages: List of languages to include (default: ["English"]). 
+                      Available in ai4privacy: ["English", "French", "German", "Italian", "Dutch", "Spanish"]
+                      Use ["all"] to include all languages.
         """
         self.data_dir = Path(data_dir)
         self.dataset_type = dataset_type
-        self.task_type = task_type
+        self.max_samples = max_samples
+        self.languages = languages if languages != ["all"] else ["English", "French", "German", "Italian", "Dutch", "Spanish"]
         self.label2id = {}
         self.id2label = {}
         
@@ -267,7 +251,7 @@ class PII_Dataset:
         return dataset_path
         
     def load_presidio_json(self, file_path, tokenizer=None):
-        """Load and parse Presidio JSON format for both sequence and token classification."""
+        """Load and parse Presidio JSON format for token classification."""
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
@@ -279,31 +263,26 @@ class PII_Dataset:
             spans = sample.get('spans', [])
             
             texts.append(text)
-            
-            if self.task_type == "token":
-                # For token classification, store the spans for later processing
-                labels.append(spans)
-            else:
-                # For sequence classification, extract dominant entity type
-                entity_types = [span['entity_type'] for span in spans]
-                
-                if not entity_types:
-                    dominant_label = 'NO_PII'
-                else:
-                    # If multiple PII types, choose the most frequent one
-                    dominant_label = max(set(entity_types), key=entity_types.count)
-                
-                labels.append(dominant_label)
+            # For token classification, store the spans for later processing
+            labels.append(spans)
         
         return texts, labels
     
     def load_ai4privacy_dataset(self):
-        """Load and parse AI4Privacy PII masking dataset from Hugging Face."""
+        """
+        Load and parse AI4Privacy PII masking dataset from Hugging Face.
+        
+        Dataset structure (as per https://huggingface.co/datasets/ai4privacy/pii-masking-300k):
+        - 225k total samples (178k train, 47.7k validation)
+        - 6 languages: English, French, German, Italian, Dutch, Spanish
+        - Columns: source_text, target_text, privacy_mask, span_labels, mbert_text_tokens, mbert_bio_labels, id, language, set
+        - Pre-tokenized with MBERT tokens and BIO labels available
+        """
         logger.info("Loading AI4Privacy PII masking dataset from Hugging Face...")
         
         # Check if cached dataset exists
         cache_dir = Path("./ai4privacy_cache")
-        cache_file = cache_dir / f"processed_dataset_{self.task_type}.json"
+        cache_file = cache_dir / f"processed_dataset_token_{'-'.join(self.languages)}.json"
         
         if cache_file.exists():
             logger.info("Found cached AI4Privacy dataset, loading from cache...")
@@ -329,140 +308,162 @@ class PII_Dataset:
                 train_data = dataset['train']
                 logger.info(f"Processing {len(train_data)} training samples...")
                 
+                sample_count = 0
+                english_samples = 0
+                valid_privacy_mask_samples = 0
+                
                 for sample in train_data:
+                    # Filter by specified languages
+                    if sample.get('language') not in self.languages:
+                        continue
+                    english_samples += 1
+                    
+                    # Limit dataset size if max_samples is specified
+                    if self.max_samples is not None and sample_count >= self.max_samples:
+                        logger.info(f"Reached max_samples limit of {self.max_samples}")
+                        break
+                        
                     source_text = sample['source_text']
                     privacy_mask = sample.get('privacy_mask', [])
                     
-                    # Extract PII types from privacy mask
+                    # Extract PII types from privacy mask with better error handling
                     if isinstance(privacy_mask, str):
                         try:
                             privacy_mask = json.loads(privacy_mask)
                         except json.JSONDecodeError:
-                            privacy_mask = []
+                            logger.warning(f"Skipping sample due to malformed privacy_mask JSON")
+                            continue
                     
+                    # Skip samples with empty or invalid privacy_mask for better data quality
+                    if not privacy_mask or not isinstance(privacy_mask, list):
+                        continue
+                    
+                    valid_privacy_mask_samples += 1
                     texts.append(source_text)
+                    sample_count += 1
                     
-                    if self.task_type == "token":
-                        # For token classification, convert privacy mask to span format
-                        spans = []
-                        for mask_item in privacy_mask:
-                            # Handle different possible key structures in AI4Privacy dataset
-                            entity_type = None
-                            start_pos = None
-                            end_pos = None
-                            
-                            # Try different key names for entity type
-                            if 'label' in mask_item:
-                                entity_type = mask_item['label']
-                            elif 'entity_type' in mask_item:
-                                entity_type = mask_item['entity_type']
-                            
-                            # Try different key names for start position
-                            if 'start' in mask_item:
-                                start_pos = mask_item['start']
-                            elif 'start_position' in mask_item:
-                                start_pos = mask_item['start_position']
-                            
-                            # Try different key names for end position
-                            if 'end' in mask_item:
-                                end_pos = mask_item['end']
-                            elif 'end_position' in mask_item:
-                                end_pos = mask_item['end_position']
-                            
-                            # Only add span if we have all required information
-                            if entity_type and start_pos is not None and end_pos is not None:
-                                spans.append({
-                                    'entity_type': entity_type,
-                                    'start': start_pos,
-                                    'end': end_pos,
-                                    'value': mask_item.get('value', '')  # Store the actual PII value if available
-                                })
-                        labels.append(spans)
-                    else:
-                        # For sequence classification
-                        if not privacy_mask or len(privacy_mask) == 0:
-                            dominant_label = 'NO_PII'
-                        else:
-                            # Extract entity types from privacy mask
-                            entity_types = [mask_item['label'] for mask_item in privacy_mask if 'label' in mask_item]
-                            
-                            if not entity_types:
-                                dominant_label = 'NO_PII'
-                            else:
-                                # For classification, choose the most frequent PII type
-                                dominant_label = max(set(entity_types), key=entity_types.count)
+                    # For token classification, convert privacy mask to span format
+                    spans = []
+                    for mask_item in privacy_mask:
+                        # Handle different possible key structures in AI4Privacy dataset
+                        entity_type = None
+                        start_pos = None
+                        end_pos = None
                         
-                        labels.append(dominant_label)
+                        # Try different key names for entity type
+                        if 'label' in mask_item:
+                            entity_type = mask_item['label']
+                        elif 'entity_type' in mask_item:
+                            entity_type = mask_item['entity_type']
+                        
+                        # Try different key names for start position
+                        if 'start' in mask_item:
+                            start_pos = mask_item['start']
+                        elif 'start_position' in mask_item:
+                            start_pos = mask_item['start_position']
+                        
+                        # Try different key names for end position
+                        if 'end' in mask_item:
+                            end_pos = mask_item['end']
+                        elif 'end_position' in mask_item:
+                            end_pos = mask_item['end_position']
+                        
+                        # Only add span if we have all required information
+                        if entity_type and start_pos is not None and end_pos is not None:
+                            spans.append({
+                                'entity_type': entity_type,
+                                'start': start_pos,
+                                'end': end_pos,
+                                'value': mask_item.get('value', '')  # Store the actual PII value if available
+                            })
+                    labels.append(spans)
+            
+            # Log filtering results for training data
+            logger.info(f"Training data filtering results:")
+            logger.info(f"  Total samples: {len(train_data)}")
+            logger.info(f"  Filtered languages: {self.languages}")
+            logger.info(f"  Language-filtered samples: {english_samples}")
+            logger.info(f"  Valid privacy_mask samples: {valid_privacy_mask_samples}")
+            logger.info(f"  Final sample count: {sample_count}")
+            
+            # Check if we have any samples after filtering
+            if sample_count == 0:
+                logger.warning("No samples remaining after filtering! Suggestions:")
+                logger.warning(f"1. Try --languages all to include all languages (current: {self.languages})")
+                logger.warning("2. Increase --max-samples limit")
+                logger.warning("3. Use presidio dataset instead")
+                logger.warning("Falling back to presidio dataset...")
+                return self.load_presidio_json(self.download_presidio_dataset())
             
             # If validation split exists, add it to the dataset
             if 'validation' in dataset:
                 val_data = dataset['validation']
                 logger.info(f"Processing {len(val_data)} validation samples...")
                 
+                val_sample_count = 0
                 for sample in val_data:
+                    # Filter by specified languages
+                    if sample.get('language') not in self.languages:
+                        continue
+                    
+                    # Limit validation samples as well if max_samples is specified
+                    if self.max_samples is not None and val_sample_count >= self.max_samples // 5:  # Use 20% of max for validation
+                        logger.info(f"Reached validation max_samples limit")
+                        break
+                        
                     source_text = sample['source_text']
                     privacy_mask = sample.get('privacy_mask', [])
                     
-                    # Extract PII types from privacy mask
+                    # Extract PII types from privacy mask with better error handling
                     if isinstance(privacy_mask, str):
                         try:
                             privacy_mask = json.loads(privacy_mask)
                         except json.JSONDecodeError:
-                            privacy_mask = []
+                            logger.warning(f"Skipping sample due to malformed privacy_mask JSON")
+                            continue
+                    
+                    # Skip samples with empty or invalid privacy_mask for better data quality
+                    if not privacy_mask or not isinstance(privacy_mask, list):
+                        continue
                     
                     texts.append(source_text)
+                    val_sample_count += 1
                     
-                    if self.task_type == "token":
-                        # For token classification, convert privacy mask to span format
-                        spans = []
-                        for mask_item in privacy_mask:
-                            # Handle different possible key structures in AI4Privacy dataset
-                            entity_type = None
-                            start_pos = None
-                            end_pos = None
-                            
-                            # Try different key names for entity type
-                            if 'label' in mask_item:
-                                entity_type = mask_item['label']
-                            elif 'entity_type' in mask_item:
-                                entity_type = mask_item['entity_type']
-                            
-                            # Try different key names for start position
-                            if 'start' in mask_item:
-                                start_pos = mask_item['start']
-                            elif 'start_position' in mask_item:
-                                start_pos = mask_item['start_position']
-                            
-                            # Try different key names for end position
-                            if 'end' in mask_item:
-                                end_pos = mask_item['end']
-                            elif 'end_position' in mask_item:
-                                end_pos = mask_item['end_position']
-                            
-                            # Only add span if we have all required information
-                            if entity_type and start_pos is not None and end_pos is not None:
-                                spans.append({
-                                    'entity_type': entity_type,
-                                    'start': start_pos,
-                                    'end': end_pos,
-                                    'value': mask_item.get('value', '')  # Store the actual PII value if available
-                                })
-                        labels.append(spans)
-                    else:
-                        # For sequence classification
-                        if not privacy_mask or len(privacy_mask) == 0:
-                            dominant_label = 'NO_PII'
-                        else:
-                            # Extract entity types from privacy mask
-                            entity_types = [mask_item['label'] for mask_item in privacy_mask if 'label' in mask_item]
-                            
-                            if not entity_types:
-                                dominant_label = 'NO_PII'
-                            else:
-                                # For classification, choose the most frequent PII type
-                                dominant_label = max(set(entity_types), key=entity_types.count)
+                    # For token classification, convert privacy mask to span format
+                    spans = []
+                    for mask_item in privacy_mask:
+                        # Handle different possible key structures in AI4Privacy dataset
+                        entity_type = None
+                        start_pos = None
+                        end_pos = None
                         
-                        labels.append(dominant_label)
+                        # Try different key names for entity type
+                        if 'label' in mask_item:
+                            entity_type = mask_item['label']
+                        elif 'entity_type' in mask_item:
+                            entity_type = mask_item['entity_type']
+                        
+                        # Try different key names for start position
+                        if 'start' in mask_item:
+                            start_pos = mask_item['start']
+                        elif 'start_position' in mask_item:
+                            start_pos = mask_item['start_position']
+                        
+                        # Try different key names for end position
+                        if 'end' in mask_item:
+                            end_pos = mask_item['end']
+                        elif 'end_position' in mask_item:
+                            end_pos = mask_item['end_position']
+                        
+                        # Only add span if we have all required information
+                        if entity_type and start_pos is not None and end_pos is not None:
+                            spans.append({
+                                'entity_type': entity_type,
+                                'start': start_pos,
+                                'end': end_pos,
+                                'value': mask_item.get('value', '')  # Store the actual PII value if available
+                            })
+                    labels.append(spans)
             
             logger.info(f"Loaded {len(texts)} total samples from AI4Privacy dataset")
             
@@ -492,71 +493,26 @@ class PII_Dataset:
         """Split the dataset into train, validation, and test sets."""
         assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios must sum to 1.0"
         
-        if self.task_type == "token":
-            # For token classification, we can't easily do stratified splitting based on entity types
-            # So we'll do simple random splitting
-            logger.info("Using random split for token classification task")
-            
-            # First split: train and temp (val + test)
-            train_texts, temp_texts, train_labels, temp_labels = train_test_split(
-                texts, labels, test_size=(val_ratio + test_ratio), random_state=random_state
-            )
-            
-            # Second split: val and test
-            val_size = val_ratio / (val_ratio + test_ratio)
-            val_texts, test_texts, val_labels, test_labels = train_test_split(
-                temp_texts, temp_labels, test_size=(1 - val_size), random_state=random_state
-            )
-            
-        else:
-            # For sequence classification, use stratified splitting
-            # Check class distribution and filter rare classes if needed
-            class_counts = Counter(labels)
-            
-            # Remove classes with less than 3 samples for stratified splitting
-            min_samples_per_class = 3
-            filtered_data = []
-            for text, label in zip(texts, labels):
-                if class_counts[label] >= min_samples_per_class:
-                    filtered_data.append((text, label))
-            
-            if len(filtered_data) < len(texts):
-                removed_count = len(texts) - len(filtered_data)
-                rare_classes = [cls for cls, count in class_counts.items() if count < min_samples_per_class]
-                logger.warning(f"Removed {removed_count} samples from rare classes: {rare_classes}")
-            
-            # Unpack filtered data
-            filtered_texts, filtered_labels = zip(*filtered_data) if filtered_data else ([], [])
-            filtered_texts, filtered_labels = list(filtered_texts), list(filtered_labels)
-            
-            try:
-                # First split: train and temp (val + test)
-                train_texts, temp_texts, train_labels, temp_labels = train_test_split(
-                    filtered_texts, filtered_labels, test_size=(val_ratio + test_ratio), 
-                    random_state=random_state, stratify=filtered_labels
-                )
-                
-                # Second split: val and test
-                val_size = val_ratio / (val_ratio + test_ratio)
-                val_texts, test_texts, val_labels, test_labels = train_test_split(
-                    temp_texts, temp_labels, test_size=(1 - val_size), 
-                    random_state=random_state, stratify=temp_labels
-                )
-                
-            except ValueError as e:
-                # Fall back to non-stratified splitting if stratified fails
-                logger.warning(f"Stratified split failed: {e}. Using random split instead.")
-                
-                train_texts, temp_texts, train_labels, temp_labels = train_test_split(
-                    filtered_texts, filtered_labels, test_size=(val_ratio + test_ratio), 
-                    random_state=random_state
-                )
-                
-                val_size = val_ratio / (val_ratio + test_ratio)
-                val_texts, test_texts, val_labels, test_labels = train_test_split(
-                    temp_texts, temp_labels, test_size=(1 - val_size), 
-                    random_state=random_state
-                )
+        # Check for empty dataset
+        if len(texts) == 0 or len(labels) == 0:
+            logger.error(f"Cannot split empty dataset! texts: {len(texts)}, labels: {len(labels)}")
+            logger.error("This indicates all samples were filtered out during dataset loading.")
+            raise ValueError("Empty dataset after filtering. Try: (1) using --languages all, (2) using presidio dataset, or (3) increasing --max-samples limit")
+        
+        # For token classification, we can't easily do stratified splitting based on entity types
+        # So we'll do simple random splitting
+        logger.info("Using random split for token classification task")
+        
+        # First split: train and temp (val + test)
+        train_texts, temp_texts, train_labels, temp_labels = train_test_split(
+            texts, labels, test_size=(val_ratio + test_ratio), random_state=random_state
+        )
+        
+        # Second split: val and test
+        val_size = val_ratio / (val_ratio + test_ratio)
+        val_texts, test_texts, val_labels, test_labels = train_test_split(
+            temp_texts, temp_labels, test_size=(1 - val_size), random_state=random_state
+        )
         
         return {
             'train': (train_texts, train_labels),
@@ -565,34 +521,30 @@ class PII_Dataset:
         }
     
     def create_label_mappings(self, all_labels):
-        """Create label to ID mappings."""
-        if self.task_type == "token":
-            # Check if we have pre-tokenized BIO labels
-            if (all_labels and isinstance(all_labels[0], list) and 
-                len(all_labels[0]) > 0 and isinstance(all_labels[0][0], str)):
-                # We have pre-tokenized BIO labels, extract unique labels
-                unique_labels = set()
-                for bio_labels in all_labels:
-                    unique_labels.update(bio_labels)
-                unique_labels = sorted(list(unique_labels))
-                logger.info("Using pre-tokenized BIO labels for mappings")
-            else:
-                # For token classification with spans, we need to create BIO tags
-                entity_types = set()
-                for spans_list in all_labels:
-                    if isinstance(spans_list, list):
-                        for span in spans_list:
-                            if isinstance(span, dict) and 'entity_type' in span:
-                                entity_types.add(span['entity_type'])
-                
-                # Create BIO tags
-                unique_labels = ['O']  # Outside tag
-                for entity_type in sorted(entity_types):
-                    unique_labels.extend([f'B-{entity_type}', f'I-{entity_type}'])
-                logger.info("Created BIO tags from entity spans")
+        """Create label to ID mappings for token classification."""
+        # Check if we have pre-tokenized BIO labels
+        if (all_labels and isinstance(all_labels[0], list) and 
+            len(all_labels[0]) > 0 and isinstance(all_labels[0][0], str)):
+            # We have pre-tokenized BIO labels, extract unique labels
+            unique_labels = set()
+            for bio_labels in all_labels:
+                unique_labels.update(bio_labels)
+            unique_labels = sorted(list(unique_labels))
+            logger.info("Using pre-tokenized BIO labels for mappings")
         else:
-            # For sequence classification
-            unique_labels = sorted(list(set(all_labels)))
+            # For token classification with spans, we need to create BIO tags
+            entity_types = set()
+            for spans_list in all_labels:
+                if isinstance(spans_list, list):
+                    for span in spans_list:
+                        if isinstance(span, dict) and 'entity_type' in span:
+                            entity_types.add(span['entity_type'])
+            
+            # Create BIO tags
+            unique_labels = ['O']  # Outside tag
+            for entity_type in sorted(entity_types):
+                unique_labels.extend([f'B-{entity_type}', f'I-{entity_type}'])
+            logger.info("Created BIO tags from entity spans")
         
         self.label2id = {label: i for i, label in enumerate(unique_labels)}
         self.id2label = {i: label for label, i in self.label2id.items()}
@@ -691,99 +643,127 @@ class PII_Dataset:
         return label_ids
     
     def load_ai4privacy_pretokenized(self):
-        """Load AI4Privacy dataset using pre-tokenized BIO labels if available."""
-        logger.info("Attempting to load AI4Privacy dataset with pre-tokenized BIO labels...")
+        """
+        Load AI4Privacy dataset using pre-tokenized MBERT tokens and BIO labels.
+        
+        According to the dataset documentation, ai4privacy provides:
+        - mbert_text_tokens: Pre-tokenized text using multilingual BERT
+        - mbert_bio_labels: Pre-labeled BIO tags for each token
+        
+        This is more efficient for token classification tasks as tokenization is already done.
+        """
+        logger.info("Loading AI4Privacy dataset with pre-tokenized MBERT tokens and BIO labels...")
         
         try:
             dataset = load_dataset("ai4privacy/pii-masking-300k")
             
             texts = []
             labels = []
+            processed_samples = 0
             
             # Check if the dataset has pre-tokenized BIO labels
             if 'train' in dataset:
                 train_data = dataset['train']
-                sample = train_data[0]
                 
-                # Check if pre-tokenized columns exist
-                has_pretokenized = 'mbert_text_tokens' in sample and 'mbert_bio_labels' in sample
+                # All ai4privacy samples should have pre-tokenized data
+                logger.info(f"Processing {len(train_data)} training samples with pre-tokenized MBERT data...")
                 
-                if has_pretokenized and self.task_type == "token":
-                    logger.info("Found pre-tokenized BIO labels, using them directly...")
+                for sample in train_data:
+                    # Filter by specified languages
+                    if sample.get('language') not in self.languages:
+                        continue
                     
-                    for sample in train_data:
-                        # Get the original text by joining tokens (remove special BERT tokens)
-                        tokens = sample['mbert_text_tokens']
-                        bio_labels = sample['mbert_bio_labels']
+                    # Limit dataset size if max_samples is specified
+                    if self.max_samples is not None and processed_samples >= self.max_samples:
+                        logger.info(f"Reached max_samples limit of {self.max_samples}")
+                        break
                         
-                        # Filter out BERT special tokens and reconstruct text
+                    # Use pre-tokenized data
+                    tokens = sample.get('mbert_text_tokens', [])
+                    bio_labels = sample.get('mbert_bio_labels', [])
+                    
+                    if not tokens or not bio_labels or len(tokens) != len(bio_labels):
+                        logger.warning(f"Skipping sample {sample.get('id', 'unknown')} - invalid pre-tokenized data")
+                        continue
+                    
+                    # Filter out BERT special tokens and reconstruct text
+                    filtered_tokens = []
+                    filtered_labels = []
+                    
+                    for token, label in zip(tokens, bio_labels):
+                        if token not in ['[CLS]', '[SEP]', '[PAD]']:
+                            # Convert subword tokens back to text
+                            if token.startswith('##'):
+                                if filtered_tokens:
+                                    filtered_tokens[-1] += token[2:]  # Remove ## prefix
+                            else:
+                                filtered_tokens.append(token)
+                                filtered_labels.append(label)
+                    
+                    # Reconstruct text from tokens
+                    text = ' '.join(filtered_tokens)
+                    texts.append(text)
+                    labels.append(filtered_labels)
+                    processed_samples += 1
+                
+                # Process validation data if available
+                if 'validation' in dataset and processed_samples < (self.max_samples or float('inf')):
+                    val_data = dataset['validation']
+                    val_processed = 0
+                    max_val_samples = (self.max_samples // 5) if self.max_samples else len(val_data)
+                    
+                    for sample in val_data:
+                        if sample.get('language') not in self.languages:
+                            continue
+                        
+                        if val_processed >= max_val_samples:
+                            break
+                            
+                        tokens = sample.get('mbert_text_tokens', [])
+                        bio_labels = sample.get('mbert_bio_labels', [])
+                        
+                        if not tokens or not bio_labels or len(tokens) != len(bio_labels):
+                            continue
+                        
+                        # Filter and reconstruct
                         filtered_tokens = []
                         filtered_labels = []
                         
                         for token, label in zip(tokens, bio_labels):
                             if token not in ['[CLS]', '[SEP]', '[PAD]']:
-                                # Convert subword tokens back to text
                                 if token.startswith('##'):
                                     if filtered_tokens:
-                                        filtered_tokens[-1] += token[2:]  # Remove ## prefix
+                                        filtered_tokens[-1] += token[2:]
                                 else:
                                     filtered_tokens.append(token)
                                     filtered_labels.append(label)
                         
-                        # Reconstruct text from tokens
                         text = ' '.join(filtered_tokens)
                         texts.append(text)
-                        
-                        # Convert BIO labels to our format
-                        # Note: This assumes the BIO labels are already in the correct format
                         labels.append(filtered_labels)
-                    
-                    # Add validation data if available
-                    if 'validation' in dataset:
-                        val_data = dataset['validation']
-                        for sample in val_data:
-                            tokens = sample['mbert_text_tokens']
-                            bio_labels = sample['mbert_bio_labels']
-                            
-                            filtered_tokens = []
-                            filtered_labels = []
-                            
-                            for token, label in zip(tokens, bio_labels):
-                                if token not in ['[CLS]', '[SEP]', '[PAD]']:
-                                    if token.startswith('##'):
-                                        if filtered_tokens:
-                                            filtered_tokens[-1] += token[2:]
-                                    else:
-                                        filtered_tokens.append(token)
-                                        filtered_labels.append(label)
-                            
-                            text = ' '.join(filtered_tokens)
-                            texts.append(text)
-                            labels.append(filtered_labels)
-                    
-                    logger.info(f"Loaded {len(texts)} samples using pre-tokenized BIO labels")
-                    return texts, labels
+                        val_processed += 1
                 
+                logger.info(f"Loaded {len(texts)} samples using pre-tokenized MBERT data")
+                logger.info(f"Languages: {self.languages}")
+                return texts, labels
+            
         except Exception as e:
-            logger.warning(f"Could not load pre-tokenized labels: {e}")
+            logger.warning(f"Could not load pre-tokenized MBERT data: {e}")
         
         # Fall back to regular loading method
         logger.info("Falling back to regular AI4Privacy loading method...")
         return None, None
         
     def prepare_datasets(self, tokenizer=None):
-        """Prepare train/validation/test datasets from selected dataset."""
+        """Prepare train/validation/test datasets from selected dataset for token classification."""
         
         # Load the appropriate dataset based on dataset_type
         if self.dataset_type == "ai4privacy":
             logger.info("Loading AI4Privacy dataset...")
             # Try pre-tokenized approach first for token classification
-            if self.task_type == "token":
-                texts, labels = self.load_ai4privacy_pretokenized()
-                if texts is None or labels is None:
-                    # Fall back to regular method
-                    texts, labels = self.load_ai4privacy_dataset()
-            else:
+            texts, labels = self.load_ai4privacy_pretokenized()
+            if texts is None or labels is None:
+                # Fall back to regular method
                 texts, labels = self.load_ai4privacy_dataset()
         else:
             # Default to Presidio dataset
@@ -793,30 +773,27 @@ class PII_Dataset:
         
         logger.info(f"Loaded {len(texts)} samples")
         
-        if self.task_type == "sequence":
-            logger.info(f"Label distribution: {dict(sorted([(label, labels.count(label)) for label in set(labels)], key=lambda x: x[1], reverse=True))}")
-        else:
-            # For token classification, show entity type distribution
-            entity_types = []
-            
-            # Check if we have pre-tokenized BIO labels or span dictionaries
-            if labels and isinstance(labels[0], list):
-                if len(labels[0]) > 0 and isinstance(labels[0][0], str):
-                    # We have pre-tokenized BIO labels
-                    for bio_labels in labels:
-                        for label in bio_labels:
-                            if label != 'O' and label.startswith(('B-', 'I-')):
-                                entity_type = label[2:]  # Remove B- or I- prefix
-                                entity_types.append(entity_type)
-                else:
-                    # We have span dictionaries
-                    for spans in labels:
-                        for span in spans:
-                            if isinstance(span, dict) and 'entity_type' in span:
-                                entity_types.append(span['entity_type'])
-            
-            if entity_types:
-                logger.info(f"Entity type distribution: {dict(sorted([(entity, entity_types.count(entity)) for entity in set(entity_types)], key=lambda x: x[1], reverse=True))}")
+        # For token classification, show entity type distribution
+        entity_types = []
+        
+        # Check if we have pre-tokenized BIO labels or span dictionaries
+        if labels and isinstance(labels[0], list):
+            if len(labels[0]) > 0 and isinstance(labels[0][0], str):
+                # We have pre-tokenized BIO labels
+                for bio_labels in labels:
+                    for label in bio_labels:
+                        if label != 'O' and label.startswith(('B-', 'I-')):
+                            entity_type = label[2:]  # Remove B- or I- prefix
+                            entity_types.append(entity_type)
+            else:
+                # We have span dictionaries
+                for spans in labels:
+                    for span in spans:
+                        if isinstance(span, dict) and 'entity_type' in span:
+                            entity_types.append(span['entity_type'])
+        
+        if entity_types:
+            logger.info(f"Entity type distribution: {dict(sorted([(entity, entity_types.count(entity)) for entity in set(entity_types)], key=lambda x: x[1], reverse=True))}")
         
         # Split the dataset
         logger.info("Splitting dataset into train/validation/test...")
@@ -830,52 +807,46 @@ class PII_Dataset:
         all_labels = train_labels + val_labels + test_labels
         self.create_label_mappings(all_labels)
         
-        if self.task_type == "token":
-            # For token classification, handle labels
-            if tokenizer is None:
-                raise ValueError("Tokenizer is required for token classification")
+        # For token classification, handle labels
+        if tokenizer is None:
+            raise ValueError("Tokenizer is required for token classification")
+        
+        train_label_ids = []
+        val_label_ids = []
+        test_label_ids = []
+        
+        # Check if we already have BIO labels (from pre-tokenized data)
+        if (train_labels and isinstance(train_labels[0], list) and 
+            len(train_labels[0]) > 0 and isinstance(train_labels[0][0], str)):
+            # We have pre-tokenized BIO labels, convert them to IDs
+            logger.info("Using pre-tokenized BIO labels")
             
-            train_label_ids = []
-            val_label_ids = []
-            test_label_ids = []
+            for bio_labels in train_labels:
+                label_ids = [self.label2id.get(label, self.label2id.get('O', 0)) for label in bio_labels]
+                train_label_ids.append(label_ids)
             
-            # Check if we already have BIO labels (from pre-tokenized data)
-            if (train_labels and isinstance(train_labels[0], list) and 
-                len(train_labels[0]) > 0 and isinstance(train_labels[0][0], str)):
-                # We have pre-tokenized BIO labels, convert them to IDs
-                logger.info("Using pre-tokenized BIO labels")
+            for bio_labels in val_labels:
+                label_ids = [self.label2id.get(label, self.label2id.get('O', 0)) for label in bio_labels]
+                val_label_ids.append(label_ids)
                 
-                for bio_labels in train_labels:
-                    label_ids = [self.label2id.get(label, self.label2id.get('O', 0)) for label in bio_labels]
-                    train_label_ids.append(label_ids)
-                
-                for bio_labels in val_labels:
-                    label_ids = [self.label2id.get(label, self.label2id.get('O', 0)) for label in bio_labels]
-                    val_label_ids.append(label_ids)
-                    
-                for bio_labels in test_labels:
-                    label_ids = [self.label2id.get(label, self.label2id.get('O', 0)) for label in bio_labels]
-                    test_label_ids.append(label_ids)
-            else:
-                # We have span-based labels, convert them to token labels
-                logger.info("Converting spans to token labels")
-                
-                for text, spans in zip(train_texts, train_labels):
-                    token_labels = self.create_token_labels(text, spans, tokenizer)
-                    train_label_ids.append(token_labels)
-                
-                for text, spans in zip(val_texts, val_labels):
-                    token_labels = self.create_token_labels(text, spans, tokenizer)
-                    val_label_ids.append(token_labels)
-                    
-                for text, spans in zip(test_texts, test_labels):
-                    token_labels = self.create_token_labels(text, spans, tokenizer)
-                    test_label_ids.append(token_labels)
+            for bio_labels in test_labels:
+                label_ids = [self.label2id.get(label, self.label2id.get('O', 0)) for label in bio_labels]
+                test_label_ids.append(label_ids)
         else:
-            # For sequence classification, convert labels to IDs
-            train_label_ids = [self.label2id[label] for label in train_labels]
-            val_label_ids = [self.label2id[label] for label in val_labels]
-            test_label_ids = [self.label2id[label] for label in test_labels]
+            # We have span-based labels, convert them to token labels
+            logger.info("Converting spans to token labels")
+            
+            for text, spans in zip(train_texts, train_labels):
+                token_labels = self.create_token_labels(text, spans, tokenizer)
+                train_label_ids.append(token_labels)
+            
+            for text, spans in zip(val_texts, val_labels):
+                token_labels = self.create_token_labels(text, spans, tokenizer)
+                val_label_ids.append(token_labels)
+                
+            for text, spans in zip(test_texts, test_labels):
+                token_labels = self.create_token_labels(text, spans, tokenizer)
+                test_label_ids.append(token_labels)
         
         return {
             'train': (train_texts, train_label_ids),
@@ -883,28 +854,7 @@ class PII_Dataset:
             'test': (test_texts, test_label_ids)
         }
 
-# Function to predict PII type using the sequence classification model
-def predict_pii_type(model, tokenizer, text, idx_to_label_map, device):
-    """Predict PII type for a given text using sequence classification."""
-    model.eval()
-    
-    # Tokenize input
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    
-    with torch.no_grad():
-        outputs = model(**inputs)
-        logits = outputs.logits
-        
-    probabilities = torch.softmax(logits, dim=-1)
-    confidence, predicted_idx = torch.max(probabilities, dim=-1)
-    
-    predicted_idx = predicted_idx.item()
-    confidence = confidence.item()
-    
-    predicted_pii_type = idx_to_label_map.get(predicted_idx, "Unknown PII Type")
-    
-    return predicted_pii_type, confidence
+
 
 # Function to predict token-level PII labels and extract entities
 def predict_pii_tokens(model, tokenizer, text, idx_to_label_map, device):
@@ -971,34 +921,14 @@ def predict_pii_tokens(model, tokenizer, text, idx_to_label_map, device):
     
     return entities
 
-# Evaluate on validation set using the classification model
-def evaluate_pii_classifier(model, tokenizer, texts_list, true_label_indices_list, idx_to_label_map, device):
-    """Evaluate the PII classifier on a dataset."""
-    correct = 0
-    total = len(texts_list)
-    
-    if total == 0:
-        return 0.0
 
-    for text, true_label_idx in zip(texts_list, true_label_indices_list):
-        predicted_pii_type, _ = predict_pii_type(model, tokenizer, text, idx_to_label_map, device)
-        true_pii_type = idx_to_label_map.get(true_label_idx)
-        
-        if true_pii_type == predicted_pii_type:
-            correct += 1
-    
-    return correct / total
 
-def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presidio", force_restart=False, target_accuracy=0.95, patience=3, task_type="sequence"):
-    """Main function to demonstrate PII classification fine-tuning with accuracy-based early stopping."""
+def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_type="presidio", force_restart=False, target_accuracy=0.95, patience=3, max_samples=None, languages=["English"]):
+    """Main function to demonstrate PII token classification fine-tuning with accuracy-based early stopping."""
     
-    # Validate model name and task type
+    # Validate model name
     if model_name not in MODEL_CONFIGS:
         logger.error(f"Unknown model: {model_name}. Available models: {list(MODEL_CONFIGS.keys())}")
-        return
-    
-    if task_type not in ["sequence", "token"]:
-        logger.error(f"Unknown task type: {task_type}. Available types: ['sequence', 'token']")
         return
     
     # Set up device (GPU if available)
@@ -1006,7 +936,7 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
     
     model_path = MODEL_CONFIGS[model_name]
     logger.info(f"Using model: {model_name} ({model_path})")
-    logger.info(f"Task type: {task_type}")
+    logger.info(f"Task type: token classification")
     logger.info(f"Training configuration: max {max_epochs} epochs, batch size {batch_size}")
     logger.info(f"Early stopping: target accuracy {target_accuracy:.4f}, patience {patience}")
     logger.info(f"Dataset: {dataset_type}")
@@ -1025,7 +955,7 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
             tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     
     logger.info(f"Loading {dataset_type} PII dataset...")
-    dataset_loader = PII_Dataset(dataset_type=dataset_type, task_type=task_type)
+    dataset_loader = PII_Dataset(dataset_type=dataset_type, max_samples=max_samples, languages=languages)
     datasets = dataset_loader.prepare_datasets(tokenizer)
     
     train_texts, train_categories = datasets['train']
@@ -1044,61 +974,39 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
 
     num_labels = len(unique_categories)
     
-    # Load model based on task type
-    logger.info(f"Loading {task_type} classification model...")
+    # Load token classification model
+    logger.info(f"Loading token classification model...")
     
-    # Suppress the expected warning about newly initialized classifier weights
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=".*classifier.*newly initialized.*")
-        if task_type == "sequence":
-            model = AutoModelForSequenceClassification.from_pretrained(
-                model_path,
-                num_labels=num_labels,
-                label2id=category_to_idx,
-                id2label=idx_to_category
-            )
-        else:  # token classification
-            model = AutoModelForTokenClassification.from_pretrained(
-                model_path,
-                num_labels=num_labels,
-                label2id=category_to_idx,
-                id2label=idx_to_category
-            )
+    model = AutoModelForTokenClassification.from_pretrained(
+        model_path,
+        num_labels=num_labels,
+        label2id=category_to_idx,
+        id2label=idx_to_category
+    )
     
     # Move model to device
     model.to(device)
     
-    # Create datasets and tokenization function based on task type
-    if task_type == "sequence":
-        # For sequence classification
-        def tokenize_function(examples):
-            return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=512)
-        
-        train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
-        val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
-        test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
-    else:
-        # For token classification
-        def tokenize_function(examples):
-            tokenized = tokenizer(examples["text"], truncation=True, padding="max_length", max_length=512)
-            # Pad/truncate labels to match tokenized input length
-            labels = []
-            for label_list in examples["labels"]:
-                # Ensure labels match the tokenized length
-                if len(label_list) < 512:
-                    # Pad with -100 (ignored index)
-                    padded_labels = label_list + [-100] * (512 - len(label_list))
-                else:
-                    # Truncate
-                    padded_labels = label_list[:512]
-                labels.append(padded_labels)
-            tokenized["labels"] = labels
-            return tokenized
-        
-        train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
-        val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
-        test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
+    # Create datasets and tokenization function for token classification
+    def tokenize_function(examples):
+        tokenized = tokenizer(examples["text"], truncation=True, padding="max_length", max_length=512)
+        # Pad/truncate labels to match tokenized input length
+        labels = []
+        for label_list in examples["labels"]:
+            # Ensure labels match the tokenized length
+            if len(label_list) < 512:
+                # Pad with -100 (ignored index)
+                padded_labels = label_list + [-100] * (512 - len(label_list))
+            else:
+                # Truncate
+                padded_labels = label_list[:512]
+            labels.append(padded_labels)
+        tokenized["labels"] = labels
+        return tokenized
+    
+    train_dataset = Dataset.from_dict({"text": train_texts, "labels": train_categories})
+    val_dataset = Dataset.from_dict({"text": val_texts, "labels": val_categories})
+    test_dataset = Dataset.from_dict({"text": test_texts, "labels": test_categories})
     
     # Tokenize datasets
     train_dataset = train_dataset.map(tokenize_function, batched=True)
@@ -1109,7 +1017,7 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
     eval_strategy_param = check_transformers_compatibility()
     
     # Training arguments
-    output_model_path = f"pii_classifier_{model_name}_{dataset_type}_{task_type}_model"
+    output_model_path = f"pii_classifier_{model_name}_{dataset_type}_token_model"
     
     # Check for existing checkpoints
     checkpoint_dir = None
@@ -1136,7 +1044,7 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
         "num_train_epochs": max_epochs,  # Maximum epochs (will stop early if target accuracy reached)
         "per_device_train_batch_size": batch_size,
         "per_device_eval_batch_size": batch_size,
-        "warmup_steps": 500,
+        "warmup_ratio": 0.1,
         "weight_decay": 0.01,
         "logging_dir": f"{output_model_path}/logs",
         "logging_steps": 100,
@@ -1146,6 +1054,7 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
         "metric_for_best_model": "accuracy",  # Use accuracy as the primary metric
         "save_total_limit": 3,  # Keep more checkpoints for resuming
         "report_to": [],
+        "load_best_model_at_end": True,
     }
     
     # Only add resume_from_checkpoint if we found a checkpoint
@@ -1161,17 +1070,16 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
     )
     
     # Create trainer with early stopping callback
-    metrics_function = compute_metrics_token_classification if task_type == "token" else compute_metrics
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        compute_metrics=metrics_function,
+        compute_metrics=compute_metrics_token_classification,
         callbacks=[early_stopping_callback],
     )
 
-    logger.info(f"Starting PII classification fine-tuning with {model_name}...")
+    logger.info(f"Starting PII token classification fine-tuning with {model_name}...")
 
     # Train the model with error handling
     try:
@@ -1194,50 +1102,28 @@ def main(model_name="minilm", max_epochs=50, batch_size=16, dataset_type="presid
             "idx_to_label": {str(k): v for k, v in idx_to_category.items()} # JSON keys must be strings
         }, f)
 
-    # Evaluate on validation set
-    logger.info("Evaluating on validation set...")
-    if task_type == "sequence":
-        val_accuracy = evaluate_pii_classifier(model, tokenizer, val_texts, val_categories, idx_to_category, device)
-        logger.info(f"Validation accuracy: {val_accuracy:.4f}")
-        
-        # Evaluate on test set
-        logger.info("Evaluating on test set...")
-        test_accuracy = evaluate_pii_classifier(model, tokenizer, test_texts, test_categories, idx_to_category, device)
-        logger.info(f"Test accuracy: {test_accuracy:.4f}")
-        
-        # Print final results
-        print("\n" + "="*50)
-        print("PII Sequence Classification Fine-tuning Completed!")
-        print("="*50)
-        print(f"Validation Accuracy: {val_accuracy:.4f}")
-        print(f"Test Accuracy: {test_accuracy:.4f}")
-    else:
-        # For token classification, we'll do a simpler evaluation
-        logger.info("Token classification training completed!")
-        print("\n" + "="*50)
-        print("PII Token Classification Fine-tuning Completed!")
-        print("="*50)
-        print("Model can now predict token-level PII entities and their locations.")
+    # Token classification training completed
+    logger.info("Token classification training completed!")
+    print("\n" + "="*50)
+    print("PII Token Classification Fine-tuning Completed!")
+    print("="*50)
+    print("Model can now predict token-level PII entities and their locations.")
     
     return model, tokenizer, idx_to_category
 
-def demo_inference(model_name="minilm", dataset_type="presidio", task_type="sequence"):
-    """Demonstrate inference with the trained model."""
+def demo_inference(model_name="modernbert-base", dataset_type="presidio"):
+    """Demonstrate token classification inference with the trained model."""
     
     # Set up device (GPU if available)
     device = get_device()
     
-    model_path = f"./pii_classifier_{model_name}_{dataset_type}_{task_type}_model"
+    model_path = f"./pii_classifier_{model_name}_{dataset_type}_token_model"
     if not Path(model_path).exists():
-        logger.error(f"Trained model not found at {model_path}. Please run training first with --model {model_name} --dataset {dataset_type} --task-type {task_type}")
+        logger.error(f"Trained model not found at {model_path}. Please run training first with --model {model_name} --dataset {dataset_type}")
         return
     
-    # Load model and tokenizer based on task type
-    if task_type == "sequence":
-        model = AutoModelForSequenceClassification.from_pretrained(model_path)
-    else:
-        model = AutoModelForTokenClassification.from_pretrained(model_path)
-    
+    # Load token classification model and tokenizer
+    model = AutoModelForTokenClassification.from_pretrained(model_path)
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model.to(device)
     
@@ -1247,10 +1133,7 @@ def demo_inference(model_name="minilm", dataset_type="presidio", task_type="sequ
         idx_to_label = {int(k): v for k, v in mappings["idx_to_label"].items()}
     
     print("\n" + "="*50)
-    if task_type == "sequence":
-        print("PII Sequence Classification Test")
-    else:
-        print("PII Token Classification Test")
+    print("PII Token Classification Test")
     print("="*50)
     
     test_texts = [
@@ -1267,32 +1150,26 @@ def demo_inference(model_name="minilm", dataset_type="presidio", task_type="sequ
     for text in test_texts:
         print(f"Text: {text}")
         
-        if task_type == "sequence":
-            predicted_pii_type, confidence = predict_pii_type(model, tokenizer, text, idx_to_label, device)
-            print(f"Predicted PII Type: {predicted_pii_type}, Confidence: {confidence:.4f}")
+        entities = predict_pii_tokens(model, tokenizer, text, idx_to_label, device)
+        if entities:
+            print("Detected PII entities:")
+            for entity in entities:
+                print(f"  - {entity['entity_type']}: '{entity['text']}' (confidence: {entity['confidence']:.4f})")
         else:
-            entities = predict_pii_tokens(model, tokenizer, text, idx_to_label, device)
-            if entities:
-                print("Detected PII entities:")
-                for entity in entities:
-                    print(f"  - {entity['entity_type']}: '{entity['text']}' (confidence: {entity['confidence']:.4f})")
-            else:
-                print("No PII entities detected.")
+            print("No PII entities detected.")
         
         print("---")
 
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="PII Classification Fine-tuning")
+    parser = argparse.ArgumentParser(description="PII Token Classification Fine-tuning")
     parser.add_argument("--mode", choices=["train", "test"], default="train", 
                        help="Mode: 'train' to fine-tune model, 'test' to run inference")
-    parser.add_argument("--model", choices=MODEL_CONFIGS.keys(), default="minilm", 
+    parser.add_argument("--model", choices=MODEL_CONFIGS.keys(), default="modernbert-base", 
                        help="Model to use for fine-tuning (e.g., bert-base, roberta-base, etc.)")
     parser.add_argument("--dataset", choices=["presidio", "ai4privacy"], default="presidio",
                        help="Dataset to use: 'presidio' for Microsoft Presidio dataset, 'ai4privacy' for AI4Privacy PII masking dataset")
-    parser.add_argument("--task-type", choices=["sequence", "token"], default="sequence",
-                       help="Task type: 'sequence' for classification, 'token' for token-level entity recognition")
     parser.add_argument("--max-epochs", type=int, default=10,
                        help="Maximum number of training epochs (default: 10, training will stop early if target accuracy reached)")
     parser.add_argument("--batch-size", type=int, default=8,
@@ -1305,6 +1182,10 @@ if __name__ == "__main__":
                        help="Force restart training from scratch, ignoring any existing checkpoints")
     parser.add_argument("--clear-cache", action="store_true",
                        help="Clear the AI4Privacy dataset cache before training")
+    parser.add_argument("--max-samples", type=int, default=None,
+                       help="Maximum number of samples to load from the dataset (useful for limiting large datasets like ai4privacy)")
+    parser.add_argument("--languages", nargs="+", default=["English"],
+                       help="Languages to include from ai4privacy dataset. Options: English French German Italian Dutch Spanish all. Default: ['English']")
     
     args = parser.parse_args()
     
@@ -1317,6 +1198,6 @@ if __name__ == "__main__":
             exit(0)
     
     if args.mode == "train":
-        main(args.model, args.max_epochs, args.batch_size, args.dataset, args.force_restart, args.target_accuracy, args.patience, args.task_type)
+        main(args.model, args.max_epochs, args.batch_size, args.dataset, args.force_restart, args.target_accuracy, args.patience, args.max_samples, languages=args.languages)
     elif args.mode == "test":
-        demo_inference(args.model, args.dataset, args.task_type) 
+        demo_inference(args.model, args.dataset) 
