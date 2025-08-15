@@ -16,7 +16,10 @@ Usage:
     python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy --target-accuracy 0.98 --batch-size 32
 
     # Test inference with trained token classification model
-    python pii_bert_finetuning.py --mode test --model bert-base --dataset ai4privacy
+    python pii_bert_finetuning.py --mode test --model modernbert-base --dataset ai4privacy
+    
+    # Test with debug mode for detailed token analysis
+    python pii_bert_finetuning.py --mode test --model modernbert-base --dataset ai4privacy --debug
 
     # Train with custom maximum epochs and patience
     python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --max-epochs 100 --patience 5
@@ -900,15 +903,27 @@ def predict_pii_tokens(model, tokenizer, text, idx_to_label_map, device):
                 'text': text[offset[0]:offset[1]],
                 'confidence': prob[predictions[i]].item()
             }
-        elif label.startswith('I-') and current_entity is not None:
-            # Inside current entity
+        elif label.startswith('I-'):
             entity_type = label[2:]  # Remove 'I-' prefix
-            if entity_type == current_entity['entity_type']:
-                # Extend current entity
+            
+            if current_entity is not None and entity_type == current_entity['entity_type']:
+                # Continue current entity
                 current_entity['end'] = offset[1].item()
                 current_entity['text'] = text[current_entity['start']:current_entity['end']]
                 # Update confidence with average
                 current_entity['confidence'] = (current_entity['confidence'] + prob[predictions[i]].item()) / 2
+            else:
+                # Start new entity with I- tag (missing B- tag) - MAIN FIX
+                if current_entity is not None:
+                    entities.append(current_entity)
+                
+                current_entity = {
+                    'entity_type': entity_type,
+                    'start': offset[0].item(),
+                    'end': offset[1].item(),
+                    'text': text[offset[0]:offset[1]],
+                    'confidence': prob[predictions[i]].item()
+                }
         else:
             # Outside entity or different entity type
             if current_entity is not None:
@@ -918,6 +933,162 @@ def predict_pii_tokens(model, tokenizer, text, idx_to_label_map, device):
     # Don't forget the last entity
     if current_entity is not None:
         entities.append(current_entity)
+    
+    return entities
+
+
+def debug_predict_pii_tokens(model, tokenizer, text, idx_to_label_map, device, show_all_tokens=True):
+    """Debug version of predict_pii_tokens with detailed output."""
+    model.eval()
+    
+    # Tokenize input with offset mapping to reconstruct spans
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, 
+                      max_length=512, return_offsets_mapping=True)
+    offset_mapping = inputs.pop('offset_mapping')[0]  # Remove from inputs, keep for span reconstruction
+    inputs_device = {k: v.to(device) for k, v in inputs.items()}
+    
+    with torch.no_grad():
+        outputs = model(**inputs_device)
+        logits = outputs.logits
+        
+    # Get predictions and probabilities
+    predictions = torch.argmax(logits, dim=-1)[0]  # Remove batch dimension
+    probabilities = torch.softmax(logits, dim=-1)[0]
+    
+    # Convert predictions to labels
+    predicted_labels = [idx_to_label_map.get(pred.item(), 'O') for pred in predictions]
+    
+    # Debug output
+    print(f"\n{'='*60}")
+    print(f"DEBUG: Token Classification Analysis")
+    print(f"{'='*60}")
+    print(f"Input text: '{text}'")
+    print(f"Text length: {len(text)} characters")
+    print(f"Number of tokens: {len(predictions)}")
+    
+    # Show non-O predictions
+    non_o_count = sum(1 for label in predicted_labels if label != 'O')
+    print(f"Non-O predictions: {non_o_count} out of {len(predicted_labels)}")
+    print(f"Predicted labels: {predicted_labels}")
+    
+    if show_all_tokens:
+        print(f"\n{'Token Analysis (all tokens)':<30} {'Label':<15} {'Confidence':<12} {'Text Span'}")
+        print(f"{'-'*70}")
+        
+        for i, (pred, offset, prob) in enumerate(zip(predictions, offset_mapping, probabilities)):
+            # Get token text
+            try:
+                token_ids = inputs['input_ids'][0][i].item()
+                token = tokenizer.convert_ids_to_tokens([token_ids])[0]  # FIXED: Convert single ID to list
+            except Exception as e:
+                token = f"<error: {e}>"
+            
+            label = idx_to_label_map.get(pred.item(), 'O')
+            confidence = prob[pred].item()
+            
+            # Get text span
+            if offset[0] == 0 and offset[1] == 0 and i > 0:
+                text_span = "<special>"
+            else:
+                text_span = f"'{text[offset[0]:offset[1]]}'"
+            
+            # Highlight non-O predictions
+            if label != 'O':
+                print(f">>> {token:<26} {label:<15} {confidence:<12.4f} {text_span}")
+            elif show_all_tokens:
+                print(f"    {token:<26} {label:<15} {confidence:<12.4f} {text_span}")
+    else:
+        # Show only non-O predictions
+        print(f"\n{'Non-O Token Analysis':<30} {'Label':<15} {'Confidence':<12} {'Text Span'}")
+        print(f"{'-'*70}")
+        
+        for i, (pred, offset, prob) in enumerate(zip(predictions, offset_mapping, probabilities)):
+            label = idx_to_label_map.get(pred.item(), 'O')
+            if label != 'O':
+                try:
+                    token_ids = inputs['input_ids'][0][i].item()
+                    token = tokenizer.convert_ids_to_tokens([token_ids])[0]  # FIXED: Convert single ID to list
+                except Exception as e:
+                    token = f"<error: {e}>"
+                
+                confidence = prob[pred].item()
+                
+                if offset[0] == 0 and offset[1] == 0 and i > 0:
+                    text_span = "<special>"
+                else:
+                    text_span = f"'{text[offset[0]:offset[1]]}'"
+                
+                print(f">>> {token:<26} {label:<15} {confidence:<12.4f} {text_span}")
+    
+    # Now extract entities using the same logic as predict_pii_tokens
+    entities = []
+    current_entity = None
+    
+    print(f"\n{'Entity Extraction Process:'}")
+    print(f"{'-'*40}")
+    
+    for i, (label, offset, prob) in enumerate(zip(predicted_labels, offset_mapping, probabilities)):
+        # Skip special tokens (they have offset (0,0))
+        if offset[0] == 0 and offset[1] == 0 and i > 0:
+            continue
+            
+        if label.startswith('B-'):
+            # Beginning of new entity
+            if current_entity is not None:
+                entities.append(current_entity)
+                print(f"Finished entity: {current_entity}")
+            
+            entity_type = label[2:]  # Remove 'B-' prefix
+            current_entity = {
+                'entity_type': entity_type,
+                'start': offset[0].item(),
+                'end': offset[1].item(),
+                'text': text[offset[0]:offset[1]],
+                'confidence': prob[predictions[i]].item()
+            }
+            print(f"Started new entity with B-: {current_entity}")
+            
+        elif label.startswith('I-'):
+            entity_type = label[2:]  # Remove 'I-' prefix
+            
+            if current_entity is not None and entity_type == current_entity['entity_type']:
+                # Continue current entity
+                current_entity['end'] = offset[1].item()
+                current_entity['text'] = text[current_entity['start']:current_entity['end']]
+                # Update confidence with average
+                current_entity['confidence'] = (current_entity['confidence'] + prob[predictions[i]].item()) / 2
+                print(f"Extended entity: {current_entity}")
+            else:
+                # Start new entity with I- tag (missing B- tag)
+                if current_entity is not None:
+                    entities.append(current_entity)
+                    print(f"Finished entity: {current_entity}")
+                
+                current_entity = {
+                    'entity_type': entity_type,
+                    'start': offset[0].item(),
+                    'end': offset[1].item(),
+                    'text': text[offset[0]:offset[1]],
+                    'confidence': prob[predictions[i]].item()
+                }
+                print(f"Started new entity with I- (no B-): {current_entity}")
+        else:
+            # Outside entity
+            if current_entity is not None:
+                entities.append(current_entity)
+                print(f"Finished entity: {current_entity}")
+                current_entity = None
+    
+    # Don't forget the last entity
+    if current_entity is not None:
+        entities.append(current_entity)
+        print(f"Finished final entity: {current_entity}")
+    
+    print(f"\nFinal extracted entities: {len(entities)}")
+    for i, entity in enumerate(entities):
+        print(f"  {i+1}. {entity['entity_type']}: '{entity['text']}' (confidence: {entity['confidence']:.4f})")
+    
+    print(f"{'='*60}")
     
     return entities
 
@@ -1111,7 +1282,7 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
     
     return model, tokenizer, idx_to_category
 
-def demo_inference(model_name="modernbert-base", dataset_type="presidio"):
+def demo_inference(model_name="modernbert-base", dataset_type="presidio", debug_mode=False):
     """Demonstrate token classification inference with the trained model."""
     
     # Set up device (GPU if available)
@@ -1122,18 +1293,36 @@ def demo_inference(model_name="modernbert-base", dataset_type="presidio"):
         logger.error(f"Trained model not found at {model_path}. Please run training first with --model {model_name} --dataset {dataset_type}")
         return
     
+    logger.info(f"Loading trained model from: {model_path}")
+    logger.info(f"Model: {model_name}")
+    logger.info(f"Dataset: {dataset_type}")
+    logger.info(f"Device: {device}")
+    
     # Load token classification model and tokenizer
     model = AutoModelForTokenClassification.from_pretrained(model_path)
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model.to(device)
+    
+    logger.info(f"Model loaded successfully")
+    logger.info(f"Model config: {model.config}")
+    logger.info(f"Number of labels: {model.config.num_labels}")
     
     mapping_path = os.path.join(model_path, "pii_type_mapping.json")
     with open(mapping_path, "r") as f:
         mappings = json.load(f)
         idx_to_label = {int(k): v for k, v in mappings["idx_to_label"].items()}
     
+    logger.info(f"Label mappings: {idx_to_label}")
+    
     print("\n" + "="*50)
     print("PII Token Classification Test")
+    print("="*50)
+    print(f"Model: {model_name}")
+    print(f"Dataset: {dataset_type}")
+    print(f"Device: {device}")
+    print(f"Available labels: {list(idx_to_label.values())}")
+    if debug_mode:
+        print("DEBUG MODE: Detailed analysis will be shown for each prediction")
     print("="*50)
     
     test_texts = [
@@ -1147,10 +1336,20 @@ def demo_inference(model_name="modernbert-base", dataset_type="presidio"):
         "My date of birth is January 15, 1990."
     ]
     
-    for text in test_texts:
-        print(f"Text: {text}")
+    for i, text in enumerate(test_texts):
+        print(f"\n{'='*60}")
+        print(f"Test {i+1}/{len(test_texts)}: {text}")
+        print(f"{'='*60}")
         
-        entities = predict_pii_tokens(model, tokenizer, text, idx_to_label, device)
+        if debug_mode:
+            # Use debug function for detailed analysis
+            entities = debug_predict_pii_tokens(model, tokenizer, text, idx_to_label, device, show_all_tokens=False)
+        else:
+            # Use regular prediction function
+            entities = predict_pii_tokens(model, tokenizer, text, idx_to_label, device)
+        
+        # Show final results
+        print(f"\n{'FINAL RESULTS:':<20}")
         if entities:
             print("Detected PII entities:")
             for entity in entities:
@@ -1158,7 +1357,8 @@ def demo_inference(model_name="modernbert-base", dataset_type="presidio"):
         else:
             print("No PII entities detected.")
         
-        print("---")
+        if not debug_mode:
+            print("---")
 
 if __name__ == "__main__":
     import argparse
@@ -1186,6 +1386,8 @@ if __name__ == "__main__":
                        help="Maximum number of samples to load from the dataset (useful for limiting large datasets like ai4privacy)")
     parser.add_argument("--languages", nargs="+", default=["English"],
                        help="Languages to include from ai4privacy dataset. Options: English French German Italian Dutch Spanish all. Default: ['English']")
+    parser.add_argument("--debug", action="store_true",
+                       help="Enable debug mode for detailed token analysis during testing")
     
     args = parser.parse_args()
     
@@ -1200,4 +1402,4 @@ if __name__ == "__main__":
     if args.mode == "train":
         main(args.model, args.max_epochs, args.batch_size, args.dataset, args.force_restart, args.target_accuracy, args.patience, args.max_samples, languages=args.languages)
     elif args.mode == "test":
-        demo_inference(args.model, args.dataset) 
+        demo_inference(args.model, args.dataset, debug_mode=args.debug) 
