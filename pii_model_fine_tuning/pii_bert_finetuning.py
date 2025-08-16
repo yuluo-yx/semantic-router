@@ -1152,7 +1152,8 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
         model_path,
         num_labels=num_labels,
         label2id=category_to_idx,
-        id2label=idx_to_category
+        id2label=idx_to_category,
+        reference_compile=False
     )
     
     # Move model to device
@@ -1402,4 +1403,4 @@ if __name__ == "__main__":
     if args.mode == "train":
         main(args.model, args.max_epochs, args.batch_size, args.dataset, args.force_restart, args.target_accuracy, args.patience, args.max_samples, languages=args.languages)
     elif args.mode == "test":
-        demo_inference(args.model, args.dataset, debug_mode=args.debug) 
+        demo_inference(args.model, args.dataset, debug_mode=args.debug)
