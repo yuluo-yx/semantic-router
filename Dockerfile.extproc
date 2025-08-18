@@ -1,41 +1,55 @@
-# Build the Rust library for the candle-binding module
+# Build the Rust library using Makefile
 FROM rust:1.85 as rust-builder
 
+# Install make and other build dependencies
+RUN apt-get update && apt-get install -y \
+    make \
+    build-essential \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+# Copy only essential files for Rust build
+COPY Makefile ./
 COPY candle-binding/Cargo.toml candle-binding/
 COPY candle-binding/src/ candle-binding/src/
 
-WORKDIR /app/candle-binding
-RUN cargo build --release
+# Use Makefile to build the Rust library
+RUN make rust
 
 # Build the Go application
 FROM golang:1.24 as go-builder
 
 WORKDIR /app
-COPY semantic_router/go.mod semantic_router/go.sum* ./
 
-# Create the directory for the candle-binding module
-RUN mkdir /app/candle-binding
-# Copy only the necessary Go files and go.mod for the candle-binding module
-COPY candle-binding/go.mod candle-binding/semantic_router.go /app/candle-binding/
+# Copy Go module files first for better layer caching
+COPY semantic_router/go.mod semantic_router/go.sum semantic_router/
+COPY candle-binding/go.mod candle-binding/semantic_router.go candle-binding/
 
-COPY semantic_router/ ./semantic_router/
+# Download Go dependencies
+RUN cd semantic_router && go mod download
 
-# Copy the .so file from the rust-builder for CGO
-COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
-# Set environment for CGO to find the library
-ENV CGO_LDFLAGS="-L/app/lib"
+# Copy semantic_router source code
+COPY semantic_router/ semantic_router/
+
+# Copy the built Rust library from rust-builder
+COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
+
+# Set environment variables for CGO to find the library
 ENV CGO_ENABLED=1
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
 
-RUN cd /app/semantic_router && go build -o extproc-server ./cmd/main.go
+# Build the router binary
+RUN mkdir -p bin && cd semantic_router && go build -o ../bin/router cmd/main.go
 
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream9
 
 WORKDIR /app
 
-COPY --from=go-builder /app/semantic_router/extproc-server /app/
-COPY --from=go-builder /app/lib/libcandle_semantic_router.so /app/lib/
+COPY --from=go-builder /app/bin/router /app/extproc-server
+COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
 COPY config/config.yaml /app/config/
 
 ENV LD_LIBRARY_PATH=/app/lib
