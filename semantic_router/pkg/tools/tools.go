@@ -8,17 +8,17 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/openai/openai-go"
 	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/openai"
 )
 
 // ToolEntry represents a tool stored in the tools database
 type ToolEntry struct {
-	Tool        openai.Tool `json:"tool"`
-	Description string      `json:"description"` // Used for similarity matching
-	Embedding   []float32   `json:"-"`           // Generated from description
-	Tags        []string    `json:"tags,omitempty"`
-	Category    string      `json:"category,omitempty"`
+	Tool        openai.ChatCompletionToolParam `json:"tool"`
+	Description string                          `json:"description"` // Used for similarity matching
+	Embedding   []float32                       `json:"-"`           // Generated from description
+	Tags        []string                        `json:"tags,omitempty"`
+	Category    string                          `json:"category,omitempty"`
 }
 
 // ToolsDatabase manages a collection of tools with semantic search capabilities
@@ -92,7 +92,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 }
 
 // AddTool adds a tool to the database with automatic embedding generation
-func (db *ToolsDatabase) AddTool(tool openai.Tool, description string, category string, tags []string) error {
+func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, description string, category string, tags []string) error {
 	if !db.enabled {
 		return nil
 	}
@@ -103,13 +103,7 @@ func (db *ToolsDatabase) AddTool(tool openai.Tool, description string, category 
 		return fmt.Errorf("failed to generate embedding for tool %s: %w", tool.Function.Name, err)
 	}
 
-	entry := ToolEntry{
-		Tool:        tool,
-		Description: description,
-		Embedding:   embedding,
-		Category:    category,
-		Tags:        tags,
-	}
+	entry := ToolEntry{Tool: tool, Description: description, Embedding: embedding, Category: category, Tags: tags}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -121,9 +115,9 @@ func (db *ToolsDatabase) AddTool(tool openai.Tool, description string, category 
 }
 
 // FindSimilarTools finds the most similar tools based on the query
-func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Tool, error) {
+func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.ChatCompletionToolParam, error) {
 	if !db.enabled {
-		return []openai.Tool{}, nil
+		return []openai.ChatCompletionToolParam{}, nil
 	}
 
 	// Generate embedding for the query
@@ -161,7 +155,7 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Tool
 
 	// No results found
 	if len(results) == 0 {
-		return []openai.Tool{}, nil
+		return []openai.ChatCompletionToolParam{}, nil
 	}
 
 	// Sort by similarity (highest first)
@@ -170,7 +164,7 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Tool
 	})
 
 	// Select top-k tools that meet the threshold
-	var selectedTools []openai.Tool
+	var selectedTools []openai.ChatCompletionToolParam
 	for i := 0; i < len(results) && i < topK; i++ {
 		if results[i].Similarity >= db.similarityThreshold {
 			selectedTools = append(selectedTools, results[i].Entry.Tool)
@@ -184,15 +178,15 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Tool
 }
 
 // GetAllTools returns all tools in the database
-func (db *ToolsDatabase) GetAllTools() []openai.Tool {
+func (db *ToolsDatabase) GetAllTools() []openai.ChatCompletionToolParam {
 	if !db.enabled {
-		return []openai.Tool{}
+		return []openai.ChatCompletionToolParam{}
 	}
 
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	tools := make([]openai.Tool, len(db.entries))
+	tools := make([]openai.ChatCompletionToolParam, len(db.entries))
 	for i, entry := range db.entries {
 		tools[i] = entry.Tool
 	}

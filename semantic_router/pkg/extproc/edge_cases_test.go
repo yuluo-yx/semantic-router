@@ -11,9 +11,9 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/openai"
 )
 
 var _ = Describe("Edge Cases and Error Conditions", func() {
@@ -32,10 +32,10 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 	Context("Large and malformed requests", func() {
 		It("should handle very large request bodies", func() {
 			largeContent := strings.Repeat("a", 10*1024) // 10KB content (reduced from 1MB to avoid memory issues)
-			request := openai.OpenAIRequest{
-				Model: "model-a",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: largeContent},
+			request := map[string]interface{}{
+				"model": "model-a",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": largeContent},
 				},
 			}
 
@@ -63,10 +63,10 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		})
 
 		It("should handle requests with special characters", func() {
-			request := openai.OpenAIRequest{
-				Model: "model-a",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: "Hello 🌍! What about ñoño and émojis? 你好"},
+			request := map[string]interface{}{
+				"model": "model-a",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Hello 🌍! What about ñoño and émojis? 你好"},
 				},
 			}
 
@@ -121,10 +121,10 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		})
 
 		It("should handle requests with invalid model names", func() {
-			request := openai.OpenAIRequest{
-				Model: "invalid-model-name-12345",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: "Test with invalid model"},
+			request := map[string]interface{}{
+				"model": "invalid-model-name-12345",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Test with invalid model"},
 				},
 			}
 
@@ -149,21 +149,21 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		})
 
 		It("should handle requests with extremely long message chains", func() {
-			messages := make([]openai.ChatMessage, 100) // 100 messages
+			messages := make([]map[string]interface{}, 100) // 100 messages
 			for i := 0; i < 100; i++ {
 				role := "user"
 				if i%2 == 1 {
 					role = "assistant"
 				}
-				messages[i] = openai.ChatMessage{
-					Role:    role,
-					Content: fmt.Sprintf("Message %d in a very long conversation chain", i+1),
+				messages[i] = map[string]interface{}{
+					"role":    role,
+					"content": fmt.Sprintf("Message %d in a very long conversation chain", i+1),
 				}
 			}
 
-			request := openai.OpenAIRequest{
-				Model:    "model-b",
-				Messages: messages,
+			request := map[string]interface{}{
+				"model":    "model-b",
+				"messages": messages,
 			}
 
 			requestBody, err := json.Marshal(request)
@@ -195,10 +195,10 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			// Create multiple concurrent requests
 			for i := 0; i < numRequests; i++ {
 				go func(index int) {
-					request := openai.OpenAIRequest{
-						Model: "model-a",
-						Messages: []openai.ChatMessage{
-							{Role: "user", Content: fmt.Sprintf("Request %d", index)},
+					request := map[string]interface{}{
+						"model": "model-a",
+						"messages": []map[string]interface{}{
+							{"role": "user", "content": fmt.Sprintf("Request %d", index)},
 						},
 					}
 
@@ -243,10 +243,10 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			const numRequests = 20
 			
 			for i := 0; i < numRequests; i++ {
-				request := openai.OpenAIRequest{
-					Model: "model-b",
-					Messages: []openai.ChatMessage{
-						{Role: "user", Content: fmt.Sprintf("Sequential request %d", i)},
+				request := map[string]interface{}{
+					"model": "model-b",
+					"messages": []map[string]interface{}{
+						{"role": "user", "content": fmt.Sprintf("Sequential request %d", i)},
 					},
 				}
 
@@ -285,10 +285,10 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			}
 			nestedContent += "}"
 
-			request := openai.OpenAIRequest{
-				Model: "model-a",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: "Process this nested structure: " + nestedContent},
+			request := map[string]interface{}{
+				"model": "model-a",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Process this nested structure: " + nestedContent},
 				},
 			}
 
@@ -316,9 +316,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			// Create content with many repeated patterns
 			repeatedPattern := strings.Repeat("The quick brown fox jumps over the lazy dog. ", 100)
 			
-			request := openai.OpenAIRequest{
+			request := cache.OpenAIRequest{
 				Model: "model-a",
-				Messages: []openai.ChatMessage{
+				Messages: []cache.ChatMessage{
 					{Role: "user", Content: repeatedPattern},
 				},
 			}
@@ -346,9 +346,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 	Context("Boundary conditions", func() {
 		It("should handle empty messages array", func() {
-			request := openai.OpenAIRequest{
+			request := cache.OpenAIRequest{
 				Model:    "model-a",
-				Messages: []openai.ChatMessage{}, // Empty messages
+				Messages: []cache.ChatMessage{}, // Empty messages
 			}
 
 			requestBody, err := json.Marshal(request)
@@ -372,9 +372,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		})
 
 		It("should handle messages with empty content", func() {
-			request := openai.OpenAIRequest{
+			request := cache.OpenAIRequest{
 				Model: "model-a",
-				Messages: []openai.ChatMessage{
+				Messages: []cache.ChatMessage{
 					{Role: "user", Content: ""},     // Empty content
 					{Role: "assistant", Content: ""}, // Empty content
 					{Role: "user", Content: "Now respond to this"},
@@ -402,9 +402,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		})
 
 		It("should handle messages with only whitespace content", func() {
-			request := openai.OpenAIRequest{
+			request := cache.OpenAIRequest{
 				Model: "model-a",
-				Messages: []openai.ChatMessage{
+				Messages: []cache.ChatMessage{
 					{Role: "user", Content: "   \n\t  "}, // Only whitespace
 					{Role: "user", Content: "What is AI?"},
 				},
@@ -434,9 +434,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 	Context("Error recovery", func() {
 		It("should recover from classification errors gracefully", func() {
 			// Create a request that might cause classification issues
-			request := openai.OpenAIRequest{
+			request := cache.OpenAIRequest{
 				Model: "auto", // This triggers classification
-				Messages: []openai.ChatMessage{
+				Messages: []cache.ChatMessage{
 					{Role: "user", Content: "Test content that might cause classification issues: \x00\x01\x02"}, // Binary content
 				},
 			}
@@ -466,9 +466,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 		It("should handle timeout scenarios gracefully", func() {
 			// Simulate a request that might take a long time to process
-			request := openai.OpenAIRequest{
+			request := cache.OpenAIRequest{
 				Model: "auto",
-				Messages: []openai.ChatMessage{
+				Messages: []cache.ChatMessage{
 					{Role: "user", Content: "This is a complex request that might take time to classify and process"},
 				},
 			}
