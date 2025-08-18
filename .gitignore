@@ -11,6 +11,7 @@ Cargo.lock
 *.pyz
 __pycache__/
 .venv/
+pii_env/
 
 # Go
 *.exe

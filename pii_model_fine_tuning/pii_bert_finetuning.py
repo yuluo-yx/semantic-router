@@ -1,32 +1,24 @@
 """
 PII Token Classification Fine-tuning with Multiple BERT Models
 Supports token classification (NER-style) for precise PII entity detection and location.
-
 Usage:
     # Train token classification for entity location detection (default)
     python pii_bert_finetuning.py --mode train
-
     # Train with BERT base and AI4Privacy dataset for token classification
     python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy
-
     # Train with ModernBERT for token classification (recommended for best performance)
     python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy
-
     # Train with custom target accuracy and batch size
     python pii_bert_finetuning.py --mode train --model modernbert-base --dataset ai4privacy --target-accuracy 0.98 --batch-size 32
-
     # Test inference with trained token classification model
     python pii_bert_finetuning.py --mode test --model modernbert-base --dataset ai4privacy
     
     # Test with debug mode for detailed token analysis
     python pii_bert_finetuning.py --mode test --model modernbert-base --dataset ai4privacy --debug
-
     # Train with custom maximum epochs and patience
     python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --max-epochs 100 --patience 5
-
     # Force restart training from scratch (ignore checkpoints)
     python pii_bert_finetuning.py --mode train --model bert-base --dataset ai4privacy --force-restart
-
 Supported models:
     - bert-base, bert-large: Standard BERT models
     - roberta-base, roberta-large: RoBERTa models
@@ -35,11 +27,9 @@ Supported models:
     - minilm: Lightweight MiniLM model (default for compatibility)
     - distilbert: Distilled BERT
     - electra-base, electra-large: ELECTRA models
-
 Supported datasets:
     - presidio: Microsoft Presidio research dataset (default)
     - ai4privacy: AI4Privacy PII masking dataset (300k samples, multilingual)
-
 Features:
     - Token classification with BIO tagging for precise PII entity location detection
     - Automatic model selection: AutoModelForTokenClassification
@@ -64,6 +54,7 @@ from pathlib import Path
 from transformers import (
     AutoTokenizer, 
     AutoModelForTokenClassification,
+    AutoConfig,
     Trainer, 
     TrainingArguments,
     TrainerCallback,
@@ -763,11 +754,9 @@ class PII_Dataset:
         # Load the appropriate dataset based on dataset_type
         if self.dataset_type == "ai4privacy":
             logger.info("Loading AI4Privacy dataset...")
-            # Try pre-tokenized approach first for token classification
-            texts, labels = self.load_ai4privacy_pretokenized()
-            if texts is None or labels is None:
-                # Fall back to regular method
-                texts, labels = self.load_ai4privacy_dataset()
+            # IMPORTANT: For ModernBERT and other non-MBERT models, avoid using the
+            # pre-tokenized MBERT labels to prevent misalignment. Always use span-based.
+            texts, labels = self.load_ai4privacy_dataset()
         else:
             # Default to Presidio dataset
             dataset_path = self.download_presidio_dataset()
@@ -839,16 +828,19 @@ class PII_Dataset:
             # We have span-based labels, convert them to token labels
             logger.info("Converting spans to token labels")
             
+            # Determine max sequence length from tokenizer/model where available;
+            # default to 512 if not specified here. Will be overridden in main.
+            inferred_max_length = getattr(tokenizer, 'model_max_length', 512) or 512
             for text, spans in zip(train_texts, train_labels):
-                token_labels = self.create_token_labels(text, spans, tokenizer)
+                token_labels = self.create_token_labels(text, spans, tokenizer, max_length=inferred_max_length)
                 train_label_ids.append(token_labels)
             
             for text, spans in zip(val_texts, val_labels):
-                token_labels = self.create_token_labels(text, spans, tokenizer)
+                token_labels = self.create_token_labels(text, spans, tokenizer, max_length=inferred_max_length)
                 val_label_ids.append(token_labels)
                 
             for text, spans in zip(test_texts, test_labels):
-                token_labels = self.create_token_labels(text, spans, tokenizer)
+                token_labels = self.create_token_labels(text, spans, tokenizer, max_length=inferred_max_length)
                 test_label_ids.append(token_labels)
         
         return {
@@ -1094,7 +1086,70 @@ def debug_predict_pii_tokens(model, tokenizer, text, idx_to_label_map, device, s
 
 
 
-def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_type="presidio", force_restart=False, target_accuracy=0.95, patience=3, max_samples=None, languages=["English"]):
+class FreezeLayersCallback(TrainerCallback):
+    """Freeze lower encoder layers for a few epochs, then unfreeze."""
+
+    def __init__(self, model, freeze_n_layers=2, unfreeze_after_epochs=1):
+        self.model = model
+        self.freeze_n_layers = max(0, int(freeze_n_layers))
+        self.unfreeze_after_epochs = max(0, int(unfreeze_after_epochs))
+        self._unfroze = False
+
+    def _set_freeze(self, freeze: bool):
+        for name, param in self.model.named_parameters():
+            # Always keep classifier trainable
+            if name.startswith("classifier") or ".classifier" in name:
+                param.requires_grad = True
+                continue
+            if self.freeze_n_layers == 0:
+                param.requires_grad = True
+                continue
+            # Try to detect encoder layer index in a model-agnostic way
+            layer_index = None
+            if ".layer." in name:
+                # e.g., encoder.layer.0.attention..., roberta.encoder.layer.1...
+                try:
+                    prefix, after = name.split(".layer.", 1)
+                    layer_index_str = after.split(".", 1)[0]
+                    layer_index = int(layer_index_str)
+                except Exception:
+                    layer_index = None
+            # For models with block naming like 'layers.N.' or 'h.N.' you could extend here
+            if layer_index is not None and layer_index < self.freeze_n_layers:
+                param.requires_grad = not freeze
+            else:
+                param.requires_grad = True
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        if self.unfreeze_after_epochs > 0 and self.freeze_n_layers > 0:
+            self._set_freeze(freeze=True)
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        if not self._unfroze and state.epoch is not None and state.epoch >= self.unfreeze_after_epochs:
+            self._set_freeze(freeze=False)
+            self._unfroze = True
+
+
+def main(
+    model_name="modernbert-base",
+    max_epochs=50,
+    batch_size=16,
+    dataset_type="presidio",
+    force_restart=False,
+    target_accuracy=0.95,
+    patience=3,
+    max_samples=None,
+    languages=["English"],
+    learning_rate=1e-5,
+    weight_decay=0.1,
+    lr_scheduler_type="cosine",
+    gradient_accumulation_steps=2,
+    warmup_ratio=0.1,
+    dropout=0.3,
+    max_seq_length=None,
+    freeze_layers=2,
+    unfreeze_after_epochs=1,
+):
     """Main function to demonstrate PII token classification fine-tuning with accuracy-based early stopping."""
     
     # Validate model name
@@ -1125,6 +1180,20 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
         else:
             tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     
+    # Determine max sequence length BEFORE preparing datasets so label creation matches
+    config_for_length = AutoConfig.from_pretrained(model_path)
+    model_max_positions = getattr(config_for_length, 'max_position_embeddings', None)
+    inferred_model_max = int(model_max_positions) if model_max_positions is not None else 512
+    # If user provided, honor it; otherwise, prefer ModernBERT's long context
+    effective_max_seq_len = int(max_seq_length) if max_seq_length is not None else inferred_model_max
+    # Cap to a reasonable upper bound to avoid accidental huge sequences
+    if effective_max_seq_len <= 0:
+        effective_max_seq_len = inferred_model_max
+    try:
+        tokenizer.model_max_length = effective_max_seq_len
+    except Exception:
+        pass
+
     logger.info(f"Loading {dataset_type} PII dataset...")
     dataset_loader = PII_Dataset(dataset_type=dataset_type, max_samples=max_samples, languages=languages)
     datasets = dataset_loader.prepare_datasets(tokenizer)
@@ -1145,15 +1214,31 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
 
     num_labels = len(unique_categories)
     
-    # Load token classification model
+    # Determine max sequence length
+    # Prefer explicit arg, otherwise from model config, else fallback to 512
     logger.info(f"Loading token classification model...")
-    
+    config = AutoConfig.from_pretrained(model_path)
+    # Set dropout according to provided value
+    if hasattr(config, 'hidden_dropout_prob'):
+        config.hidden_dropout_prob = dropout
+    if hasattr(config, 'attention_probs_dropout_prob'):
+        config.attention_probs_dropout_prob = dropout
+    # Set label space on config to avoid passing unsupported kwargs to ModernBERT init
+    config.num_labels = num_labels
+    config.label2id = category_to_idx
+    config.id2label = idx_to_category
+
+    # ModernBERT: prefer disabling reference_compile via config for broader compatibility
+    if model_name.startswith("modernbert"):
+        try:
+            setattr(config, "reference_compile", False)
+            logger.info("Set config.reference_compile = False for ModernBERT")
+        except Exception:
+            pass
+
     model = AutoModelForTokenClassification.from_pretrained(
         model_path,
-        num_labels=num_labels,
-        label2id=category_to_idx,
-        id2label=idx_to_category,
-        reference_compile=False
+        config=config,
     )
     
     # Move model to device
@@ -1161,17 +1246,22 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
     
     # Create datasets and tokenization function for token classification
     def tokenize_function(examples):
-        tokenized = tokenizer(examples["text"], truncation=True, padding="max_length", max_length=512)
+        tokenized = tokenizer(
+            examples["text"],
+            truncation=True,
+            padding="max_length",
+            max_length=effective_max_seq_len,
+        )
         # Pad/truncate labels to match tokenized input length
         labels = []
         for label_list in examples["labels"]:
             # Ensure labels match the tokenized length
-            if len(label_list) < 512:
+            if len(label_list) < effective_max_seq_len:
                 # Pad with -100 (ignored index)
-                padded_labels = label_list + [-100] * (512 - len(label_list))
+                padded_labels = label_list + [-100] * (effective_max_seq_len - len(label_list))
             else:
                 # Truncate
-                padded_labels = label_list[:512]
+                padded_labels = label_list[:effective_max_seq_len]
             labels.append(padded_labels)
         tokenized["labels"] = labels
         return tokenized
@@ -1216,8 +1306,8 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
         "num_train_epochs": max_epochs,  # Maximum epochs (will stop early if target accuracy reached)
         "per_device_train_batch_size": batch_size,
         "per_device_eval_batch_size": batch_size,
-        "warmup_ratio": 0.1,
-        "weight_decay": 0.01,
+        "warmup_ratio": warmup_ratio,
+        "weight_decay": weight_decay,
         "logging_dir": f"{output_model_path}/logs",
         "logging_steps": 100,
         eval_strategy_param: "epoch",  # Evaluate every epoch to check accuracy
@@ -1227,6 +1317,9 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
         "save_total_limit": 3,  # Keep more checkpoints for resuming
         "report_to": [],
         "load_best_model_at_end": True,
+        "learning_rate": learning_rate,
+        "lr_scheduler_type": lr_scheduler_type,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
     }
     
     # Only add resume_from_checkpoint if we found a checkpoint
@@ -1240,6 +1333,7 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
         target_accuracy=target_accuracy,
         patience=patience
     )
+    freeze_callback = FreezeLayersCallback(model, freeze_n_layers=freeze_layers, unfreeze_after_epochs=unfreeze_after_epochs)
     
     # Create trainer with early stopping callback
     trainer = Trainer(
@@ -1248,7 +1342,7 @@ def main(model_name="modernbert-base", max_epochs=50, batch_size=16, dataset_typ
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics_token_classification,
-        callbacks=[early_stopping_callback],
+        callbacks=[early_stopping_callback, freeze_callback],
     )
 
     logger.info(f"Starting PII token classification fine-tuning with {model_name}...")
@@ -1389,6 +1483,26 @@ if __name__ == "__main__":
                        help="Languages to include from ai4privacy dataset. Options: English French German Italian Dutch Spanish all. Default: ['English']")
     parser.add_argument("--debug", action="store_true",
                        help="Enable debug mode for detailed token analysis during testing")
+    # New training hyperparameters
+    parser.add_argument("--learning-rate", type=float, default=1e-5,
+                        help="Learning rate for fine-tuning (default: 1e-5)")
+    parser.add_argument("--weight-decay", type=float, default=0.1,
+                        help="Weight decay (L2 regularization) (default: 0.1)")
+    parser.add_argument("--lr-scheduler-type", type=str, default="cosine",
+                        choices=["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"],
+                        help="Learning rate scheduler type (default: cosine)")
+    parser.add_argument("--gradient-accumulation-steps", type=int, default=2,
+                        help="Number of steps to accumulate gradients before optimizer step (default: 2)")
+    parser.add_argument("--warmup-ratio", type=float, default=0.1,
+                        help="Warmup ratio for scheduler (default: 0.1)")
+    parser.add_argument("--dropout", type=float, default=0.3,
+                        help="Dropout probability for hidden and attention (default: 0.3)")
+    parser.add_argument("--max-seq-length", type=int, default=None,
+                        help="Max sequence length to use (defaults to model's max; ModernBERT supports long context up to ~8k)")
+    parser.add_argument("--freeze-layers", type=int, default=2,
+                        help="Number of lowest encoder layers to freeze initially (default: 2)")
+    parser.add_argument("--unfreeze-after-epochs", type=int, default=1,
+                        help="Unfreeze after this many epochs (default: 1)")
     
     args = parser.parse_args()
     
@@ -1401,6 +1515,25 @@ if __name__ == "__main__":
             exit(0)
     
     if args.mode == "train":
-        main(args.model, args.max_epochs, args.batch_size, args.dataset, args.force_restart, args.target_accuracy, args.patience, args.max_samples, languages=args.languages)
+        main(
+            model_name=args.model,
+            max_epochs=args.max_epochs,
+            batch_size=args.batch_size,
+            dataset_type=args.dataset,
+            force_restart=args.force_restart,
+            target_accuracy=args.target_accuracy,
+            patience=args.patience,
+            max_samples=args.max_samples,
+            languages=args.languages,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
+            lr_scheduler_type=args.lr_scheduler_type,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            warmup_ratio=args.warmup_ratio,
+            dropout=args.dropout,
+            max_seq_length=args.max_seq_length,
+            freeze_layers=args.freeze_layers,
+            unfreeze_after_epochs=args.unfreeze_after_epochs,
+        )
     elif args.mode == "test":
-        demo_inference(args.model, args.dataset, debug_mode=args.debug)
+        demo_inference(args.model, args.dataset, debug_mode=args.debug) 
