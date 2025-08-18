@@ -12,7 +12,7 @@ import (
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/openai"
+
 )
 
 var _ = Describe("Caching Functionality", func() {
@@ -40,10 +40,10 @@ var _ = Describe("Caching Functionality", func() {
 	})
 
 	It("should handle cache miss scenario", func() {
-		request := openai.OpenAIRequest{
-			Model: "model-a",
-			Messages: []openai.ChatMessage{
-				{Role: "user", Content: "What is artificial intelligence?"},
+		request := map[string]interface{}{
+			"model": "model-a",
+			"messages": []map[string]interface{}{
+				{"role": "user", "content": "What is artificial intelligence?"},
 			},
 		}
 
@@ -113,10 +113,10 @@ var _ = Describe("Caching Functionality", func() {
 	Context("with cache enabled", func() {
 		It("should attempt to cache successful responses", func() {
 			// Create a request
-			request := openai.OpenAIRequest{
-				Model: "model-a",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: "Tell me about machine learning"},
+			request := map[string]interface{}{
+				"model": "model-a",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "Tell me about machine learning"},
 				},
 			}
 
@@ -174,10 +174,10 @@ var _ = Describe("Caching Functionality", func() {
 
 		It("should handle cache errors gracefully", func() {
 			// Test with a potentially problematic query
-			request := openai.OpenAIRequest{
-				Model: "model-a",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: ""},  // Empty content might cause issues
+			request := map[string]interface{}{
+				"model": "model-a",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": ""},  // Empty content might cause issues
 				},
 			}
 
@@ -218,10 +218,10 @@ var _ = Describe("Caching Functionality", func() {
 		})
 
 		It("should process requests normally without caching", func() {
-			request := openai.OpenAIRequest{
-				Model: "model-a",
-				Messages: []openai.ChatMessage{
-					{Role: "user", Content: "What is the weather?"},
+			request := map[string]interface{}{
+				"model": "model-a",
+				"messages": []map[string]interface{}{
+					{"role": "user", "content": "What is the weather?"},
 				},
 			}
 

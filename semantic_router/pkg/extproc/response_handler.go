@@ -1,13 +1,14 @@
 package extproc
 
 import (
+	"encoding/json"
 	"log"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/openai/openai-go"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/metrics"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/openai"
 )
 
 // handleResponseHeaders processes the response headers
@@ -36,11 +37,13 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Process the response for caching
 	responseBody := v.ResponseBody.Body
 
-	// Parse tokens from the response JSON
-	promptTokens, completionTokens, _, err := openai.ParseTokensFromResponse(responseBody)
-	if err != nil {
+	// Parse tokens from the response JSON using OpenAI SDK types
+	var parsed openai.ChatCompletion
+	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		log.Printf("Error parsing tokens from response: %v", err)
 	}
+	promptTokens := int(parsed.Usage.PromptTokens)
+	completionTokens := int(parsed.Usage.CompletionTokens)
 
 	// Record tokens used with the model that was used
 	if ctx.RequestModel != "" {

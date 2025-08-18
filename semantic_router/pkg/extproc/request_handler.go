@@ -1,21 +1,102 @@
 package extproc
 
 import (
+	"encoding/json"
 	"log"
 	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/openai/openai-go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/metrics"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/http"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/openai"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
 )
+
+// parseOpenAIRequest parses the raw JSON using the OpenAI SDK types
+func parseOpenAIRequest(data []byte) (*openai.ChatCompletionNewParams, error) {
+	var req openai.ChatCompletionNewParams
+	if err := json.Unmarshal(data, &req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+// serializeOpenAIRequest converts request back to JSON
+func serializeOpenAIRequest(req *openai.ChatCompletionNewParams) ([]byte, error) {
+	return json.Marshal(req)
+}
+
+// extractUserAndNonUserContent extracts content from request messages
+func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
+	var userContent string
+	var nonUser []string
+	
+	for _, msg := range req.Messages {
+		// Extract content based on message type
+		var textContent string
+		var role string
+		
+		if msg.OfUser != nil {
+			role = "user"
+			// Handle user message content
+			if msg.OfUser.Content.OfString.Value != "" {
+				textContent = msg.OfUser.Content.OfString.Value
+			} else if len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
+				// Extract text from content parts
+				var parts []string
+				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+					if part.OfText != nil {
+						parts = append(parts, part.OfText.Text)
+					}
+				}
+				textContent = strings.Join(parts, " ")
+			}
+		} else if msg.OfSystem != nil {
+			role = "system"
+			if msg.OfSystem.Content.OfString.Value != "" {
+				textContent = msg.OfSystem.Content.OfString.Value
+			} else if len(msg.OfSystem.Content.OfArrayOfContentParts) > 0 {
+				// Extract text from content parts
+				var parts []string
+				for _, part := range msg.OfSystem.Content.OfArrayOfContentParts {
+					if part.Text != "" {
+						parts = append(parts, part.Text)
+					}
+				}
+				textContent = strings.Join(parts, " ")
+			}
+		} else if msg.OfAssistant != nil {
+			role = "assistant"
+			if msg.OfAssistant.Content.OfString.Value != "" {
+				textContent = msg.OfAssistant.Content.OfString.Value
+			} else if len(msg.OfAssistant.Content.OfArrayOfContentParts) > 0 {
+				// Extract text from content parts
+				var parts []string
+				for _, part := range msg.OfAssistant.Content.OfArrayOfContentParts {
+					if part.OfText != nil {
+						parts = append(parts, part.OfText.Text)
+					}
+				}
+				textContent = strings.Join(parts, " ")
+			}
+		}
+		
+		// Categorize by role
+		if role == "user" {
+			userContent = textContent
+		} else if role != "" {
+			nonUser = append(nonUser, textContent)
+		}
+	}
+		
+	return userContent, nonUser
+}
 
 // RequestContext holds the context for processing a request
 type RequestContext struct {
@@ -66,22 +147,22 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Save the original request body
 	ctx.OriginalRequestBody = v.RequestBody.Body
 
-	// Parse the OpenAI request
-	openAIRequest, err := openai.ParseRequest(ctx.OriginalRequestBody)
+	// Parse the OpenAI request using SDK types
+	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
 		log.Printf("Error parsing OpenAI request: %v", err)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}
 
 	// Store the original model
-	originalModel := openAIRequest.Model
+	originalModel := string(openAIRequest.Model)
 	log.Printf("Original model: %s", originalModel)
 
 	// Record the initial request to this model
 	metrics.RecordModelRequest(originalModel)
 
 	// Get content from messages
-	userContent, nonUserMessages := openai.ExtractUserAndNonUserContent(openAIRequest)
+	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
 	// Perform security checks
 	if response, shouldReturn := r.performSecurityChecks(userContent, nonUserMessages); shouldReturn {
@@ -179,7 +260,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 }
 
 // handleModelRouting handles model selection and routing logic
-func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, originalModel, userContent string, nonUserMessages []string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel, userContent string, nonUserMessages []string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Create default response with CONTINUE status
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
@@ -267,10 +348,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 				}
 
 				// Modify the model in the request
-				openAIRequest.Model = matchedModel
+				openAIRequest.Model = openai.ChatModel(matchedModel)
 
 				// Serialize the modified request
-				modifiedBody, err := openai.SerializeRequest(openAIRequest)
+				modifiedBody, err := serializeOpenAIRequest(openAIRequest)
 				if err != nil {
 					log.Printf("Error serializing modified request: %v", err)
 					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
@@ -392,99 +473,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 		response.GetRequestBody().GetResponse().HeaderMutation = headerMutation
 	}
 
-	// Handle tools auto-selection if tools field is "auto"
-	if openAIRequest.Tools != nil {
-		if toolsStr, ok := openAIRequest.Tools.(string); ok && toolsStr == "auto" {
-			// Get text for tools classification (same as model classification)
-			var classificationText string
-			if len(userContent) > 0 {
-				classificationText = userContent
-			} else if len(nonUserMessages) > 0 {
-				classificationText = strings.Join(nonUserMessages, " ")
-			}
-
-			if classificationText != "" && r.ToolsDatabase.IsEnabled() {
-				// Find similar tools based on the query
-				topK := r.Config.Tools.TopK
-				if topK <= 0 {
-					topK = 3 // Default to 3 tools if not configured
-				}
-
-				selectedTools, err := r.ToolsDatabase.FindSimilarTools(classificationText, topK)
-				if err != nil {
-					log.Printf("Error finding similar tools: %v", err)
-					if r.Config.Tools.FallbackToEmpty {
-						// Fallback: remove tools field entirely
-						openAIRequest.Tools = nil
-						log.Printf("Tools auto-selection failed, falling back to no tools")
-					} else {
-						return nil, status.Errorf(codes.Internal, "tools auto-selection failed: %v", err)
-					}
-				} else if len(selectedTools) > 0 {
-					// Replace "auto" with selected tools
-					openAIRequest.Tools = selectedTools
-					log.Printf("Auto-selected %d tools for query", len(selectedTools))
-				} else {
-					// No tools found that meet threshold, fallback based on config
-					if r.Config.Tools.FallbackToEmpty {
-						openAIRequest.Tools = nil
-						log.Printf("No suitable tools found, falling back to no tools")
-					} else {
-						log.Printf("No suitable tools found above threshold")
-						openAIRequest.Tools = []openai.Tool{} // Empty array
-					}
-				}
-
-				// Re-serialize the request with modified tools
-				modifiedBody, err := openai.SerializeRequest(openAIRequest)
-				if err != nil {
-					log.Printf("Error serializing request with modified tools: %v", err)
-					return nil, status.Errorf(codes.Internal, "error serializing request with modified tools: %v", err)
-				}
-
-				// Create body mutation with the modified body
-				bodyMutation := &ext_proc.BodyMutation{
-					Mutation: &ext_proc.BodyMutation_Body{
-						Body: modifiedBody,
-					},
-				}
-
-				// Create or get existing header mutation
-				var headerMutation *ext_proc.HeaderMutation
-				if response.GetRequestBody().GetResponse().GetHeaderMutation() != nil {
-					headerMutation = response.GetRequestBody().GetResponse().GetHeaderMutation()
-				} else {
-					headerMutation = &ext_proc.HeaderMutation{}
-				}
-				
-				// Add content-length removal if not already present
-				if headerMutation.RemoveHeaders == nil {
-					headerMutation.RemoveHeaders = make([]string, 0)
-				}
-				headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-length")
-
-				// Update the response with both mutations
-				response = &ext_proc.ProcessingResponse{
-					Response: &ext_proc.ProcessingResponse_RequestBody{
-						RequestBody: &ext_proc.BodyResponse{
-							Response: &ext_proc.CommonResponse{
-								Status:         ext_proc.CommonResponse_CONTINUE,
-								HeaderMutation: headerMutation,
-								BodyMutation:   bodyMutation,
-							},
-						},
-					},
-				}
-			} else {
-				// No content for classification or tools database disabled
-				if r.Config.Tools.FallbackToEmpty {
-					openAIRequest.Tools = nil
-					log.Printf("No content for tools classification or tools database disabled, falling back to no tools")
-				} else {
-					log.Printf("Warning: Tools auto-selection requested but no content available for classification")
-				}
-			}
-		}
+	// Handle tool selection based on tool_choice field
+	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
+		log.Printf("Error in tool selection: %v", err)
+		// Continue without failing the request
 	}
 
 	// Record the routing latency
@@ -492,4 +484,136 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.OpenAIRequest, o
 	metrics.RecordModelRoutingLatency(routingLatency.Seconds())
 
 	return response, nil
+}
+
+// handleToolSelection handles automatic tool selection based on semantic similarity
+func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionNewParams, userContent string, nonUserMessages []string, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
+	// Check if tool_choice is set to "auto"
+	if openAIRequest.ToolChoice.OfAuto.Value == "auto" {
+		// Continue with tool selection logic
+	} else {
+		return nil // Not auto tool selection
+	}
+	
+	// Get text for tools classification
+	var classificationText string
+	if len(userContent) > 0 {
+		classificationText = userContent
+	} else if len(nonUserMessages) > 0 {
+		classificationText = strings.Join(nonUserMessages, " ")
+	}
+	
+	if classificationText == "" {
+		log.Printf("No content available for tool classification")
+		return nil
+	}
+	
+	if !r.ToolsDatabase.IsEnabled() {
+		log.Printf("Tools database is disabled")
+		return nil
+	}
+	
+	// Get configuration for tool selection
+	topK := r.Config.Tools.TopK
+	if topK <= 0 {
+		topK = 3 // Default to 3 tools
+	}
+	
+	// Find similar tools based on the query
+	selectedTools, err := r.ToolsDatabase.FindSimilarTools(classificationText, topK)
+	if err != nil {
+		if r.Config.Tools.FallbackToEmpty {
+			log.Printf("Tool selection failed, falling back to no tools: %v", err)
+			openAIRequest.Tools = nil
+			return r.updateRequestWithTools(openAIRequest, response)
+		}
+		return err
+	}
+	
+	if len(selectedTools) == 0 {
+		if r.Config.Tools.FallbackToEmpty {
+			log.Printf("No suitable tools found, falling back to no tools")
+			openAIRequest.Tools = nil
+		} else {
+			log.Printf("No suitable tools found above threshold")
+			openAIRequest.Tools = []openai.ChatCompletionToolParam{} // Empty array
+		}
+	} else {
+		// Convert selected tools to OpenAI SDK tool format
+		tools := make([]openai.ChatCompletionToolParam, len(selectedTools))
+		for i, tool := range selectedTools {
+			// Convert the tool to OpenAI SDK format
+			toolBytes, err := json.Marshal(tool)
+			if err != nil {
+				return err
+			}
+			var sdkTool openai.ChatCompletionToolParam
+			if err := json.Unmarshal(toolBytes, &sdkTool); err != nil {
+				return err
+			}
+			tools[i] = sdkTool
+		}
+		
+		openAIRequest.Tools = tools
+		log.Printf("Auto-selected %d tools for query: %s", len(selectedTools), classificationText)
+	}
+	
+	return r.updateRequestWithTools(openAIRequest, response)
+}
+
+// updateRequestWithTools updates the request body with the selected tools
+func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse) error {
+	// Re-serialize the request with modified tools
+	modifiedBody, err := serializeOpenAIRequest(openAIRequest)
+	if err != nil {
+		return err
+	}
+	
+	// Create body mutation with the modified body
+	bodyMutation := &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{
+			Body: modifiedBody,
+		},
+	}
+	
+	// Create or get existing header mutation
+	var headerMutation *ext_proc.HeaderMutation
+	if (*response).GetRequestBody().GetResponse().GetHeaderMutation() != nil {
+		headerMutation = (*response).GetRequestBody().GetResponse().GetHeaderMutation()
+	} else {
+		headerMutation = &ext_proc.HeaderMutation{}
+	}
+	
+	// Add content-length removal if not already present
+	if headerMutation.RemoveHeaders == nil {
+		headerMutation.RemoveHeaders = make([]string, 0)
+	}
+	
+	// Check if content-length is already in the remove list
+	hasContentLength := false
+	for _, header := range headerMutation.RemoveHeaders {
+		if strings.ToLower(header) == "content-length" {
+			hasContentLength = true
+			break
+		}
+	}
+	
+	if !hasContentLength {
+		headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-length")
+	}
+	
+	// Update the response with both mutations
+	*response = &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status:         ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: headerMutation,
+					BodyMutation:   bodyMutation,
+				},
+			},
+		},
+	}
+	
+	return nil
 }

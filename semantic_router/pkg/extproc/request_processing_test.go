@@ -10,10 +10,11 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/openai"
+
 )
 
 var _ = Describe("Request Processing", func() {
@@ -107,9 +108,9 @@ var _ = Describe("Request Processing", func() {
 	Describe("handleRequestBody", func() {
 		Context("with valid OpenAI request", func() {
 			It("should process auto model routing successfully", func() {
-				request := openai.OpenAIRequest{
+				request := cache.OpenAIRequest{
 					Model: "auto",
-					Messages: []openai.ChatMessage{
+					Messages: []cache.ChatMessage{
 						{Role: "user", Content: "Write a Python function to sort a list"},
 					},
 				}
@@ -140,9 +141,9 @@ var _ = Describe("Request Processing", func() {
 			})
 
 			It("should handle non-auto model without modification", func() {
-				request := openai.OpenAIRequest{
+				request := cache.OpenAIRequest{
 					Model: "model-a",
-					Messages: []openai.ChatMessage{
+					Messages: []cache.ChatMessage{
 						{Role: "user", Content: "Hello world"},
 					},
 				}
@@ -170,9 +171,9 @@ var _ = Describe("Request Processing", func() {
 			})
 
 			It("should handle empty user content", func() {
-				request := openai.OpenAIRequest{
+				request := cache.OpenAIRequest{
 					Model: "auto",
-					Messages: []openai.ChatMessage{
+					Messages: []cache.ChatMessage{
 						{Role: "system", Content: "You are a helpful assistant"},
 						{Role: "assistant", Content: "Hello! How can I help you?"},
 					},
@@ -265,12 +266,12 @@ var _ = Describe("Request Processing", func() {
 			})
 
 			It("should handle tools auto-selection", func() {
-				request := openai.OpenAIRequest{
-					Model: "model-a",
-					Messages: []openai.ChatMessage{
-						{Role: "user", Content: "Calculate the square root of 16"},
+				request := map[string]interface{}{
+					"model": "model-a",
+					"messages": []map[string]interface{}{
+						{"role": "user", "content": "Calculate the square root of 16"},
 					},
-					Tools: "auto",
+					"tools": "auto",
 				}
 
 				requestBody, err := json.Marshal(request)
@@ -299,12 +300,12 @@ var _ = Describe("Request Processing", func() {
 			It("should fallback to empty tools on error", func() {
 				cfg.Tools.FallbackToEmpty = true
 				
-				request := openai.OpenAIRequest{
-					Model: "model-a",
-					Messages: []openai.ChatMessage{
-						{Role: "user", Content: "Test query"},
+				request := map[string]interface{}{
+					"model": "model-a",
+					"messages": []map[string]interface{}{
+						{"role": "user", "content": "Test query"},
 					},
-					Tools: "auto",
+					"tools": "auto",
 				}
 
 				requestBody, err := json.Marshal(request)
