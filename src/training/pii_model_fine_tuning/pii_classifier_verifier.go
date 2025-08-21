@@ -48,7 +48,7 @@ func classifyPIITokens(text string, config ModelConfig) (candle.TokenClassificat
 func main() {
 	// Parse command line flags
 	var (
-		piiTokenPath          = flag.String("pii-token-model", "../models/pii_classifier_modernbert-base_presidio_token_model", "Path to PII token classifier model")
+		piiTokenPath          = flag.String("pii-token-model", "../../../models/pii_classifier_modernbert-base_presidio_token_model", "Path to PII token classifier model")
 		enableTokenClassification = flag.Bool("token-classification", true, "Enable token-level PII classification")
 		useCPU                = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)

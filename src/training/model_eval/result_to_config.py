@@ -83,7 +83,7 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
             "ttl_seconds": 3600
         },
         "classifier": {
-            "model_id": "classifier_model_fine_tuning/category_classifier_linear_model",
+            "model_id": "models/category_classifier_modernbert-base_model",
             "threshold": 0.1,
             "use_cpu": True,
             "category_mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json"

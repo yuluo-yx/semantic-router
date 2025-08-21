@@ -384,7 +384,7 @@ func InitPIIClassifier(modelPath string, numClasses int, useCPU bool) error {
 	piiClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to a suitable PII classification model if path is empty
-			modelPath = "./pii_classifier_linear_model"
+			modelPath = "./models/pii_classifier_modernbert-base_presidio_token_model"
 		}
 
 		if numClasses < 2 {
@@ -412,7 +412,7 @@ func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) erro
 	jailbreakClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to the jailbreak classification model if path is empty
-			modelPath = "./jailbreak_classifier_linear_model"
+			modelPath = "./models/jailbreak_classifier_modernbert-base_model"
 		}
 
 		if numClasses < 2 {
