@@ -3,7 +3,7 @@ name: Create and publish Docker image for extproc
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ "classify" ]
 
 jobs:
   build_and_push:
