@@ -1,0 +1,208 @@
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+tools:
+  enabled: true  # Set to true to enable automatic tool selection
+  top_k: 3        # Number of most relevant tools to select
+  similarity_threshold: 0.2  # Threshold for tool similarity
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true  # If true, return no tools on failure; if false, return error
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+gpu_config:
+  flops: 312000000000000  # 312e12 fp16
+  hbm: 2000000000000      # 2e12 (2 TB/s)
+  description: "A100-80G" # https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf
+
+# vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "192.168.12.90"
+    port: 11434
+    models:
+      - "phi4"
+      - "gemma3:27b"
+    weight: 1  # Load balancing weight
+    health_check_path: "/health"  # Optional health check endpoint
+  - name: "endpoint2"
+    address: "192.168.12.91"
+    port: 11434
+    models:
+      - "mistral-small3.1"
+    weight: 1
+    health_check_path: "/health"
+  - name: "endpoint3"
+    address: "192.168.12.92"
+    port: 11434
+    models:
+      - "phi4"  # Same model can be served by multiple endpoints for redundancy
+      - "mistral-small3.1"
+    weight: 2  # Higher weight for more powerful endpoint
+
+model_config:
+  phi4:
+    param_count: 14000000000  # 14B parameters https://huggingface.co/microsoft/phi-4
+    batch_size: 512.0  # vLLM default batch size
+    context_size: 16384.0 # based on https://huggingface.co/microsoft/phi-4
+    pii_policy:
+      allow_by_default: false  # Deny all PII by default
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+    # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
+    preferred_endpoints: ["endpoint1", "endpoint3"]
+  gemma3:27b:
+    param_count: 27000000000  # 27B parameters (base version)
+    batch_size: 512.0
+    context_size: 16384.0
+    pii_policy:
+      allow_by_default: false  # Deny all PII by default
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+    preferred_endpoints: ["endpoint1"]
+  "mistral-small3.1":
+    param_count: 22000000000
+    batch_size: 512.0
+    context_size: 16384.0
+    pii_policy:
+      allow_by_default: false  # Deny all PII by default
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+    preferred_endpoints: ["endpoint2", "endpoint3"]
+
+# Classifier configuration for text classification
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model" #TODO: Use local model for now before the code can download the entire model from huggingface
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model" #TODO: Use local model for now before the code can download the entire model from huggingface
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+  load_aware: false
+categories:
+- name: business
+  model_scores:
+  - model: phi4
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.4
+  - model: mistral-small3.1
+    score: 0.2
+- name: law
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: phi4
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.4
+- name: psychology
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.6
+  - model: gemma3:27b
+    score: 0.4
+  - model: phi4
+    score: 0.4
+- name: biology
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.6
+  - model: phi4
+    score: 0.2
+- name: chemistry
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.6
+  - model: phi4
+    score: 0.6
+- name: history
+  model_scores:
+  - model: mistral-small3.1
+    score: 0.8
+  - model: phi4
+    score: 0.6
+  - model: gemma3:27b
+    score: 0.4
+- name: other
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: phi4
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.6
+- name: health
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: phi4
+    score: 0.8
+  - model: mistral-small3.1
+    score: 0.6
+- name: economics
+  model_scores:
+  - model: gemma3:27b
+    score: 0.8
+  - model: mistral-small3.1
+    score: 0.8
+  - model: phi4
+    score: 0.0
+- name: math
+  model_scores:
+  - model: phi4
+    score: 1.0
+  - model: mistral-small3.1
+    score: 0.8
+  - model: gemma3:27b
+    score: 0.6
+- name: physics
+  model_scores:
+  - model: gemma3:27b
+    score: 0.4
+  - model: phi4
+    score: 0.4
+  - model: mistral-small3.1
+    score: 0.4
+- name: computer science
+  model_scores:
+  - model: gemma3:27b
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.6
+  - model: phi4
+    score: 0.0
+- name: philosophy
+  model_scores:
+  - model: phi4
+    score: 0.6
+  - model: gemma3:27b
+    score: 0.2
+  - model: mistral-small3.1
+    score: 0.2
+- name: engineering
+  model_scores:
+  - model: gemma3:27b
+    score: 0.6
+  - model: mistral-small3.1
+    score: 0.6
+  - model: phi4
+    score: 0.2
+default_model: mistral-small3.1
