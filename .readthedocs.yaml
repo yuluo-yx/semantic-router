@@ -30,5 +30,3 @@ build:
       - pip install --upgrade pip
       # Install documentation dependencies from requirements.txt
       - pip install -r docs/requirements.txt
-      # Install the package itself
-      - pip install -e .
