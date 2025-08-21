@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router
+  labels:
+    app: semantic-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: semantic-router
+  template:
+    metadata:
+      labels:
+        app: semantic-router
+    spec:
+      initContainers:
+      - name: model-downloader
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          echo "Installing Hugging Face CLI..."
+          pip install --no-cache-dir huggingface_hub[cli]
+          
+          echo "Downloading models to persistent volume..."
+          cd /app/models
+          
+          # Download category classifier model
+          if [ ! -d "category_classifier_modernbert-base_model" ]; then
+            echo "Downloading category classifier model..."
+            huggingface-cli download HuaminChen/category_classifier_modernbert-base_model --local-dir category_classifier_modernbert-base_model
+          else
+            echo "Category classifier model already exists, skipping..."
+          fi
+          
+          # Download PII classifier model  
+          if [ ! -d "pii_classifier_modernbert-base_model" ]; then
+            echo "Downloading PII classifier model..."
+            huggingface-cli download HuaminChen/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model
+          else
+            echo "PII classifier model already exists, skipping..."
+          fi
+          
+          # Download jailbreak classifier model
+          if [ ! -d "jailbreak_classifier_modernbert-base_model" ]; then
+            echo "Downloading jailbreak classifier model..."
+            huggingface-cli download HuaminChen/jailbreak_classifier_modernbert-base_model --local-dir jailbreak_classifier_modernbert-base_model
+          else
+            echo "Jailbreak classifier model already exists, skipping..."
+          fi
+          
+          # Download PII token classifier model
+          if [ ! -d "pii_classifier_modernbert-base_presidio_token_model" ]; then
+            echo "Downloading PII token classifier model..."
+            huggingface-cli download HuaminChen/pii_classifier_modernbert-base_presidio_token_model --local-dir pii_classifier_modernbert-base_presidio_token_model
+          else
+            echo "PII token classifier model already exists, skipping..."
+          fi
+          
+          echo "All models downloaded successfully!"
+          ls -la /app/models/
+        env:
+        - name: HF_HUB_CACHE
+          value: /tmp/hf_cache
+        volumeMounts:
+        - name: models-volume
+          mountPath: /app/models
+      containers:
+      - name: semantic-router
+        image: ghcr.io/redhat-et/llm_semantic_router/extproc:latest
+        ports:
+        - containerPort: 50051
+          name: grpc
+          protocol: TCP
+        - containerPort: 9190
+          name: metrics
+          protocol: TCP
+        env:
+        - name: LD_LIBRARY_PATH
+          value: "/app/lib"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: models-volume
+          mountPath: /app/models
+        livenessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 45
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2"
+          limits:
+            memory: "12Gi"
+            cpu: "4"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: semantic-router-config
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: semantic-router-models

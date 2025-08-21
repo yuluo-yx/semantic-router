@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: semantic-router
+
+resources:
+- namespace.yaml
+- pvc.yaml
+- deployment.yaml
+- service.yaml
+
+# Generate ConfigMap
+configMapGenerator:
+- name: semantic-router-config
+  files:
+  - config.yaml
+  - tools_db.json
+
+# Namespace for all resources
+namespace: semantic-router
+
+images:
+ - name: ghcr.io/redhat-et/llm_semantic_router/extproc
+   newTag: latest
+
