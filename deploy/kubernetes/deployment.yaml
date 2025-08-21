@@ -96,7 +96,14 @@ spec:
         readinessProbe:
           tcpSocket:
             port: 50051
-          initialDelaySeconds: 30
+          initialDelaySeconds: 45
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
