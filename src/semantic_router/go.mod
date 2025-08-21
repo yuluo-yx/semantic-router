@@ -3,7 +3,7 @@ module github.com/redhat-et/semantic_route/semantic_router
 go 1.24.1
 
 replace (
-	github.com/redhat-et/semantic_route/candle-binding => ../candle-binding
+	github.com/redhat-et/semantic_route/candle-binding => ../../candle-binding
 	github.com/redhat-et/semantic_route/semantic_router/pkg/config => ./pkg/config
 	github.com/redhat-et/semantic_route/semantic_router/pkg/extproc => ./pkg/extproc
 )

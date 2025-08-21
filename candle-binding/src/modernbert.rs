@@ -253,6 +253,8 @@ pub enum ModernBertModel {
     Token(FixedModernBertForTokenClassification),
 }
 
+
+
 // Structure to hold ModernBERT model and tokenizer for text classification
 pub struct ModernBertClassifier {
     model: ModernBertModel,
@@ -333,7 +335,7 @@ impl ModernBertClassifier {
                 weights_path.1
             )
         } else {
-            return Err(E::msg("HuggingFace Hub loading for ModernBERT not yet implemented"));
+            return Err(E::msg(format!("HuggingFace Hub loading for ModernBERT {} not yet implemented", model_id)));
         };
 
         let config_str = std::fs::read_to_string(&config_filename)?;
@@ -345,6 +347,8 @@ impl ModernBertClassifier {
         } else {
             unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], DType::F32, &device)? }
         };
+
+
         
         // Check if we have id2label and label2id mappings either in classifier_config or at the top level
         let mut config = config;
@@ -400,10 +404,23 @@ impl ModernBertClassifier {
         }
         
         // Load the appropriate ModernBERT model based on task type
+        // Try standard naming first, then _orig_mod prefix if that fails
         let model = if is_token_classification {
-            ModernBertModel::Token(FixedModernBertForTokenClassification::load(vb, &config)?)
+            match FixedModernBertForTokenClassification::load(vb.clone(), &config) {
+                Ok(model) => ModernBertModel::Token(model),
+                Err(_) => {
+                    // Try with _orig_mod prefix (torch.compile models)
+                    ModernBertModel::Token(FixedModernBertForTokenClassification::load(vb.pp("_orig_mod"), &config)?)
+                }
+            }
         } else {
-            ModernBertModel::Sequence(FixedModernBertForSequenceClassification::load(vb, &config)?)
+            match FixedModernBertForSequenceClassification::load(vb.clone(), &config) {
+                Ok(model) => ModernBertModel::Sequence(model),
+                Err(_) => {
+                    // Try with _orig_mod prefix (torch.compile models)
+                    ModernBertModel::Sequence(FixedModernBertForSequenceClassification::load(vb.pp("_orig_mod"), &config)?)
+                }
+            }
         };
 
         Ok(Self {

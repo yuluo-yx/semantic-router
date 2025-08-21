@@ -104,10 +104,10 @@ func CreateTestConfig() *config.RouterConfig {
 				UseModernBERT bool    `yaml:"use_modernbert"`
 				CategoryMappingPath string  `yaml:"category_mapping_path"`
 			}{
-				ModelID:             "../../../models/category_classifier_modernbert-base_model",
+				ModelID:             "../../../../models/category_classifier_modernbert-base_model",
 				UseCPU:              true,
 				UseModernBERT:       true,
-				CategoryMappingPath: "../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+				CategoryMappingPath: "../../../../models/category_classifier_modernbert-base_model/category_mapping.json",
 			},
 			PIIModel: struct {
 				ModelID        string  `yaml:"model_id"`
@@ -115,9 +115,9 @@ func CreateTestConfig() *config.RouterConfig {
 				UseCPU         bool    `yaml:"use_cpu"`
 				PIIMappingPath string  `yaml:"pii_mapping_path"`
 			}{
-				ModelID:        "../../../models/pii_classifier_modernbert-base_presidio_token_model",
+				ModelID:        "../../../../models/pii_classifier_modernbert-base_presidio_token_model",
 				UseCPU:         true,
-				PIIMappingPath: "../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+				PIIMappingPath: "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
 			},
 			LoadAware: true,
 		},
