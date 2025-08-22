@@ -2,9 +2,9 @@ name: Pre-commit
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ classify ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ classify ]
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
