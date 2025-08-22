@@ -106,7 +106,7 @@ Explore how classification models are trained, what datasets are used, and the p
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/redhat-et/semantic_route/blob/main/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/redhat-et/semantic_router/blob/main/CONTRIBUTING.md) for details.
 
 ## 📄 License
 
