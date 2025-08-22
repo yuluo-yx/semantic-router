@@ -80,7 +80,7 @@ impl BertSimilarity {
             println!("Loading model from local directory: {}", model_id);
             let config_path = Path::new(model_id).join("config.json");
             let tokenizer_path = Path::new(model_id).join("tokenizer.json");
-            
+
             // Check for safetensors first, fall back to PyTorch
             let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
                 (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
@@ -89,7 +89,7 @@ impl BertSimilarity {
             } else {
                 return Err(E::msg(format!("No model weights found in {}", model_id)));
             };
-            
+
             (
                 config_path.to_string_lossy().to_string(),
                 tokenizer_path.to_string_lossy().to_string(),
@@ -100,8 +100,8 @@ impl BertSimilarity {
             // HuggingFace Hub model
             println!("Loading model from HuggingFace Hub: {}", model_id);
             let repo = Repo::with_revision(
-                model_id.to_string(), 
-                RepoType::Model, 
+                model_id.to_string(),
+                RepoType::Model,
                 "main".to_string()
             );
 
@@ -165,14 +165,14 @@ impl BertSimilarity {
             stride: 0,
             direction: TruncationDirection::Right,
         })).map_err(E::msg)?;
-        
+
         let encoding = tokenizer.encode(text, true)
             .map_err(E::msg)?;
-        
+
         // Get token IDs and tokens
         let token_ids = encoding.get_ids().iter().map(|&id| id as i32).collect();
         let tokens = encoding.get_tokens().to_vec();
-        
+
         Ok((token_ids, tokens))
     }
 
@@ -186,30 +186,30 @@ impl BertSimilarity {
             stride: 0,
             direction: TruncationDirection::Right,
         })).map_err(E::msg)?;
-        
+
         let encoding = tokenizer.encode(text, true)
             .map_err(E::msg)?;
-        
+
         // Get token IDs and attention mask
         let token_ids = encoding.get_ids().to_vec();
         let attention_mask = encoding.get_attention_mask().to_vec();
-        
+
         // Create tensors
         let token_ids_tensor = Tensor::new(&token_ids[..], &self.device)?.unsqueeze(0)?;
         let attention_mask_tensor = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
         let token_type_ids = token_ids_tensor.zeros_like()?;
-        
+
         // Run the text through BERT with attention mask
         let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, Some(&attention_mask_tensor))?;
-        
+
         // Mean pooling: sum over tokens and divide by attention mask sum
         let sum_embeddings = embeddings.sum(1)?;
         let attention_sum = attention_mask_tensor.sum(1)?.to_dtype(embeddings.dtype())?;
         let pooled = sum_embeddings.broadcast_div(&attention_sum)?;
-        
+
         // Convert to float32 and normalize
         let embedding = pooled.to_dtype(DType::F32)?;
-        
+
         normalize_l2(&embedding)
     }
 
@@ -217,13 +217,13 @@ impl BertSimilarity {
     pub fn calculate_similarity(&self, text1: &str, text2: &str, max_length: Option<usize>) -> Result<f32> {
         let embedding1 = self.get_embedding(text1, max_length)?;
         let embedding2 = self.get_embedding(text2, max_length)?;
-        
+
         // For normalized vectors, dot product equals cosine similarity
         let dot_product = embedding1.matmul(&embedding2.transpose(0, 1)?)?;
-        
+
         // Extract the scalar value from the result
         let sim_value = dot_product.squeeze(0)?.squeeze(0)?.to_scalar::<f32>()?;
-        
+
         Ok(sim_value)
     }
 
@@ -232,26 +232,26 @@ impl BertSimilarity {
         if candidates.is_empty() {
             return Err(E::msg("Empty candidate list"));
         }
-        
+
         let query_embedding = self.get_embedding(query_text, max_length)?;
-        
+
         // Calculate similarity for each candidate individually
         let mut best_idx = 0;
         let mut best_score = -1.0;
-        
+
         for (idx, candidate) in candidates.iter().enumerate() {
             let candidate_embedding = self.get_embedding(candidate, max_length)?;
-            
+
             // Calculate similarity (dot product of normalized vectors = cosine similarity)
             let sim = query_embedding.matmul(&candidate_embedding.transpose(0, 1)?)?;
             let score = sim.squeeze(0)?.squeeze(0)?.to_scalar::<f32>()?;
-            
+
             if score > best_score {
                 best_score = score;
                 best_idx = idx;
             }
         }
-        
+
         Ok((best_idx, best_score))
     }
 }
@@ -272,7 +272,7 @@ impl BertClassifier {
 
         // Check if this is a SentenceTransformer linear classifier model
         let is_sentence_transformer = Path::new(model_id).join("modules.json").exists();
-        
+
         if is_sentence_transformer {
             println!("Detected SentenceTransformer model with linear classifier head");
         }
@@ -282,7 +282,7 @@ impl BertClassifier {
             println!("Loading model from local directory: {}", model_id);
             let config_path = Path::new(model_id).join("config.json");
             let tokenizer_path = Path::new(model_id).join("tokenizer.json");
-            
+
             // For SentenceTransformer models, check both the root and 0_Transformer
             let weights_path = if is_sentence_transformer {
                 // First check if model weights are at the root level (most common for sentence-transformers)
@@ -315,7 +315,7 @@ impl BertClassifier {
             } else {
                 return Err(E::msg(format!("No model weights found in {}", model_id)));
             };
-            
+
             (
                 config_path.to_string_lossy().to_string(),
                 tokenizer_path.to_string_lossy().to_string(),
@@ -376,20 +376,20 @@ impl BertClassifier {
             // Load the dense layer weights from 2_Dense
             let dense_dir = Path::new(model_id).join("2_Dense");
             println!("Looking for dense weights in {}", dense_dir.display());
-            
+
             let dense_config_path = dense_dir.join("config.json");
-            
+
             if dense_config_path.exists() {
                 println!("Found dense config at {}", dense_config_path.display());
                 let dense_config = std::fs::read_to_string(dense_config_path)?;
                 let dense_config: serde_json::Value = serde_json::from_str(&dense_config)?;
-                
+
                 // Get dimensions from the config
                 let in_features = dense_config["in_features"].as_i64().unwrap_or(768) as usize;
                 let out_features = dense_config["out_features"].as_i64().unwrap_or(num_classes as i64) as usize;
-                
+
                 println!("Dense layer dimensions: in_features={}, out_features={}", in_features, out_features);
-                
+
                 // Try to load dense weights from safetensors or pytorch files
                 let weights_path = if dense_dir.join("model.safetensors").exists() {
                     println!("Found dense safetensors weights");
@@ -400,21 +400,21 @@ impl BertClassifier {
                 } else {
                     return Err(E::msg(format!("No dense layer weights found in {}", dense_dir.display())));
                 };
-                
+
                 // Load the weights
                 let dense_vb = if weights_path.1 {
                     VarBuilder::from_pth(&weights_path.0, DType::F32, &device)?
                 } else {
                     unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path.0], DType::F32, &device)? }
                 };
-                
+
                 // Get the weight and bias tensors - PyTorch uses [out_features, in_features] format
                 let weight = dense_vb.get((out_features, in_features), "linear.weight")?;
                 // Transpose the weight matrix to match our expected format [in_features, out_features]
                 let weight = weight.t()?;
                 let bias = dense_vb.get(out_features, "linear.bias")?;
                 println!("Successfully loaded dense layer weights");
-                
+
                 (weight, bias)
             } else {
                 // Fallback: create random weights as before
@@ -431,7 +431,7 @@ impl BertClassifier {
             let b = Tensor::zeros((num_classes,), DType::F32, &device)?;
             (w, b)
         };
-        
+
         let classification_head = Linear::new(w, Some(b));
         println!("Linear classification head created");
 
@@ -449,56 +449,56 @@ impl BertClassifier {
         let encoding = self.tokenizer
             .encode(text, true)
             .map_err(E::msg)?;
-        
+
         let token_ids = encoding.get_ids().to_vec();
         let attention_mask = encoding.get_attention_mask().to_vec();
         let token_ids_tensor = Tensor::new(&token_ids[..], &self.device)?.unsqueeze(0)?;
         let token_type_ids = token_ids_tensor.zeros_like()?;
         let attention_mask_tensor = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
-        
+
         // Run the text through BERT
         let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, Some(&attention_mask_tensor))?;
-        
+
         // Implement proper mean pooling for SentenceTransformer
         // Sum over token dimension (dim=1) and divide by attention mask sum to get mean
         let embedding_sum = embeddings.sum(1)?;
         let attention_mask_sum = attention_mask_tensor.to_dtype(embeddings.dtype())?.sum(1)?;
         let pooled_embedding = embedding_sum.broadcast_div(&attention_mask_sum)?;
-        
+
         // Get the dimensions and convert to the right type
         let pooled_embedding = pooled_embedding.to_dtype(DType::F32)?;
-        
+
         // Apply the linear layer (classification head) manually
         let weights = self.classification_head.weight().to_dtype(DType::F32)?;
         let bias = self.classification_head.bias().unwrap().to_dtype(DType::F32)?;
-        
+
         // Use matmul with the weights matrix
         // If weights are already transposed to [in_features, out_features]
         let logits = pooled_embedding.matmul(&weights)?;
-        
+
         // Add bias
         let logits = logits.broadcast_add(&bias)?;
-        
+
         // If logits has shape [1, num_classes], squeeze it to get [num_classes]
         let logits = if logits.dims().len() > 1 {
             logits.squeeze(0)?
         } else {
             logits
         };
-        
+
         // Apply softmax to get probabilities
         let logits_vec = logits.to_vec1::<f32>()?;
         let max_logit = logits_vec.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
         let exp_values: Vec<f32> = logits_vec.iter().map(|&x| (x - max_logit).exp()).collect();
         let exp_sum: f32 = exp_values.iter().sum();
         let probabilities: Vec<f32> = exp_values.iter().map(|&x| x / exp_sum).collect();
-        
+
         // Get the predicted class with highest probability
         let (predicted_idx, &max_prob) = probabilities.iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((0, &0.0));
-        
+
         // Ensure we don't return a class index outside our expected range
         if predicted_idx >= self.num_classes {
             return Err(E::msg(format!(
@@ -506,7 +506,7 @@ impl BertClassifier {
                 predicted_idx, self.num_classes
             )));
         }
-        
+
         Ok((predicted_idx, max_prob))
     }
 }
@@ -544,21 +544,21 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
     match bert.tokenize_text(text, max_length_opt) {
         Ok((token_ids, tokens)) => {
             let count = token_ids.len() as i32;
-            
+
             // Allocate memory for token IDs
             let ids_ptr = token_ids.as_ptr() as *mut i32;
-            
+
             // Allocate memory for tokens
             let c_tokens: Vec<*mut c_char> = tokens.iter()
                 .map(|s| CString::new(s.as_str()).unwrap().into_raw())
                 .collect();
-            
+
             let tokens_ptr = c_tokens.as_ptr() as *mut *mut c_char;
-            
+
             // Don't drop the vectors - Go will own the memory now
             std::mem::forget(token_ids);
             std::mem::forget(c_tokens);
-            
+
             TokenizationResult {
                 token_ids: ids_ptr,
                 token_count: count,
@@ -585,7 +585,7 @@ pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
         unsafe {
             // Reconstruct and drop the token_ids vector
             let _ids_vec = Vec::from_raw_parts(result.token_ids, result.token_count as usize, result.token_count as usize);
-            
+
             // Reconstruct and drop each token string
             if !result.tokens.is_null() {
                 let tokens_slice = std::slice::from_raw_parts(result.tokens, result.token_count as usize);
@@ -594,7 +594,7 @@ pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
                         let _ = CString::from_raw(token_ptr);
                     }
                 }
-                
+
                 // Reconstruct and drop the tokens vector
                 let _tokens_vec = Vec::from_raw_parts(result.tokens, result.token_count as usize, result.token_count as usize);
             }
@@ -718,7 +718,7 @@ pub extern "C" fn calculate_similarity(text1: *const c_char, text2: *const c_cha
             Err(_) => return -1.0,
         }
     };
-    
+
     let text2 = unsafe {
         match CStr::from_ptr(text2).to_str() {
             Ok(s) => s,
@@ -748,7 +748,7 @@ pub extern "C" fn calculate_similarity(text1: *const c_char, text2: *const c_cha
 // Find most similar text from a list (called from Go)
 #[no_mangle]
 pub extern "C" fn find_most_similar(
-    query: *const c_char, 
+    query: *const c_char,
     candidates_ptr: *const *const c_char,
     num_candidates: i32,
     max_length: i32
@@ -759,19 +759,19 @@ pub extern "C" fn find_most_similar(
             Err(_) => return SimilarityResult { index: -1, score: -1.0 },
         }
     };
-    
+
     // Convert the array of C strings to Rust strings
     let candidates: Vec<&str> = unsafe {
         let mut result = Vec::with_capacity(num_candidates as usize);
         let candidates_slice = std::slice::from_raw_parts(candidates_ptr, num_candidates as usize);
-        
+
         for &cstr in candidates_slice {
             match CStr::from_ptr(cstr).to_str() {
                 Ok(s) => result.push(s),
                 Err(_) => return SimilarityResult { index: -1, score: -1.0 },
             }
         }
-        
+
         result
     };
 
@@ -786,9 +786,9 @@ pub extern "C" fn find_most_similar(
 
     let max_length_opt = if max_length <= 0 { None } else { Some(max_length as usize) };
     match bert.find_most_similar(query, &candidates, max_length_opt) {
-        Ok((idx, score)) => SimilarityResult { 
-            index: idx as i32, 
-            score 
+        Ok((idx, score)) => SimilarityResult {
+            index: idx as i32,
+            score
         },
         Err(e) => {
             eprintln!("Error finding most similar: {}", e);
@@ -1019,4 +1019,4 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
             default_result
         }
     }
-} 
+}

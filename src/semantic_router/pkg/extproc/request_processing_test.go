@@ -14,7 +14,6 @@ import (
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
-
 )
 
 var _ = Describe("Request Processing", func() {
@@ -291,7 +290,7 @@ var _ = Describe("Request Processing", func() {
 
 				response, err := router.HandleRequestBody(bodyRequest, ctx)
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				// Should process successfully even if tools selection fails
 				bodyResp := response.GetRequestBody()
 				Expect(bodyResp.Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
@@ -299,7 +298,7 @@ var _ = Describe("Request Processing", func() {
 
 			It("should fallback to empty tools on error", func() {
 				cfg.Tools.FallbackToEmpty = true
-				
+
 				request := map[string]interface{}{
 					"model": "model-a",
 					"messages": []map[string]interface{}{

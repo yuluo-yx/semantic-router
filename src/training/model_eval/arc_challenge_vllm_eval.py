@@ -10,7 +10,7 @@ import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -32,60 +32,46 @@ def parse_args():
         "--endpoint",
         type=str,
         default="http://localhost:8000/v1",
-        help="vLLM OpenAI API endpoint URL"
+        help="vLLM OpenAI API endpoint URL",
     )
     parser.add_argument(
         "--models",
         type=str,
         nargs="+",
-        help="List of model names to evaluate. If not provided, will be fetched from the API."
+        help="List of model names to evaluate. If not provided, will be fetched from the API.",
     )
     parser.add_argument(
         "--samples",
         type=int,
         default=20,
-        help="Number of questions to sample. If not provided, all questions will be used."
+        help="Number of questions to sample. If not provided, all questions will be used.",
     )
     parser.add_argument(
-        "--api-key",
-        type=str,
-        default="",
-        help="API key for vLLM endpoint"
+        "--api-key", type=str, default="", help="API key for vLLM endpoint"
     )
     parser.add_argument(
-        "--use-cot",
-        action="store_true",
-        help="Use Chain-of-Thought prompting"
+        "--use-cot", action="store_true", help="Use Chain-of-Thought prompting"
     )
     parser.add_argument(
         "--concurrent-requests",
         type=int,
         default=1,
-        help="Number of concurrent requests to make"
+        help="Number of concurrent requests to make",
     )
     parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="results",
-        help="Directory to save results"
+        "--output-dir", type=str, default="results", help="Directory to save results"
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
         default=2048,
-        help="Maximum number of tokens to generate"
+        help="Maximum number of tokens to generate",
     )
     parser.add_argument(
-        "--temperature",
-        type=float,
-        default=0.0,
-        help="Temperature for text generation"
+        "--temperature", type=float, default=0.0, help="Temperature for text generation"
     )
     parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility"
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
     )
     return parser.parse_args()
 
@@ -103,7 +89,9 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
         return []
 
 
-def load_arc_challenge_dataset(samples: Optional[int] = None, seed: int = 42) -> pd.DataFrame:
+def load_arc_challenge_dataset(
+    samples: Optional[int] = None, seed: int = 42
+) -> pd.DataFrame:
     dataset = load_dataset("allenai/ai2_arc", "ARC-Challenge", split="train")
     df = pd.DataFrame(dataset)
     if samples:
@@ -114,7 +102,9 @@ def load_arc_challenge_dataset(samples: Optional[int] = None, seed: int = 42) ->
     return df
 
 
-def format_cot_prompt_arc(question: str, choices: Dict[str, List[str]], use_cot: bool = False) -> str:
+def format_cot_prompt_arc(
+    question: str, choices: Dict[str, List[str]], use_cot: bool = False
+) -> str:
     formatted_options = ""
     for label, text in zip(choices["label"], choices["text"]):
         formatted_options += f"{label}) {text}\n"
@@ -136,7 +126,9 @@ def extract_answer_arc(response: str) -> Optional[str]:
     return None
 
 
-def call_model_with_retry(client: OpenAI, model: str, prompt: str, max_tokens: int, temperature: float) -> (str, bool):
+def call_model_with_retry(
+    client: OpenAI, model: str, prompt: str, max_tokens: int, temperature: float
+) -> (str, bool):
     for attempt in range(MAX_RETRIES):
         try:
             response = client.chat.completions.create(
@@ -148,15 +140,24 @@ def call_model_with_retry(client: OpenAI, model: str, prompt: str, max_tokens: i
             return response.choices[0].message.content, True
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
-                delay = 2 ** attempt
-                print(f"Error calling model (attempt {attempt+1}/{MAX_RETRIES}), retrying in {delay}s: {e}")
+                delay = 2**attempt
+                print(
+                    f"Error calling model (attempt {attempt+1}/{MAX_RETRIES}), retrying in {delay}s: {e}"
+                )
                 time.sleep(delay)
             else:
                 print(f"Failed to call model after {MAX_RETRIES} attempts: {e}")
                 return "ERROR", False
 
 
-def process_question_arc(client: OpenAI, model: str, question_data: Dict[str, Any], use_cot: bool, max_tokens: int, temperature: float) -> Dict[str, Any]:
+def process_question_arc(
+    client: OpenAI,
+    model: str,
+    question_data: Dict[str, Any],
+    use_cot: bool,
+    max_tokens: int,
+    temperature: float,
+) -> Dict[str, Any]:
     question = question_data["question"]
     choices = question_data["choices"]
     correct_answer = question_data["answerKey"]
@@ -165,7 +166,9 @@ def process_question_arc(client: OpenAI, model: str, question_data: Dict[str, An
         f.write(f"Prompt: {prompt}\n")
         f.write(f"Correct answer: {correct_answer}\n\n")
     start_time = time.time()
-    response_text, success = call_model_with_retry(client, model, prompt, max_tokens, temperature)
+    response_text, success = call_model_with_retry(
+        client, model, prompt, max_tokens, temperature
+    )
     end_time = time.time()
     predicted_answer = extract_answer_arc(response_text) if success else None
     is_correct = (predicted_answer == correct_answer) if predicted_answer else False
@@ -179,15 +182,24 @@ def process_question_arc(client: OpenAI, model: str, question_data: Dict[str, An
         "predicted_answer": predicted_answer,
         "is_correct": is_correct,
         "response_time": end_time - start_time,
-        "success": success
+        "success": success,
     }
 
 
-def evaluate_model_arc(df: pd.DataFrame, model: str, endpoint: str, api_key: str, use_cot: bool, concurrent_requests: int, max_tokens: int, temperature: float) -> pd.DataFrame:
+def evaluate_model_arc(
+    df: pd.DataFrame,
+    model: str,
+    endpoint: str,
+    api_key: str,
+    use_cot: bool,
+    concurrent_requests: int,
+    max_tokens: int,
+    temperature: float,
+) -> pd.DataFrame:
     client = OpenAI(base_url=endpoint, api_key=api_key if api_key else "dummy")
     print(f"Using model: {model}, endpoint: {endpoint}, api_key: {api_key}")
     results = []
-    questions_data = df.to_dict('records')
+    questions_data = df.to_dict("records")
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = []
         for question_data in questions_data:
@@ -198,7 +210,7 @@ def evaluate_model_arc(df: pd.DataFrame, model: str, endpoint: str, api_key: str
                 question_data,
                 use_cot,
                 max_tokens,
-                temperature
+                temperature,
             )
             futures.append(future)
         for future in tqdm(futures, total=len(futures), desc=f"Evaluating {model}"):
@@ -210,8 +222,12 @@ def evaluate_model_arc(df: pd.DataFrame, model: str, endpoint: str, api_key: str
 
 def analyze_results_arc(results_df: pd.DataFrame) -> Dict[str, float]:
     valid_results = results_df[results_df["success"]]
-    overall_accuracy = valid_results["is_correct"].mean() if not valid_results.empty else 0.0
-    avg_response_time = valid_results["response_time"].mean() if not valid_results.empty else 0.0
+    overall_accuracy = (
+        valid_results["is_correct"].mean() if not valid_results.empty else 0.0
+    )
+    avg_response_time = (
+        valid_results["response_time"].mean() if not valid_results.empty else 0.0
+    )
     return {
         "overall_accuracy": overall_accuracy,
         "avg_response_time": avg_response_time,
@@ -221,7 +237,13 @@ def analyze_results_arc(results_df: pd.DataFrame) -> Dict[str, float]:
     }
 
 
-def save_results_arc(results_df: pd.DataFrame, analysis: Dict[str, Any], model: str, output_dir: str, use_cot: bool):
+def save_results_arc(
+    results_df: pd.DataFrame,
+    analysis: Dict[str, Any],
+    model: str,
+    output_dir: str,
+    use_cot: bool,
+):
     model_name = model.replace("/", "_")
     cot_suffix = "cot" if use_cot else "direct"
     os.makedirs(output_dir, exist_ok=True)
@@ -241,7 +263,7 @@ def save_results_arc(results_df: pd.DataFrame, analysis: Dict[str, Any], model: 
     }
     with open(os.path.join(model_dir, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print(f"Model: {model}")
     print(f"Approach: {'Chain-of-Thought' if use_cot else 'Direct'}")
     print(f"Overall Accuracy: {analysis['overall_accuracy']:.4f}")
@@ -249,7 +271,7 @@ def save_results_arc(results_df: pd.DataFrame, analysis: Dict[str, Any], model: 
     print(f"Successful Queries: {analysis['successful_queries']}")
     print(f"Failed Queries: {analysis['failed_queries']}")
     print(f"Average Response Time: {analysis['avg_response_time']:.2f}s")
-    print("="*50 + "\n")
+    print("=" * 50 + "\n")
 
 
 def main():
@@ -260,11 +282,13 @@ def main():
         print("Fetching available models from vLLM endpoint...")
         models = get_available_models(args.endpoint, args.api_key)
         if not models:
-            print("Could not retrieve models from the endpoint. Please specify models using --models.")
+            print(
+                "Could not retrieve models from the endpoint. Please specify models using --models."
+            )
             return
         args.models = models
-    if args.models and len(args.models) == 1 and ',' in args.models[0]:
-        args.models = args.models[0].split(',')
+    if args.models and len(args.models) == 1 and "," in args.models[0]:
+        args.models = args.models[0].split(",")
     print(f"Models to evaluate: {args.models}")
     print("Loading ARC Challenge dataset...")
     df = load_arc_challenge_dataset(samples=args.samples, seed=args.seed)
@@ -279,7 +303,7 @@ def main():
             use_cot=args.use_cot,
             concurrent_requests=args.concurrent_requests,
             max_tokens=args.max_tokens,
-            temperature=args.temperature
+            temperature=args.temperature,
         )
         analysis = analyze_results_arc(results_df)
         save_results_arc(
@@ -287,9 +311,9 @@ def main():
             analysis=analysis,
             model=model,
             output_dir=args.output_dir,
-            use_cot=args.use_cot
+            use_cot=args.use_cot,
         )
 
 
 if __name__ == "__main__":
-    main() 
+    main()

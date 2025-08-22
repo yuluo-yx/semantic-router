@@ -1,17 +1,24 @@
 import json
 import os
+import traceback
+
 import numpy as np
 import torch
-import traceback
 from sentence_transformers import SentenceTransformer
+
 
 def load_category_mapping(path):
     """Load the category mapping from a JSON file"""
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         mapping = json.load(f)
     return mapping
 
-def predict_category(model_path, question, mapping_path="../../../models/category_classifier_modernbert-base_model/category_mapping.json"):
+
+def predict_category(
+    model_path,
+    question,
+    mapping_path="../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+):
     """Predict category for a given question using the trained model"""
     # Load the category mapping
     with open(mapping_path, "r") as f:
@@ -20,7 +27,7 @@ def predict_category(model_path, question, mapping_path="../../../models/categor
 
     # Load the model
     model = SentenceTransformer(model_path)
-    
+
     # Get logits directly from model.encode
     logits_np = model.encode(question, show_progress_bar=False)
     logits_tensor = torch.tensor(logits_np)
@@ -33,8 +40,10 @@ def predict_category(model_path, question, mapping_path="../../../models/categor
     predicted_idx = predicted_idx_tensor.item()
     confidence = confidence_tensor.item()
 
-    predicted_category = idx_to_category.get(predicted_idx, f"Unknown category {predicted_idx}")
-    
+    predicted_category = idx_to_category.get(
+        predicted_idx, f"Unknown category {predicted_idx}"
+    )
+
     return predicted_category, confidence
 
 
@@ -81,40 +90,49 @@ def main():
     for i, query in enumerate(queries):
         try:
             # Call the predict_category function
-            category_name, confidence = predict_category(model_path, query, mapping_path)
-            
+            category_name, confidence = predict_category(
+                model_path, query, mapping_path
+            )
+
             # Print the result
             print(f"{i+1}. Query: {query}")
             print(f"   Classified as: {category_name} (Confidence: {confidence:.4f})")
             print()
-            
+
             # Store the result in the dictionary
             results[query] = {
-                'category': category_name,
-                'confidence': float(confidence),
-                'class_id': next((int(idx) for idx, name in mapping["idx_to_category"].items() 
-                                  if name == category_name), None)
+                "category": category_name,
+                "confidence": float(confidence),
+                "class_id": next(
+                    (
+                        int(idx)
+                        for idx, name in mapping["idx_to_category"].items()
+                        if name == category_name
+                    ),
+                    None,
+                ),
             }
-            
+
         except Exception as e:
             print(f"Query {i+1}: Classification failed: {e}")
             traceback.print_exc()
             continue
-    
+
     print("\nTest complete!")
-    
+
     return results
+
 
 if __name__ == "__main__":
     # Run the classification
     results = main()
-    
+
     # Save the results to a file for comparison
     if results:
         try:
             # Save Python results
-            with open('python_classification_results.json', 'w') as f:
+            with open("python_classification_results.json", "w") as f:
                 json.dump(results, f, indent=2)
             print(f"Results saved to python_classification_results.json")
         except Exception as e:
-            print(f"Failed to save results: {e}") 
+            print(f"Failed to save results: {e}")

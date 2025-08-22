@@ -21,10 +21,10 @@ var jailbreakLabels map[int]string
 
 // Configuration for model type
 type ModelConfig struct {
-	UseModernBERT         bool
-	JailbreakModelPath    string
-	SimilarityModelPath   string
-	UseCPU                bool
+	UseModernBERT       bool
+	JailbreakModelPath  string
+	SimilarityModelPath string
+	UseCPU              bool
 }
 
 // loadJailbreakMapping loads jailbreak labels from JSON file
@@ -66,16 +66,16 @@ func initializeModels(config ModelConfig) error {
 
 	// Initialize jailbreak classifier
 	if jailbreakLabels != nil {
-		fmt.Printf("\nInitializing jailbreak classifier (%s): %s\n", 
-			map[bool]string{true: "ModernBERT", false: "BERT"}[config.UseModernBERT], 
+		fmt.Printf("\nInitializing jailbreak classifier (%s): %s\n",
+			map[bool]string{true: "ModernBERT", false: "BERT"}[config.UseModernBERT],
 			config.JailbreakModelPath)
-		
+
 		if config.UseModernBERT {
 			err = candle.InitModernBertJailbreakClassifier(config.JailbreakModelPath, config.UseCPU)
 		} else {
 			err = candle.InitJailbreakClassifier(config.JailbreakModelPath, len(jailbreakLabels), config.UseCPU)
 		}
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to initialize jailbreak classifier: %v", err)
 		}
@@ -109,14 +109,14 @@ func main() {
 	flag.Parse()
 
 	config := ModelConfig{
-		UseModernBERT:         *useModernBERT,
-		JailbreakModelPath:    *jailbreakPath,
-		SimilarityModelPath:   *simPath,
-		UseCPU:                *useCPU,
+		UseModernBERT:       *useModernBERT,
+		JailbreakModelPath:  *jailbreakPath,
+		SimilarityModelPath: *simPath,
+		UseCPU:              *useCPU,
 	}
 	fmt.Println("Jailbreak Classifier Verifier")
 	fmt.Println("=============================")
-	
+
 	err := loadJailbreakMapping(config.JailbreakModelPath)
 	if err != nil {
 		log.Printf("Failed to load jailbreak mappings: %v", err)

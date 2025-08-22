@@ -31,10 +31,10 @@ type PIIDetection struct {
 
 // PIIAnalysisResult represents the result of PII analysis for content
 type PIIAnalysisResult struct {
-	Content      string        `json:"content"`
-	HasPII       bool          `json:"has_pii"`
+	Content      string         `json:"content"`
+	HasPII       bool           `json:"has_pii"`
 	Entities     []PIIDetection `json:"entities"`
-	ContentIndex int           `json:"content_index"`
+	ContentIndex int            `json:"content_index"`
 }
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
@@ -114,7 +114,7 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 	// Use appropriate jailbreak classifier based on configuration
 	var result candle_binding.ClassResult
 	var err error
-	
+
 	if c.Config.PromptGuard.UseModernBERT {
 		// Use ModernBERT jailbreak classifier
 		result, err = candle_binding.ClassifyModernBertJailbreakText(text)
@@ -122,7 +122,7 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 		// Use linear jailbreak classifier
 		result, err = candle_binding.ClassifyJailbreakText(text)
 	}
-	
+
 	if err != nil {
 		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
@@ -195,7 +195,7 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 	// Use appropriate classifier based on configuration
 	var result candle_binding.ClassResult
 	var err error
-	
+
 	if c.Config.Classifier.CategoryModel.UseModernBERT {
 		// Use ModernBERT classifier
 		result, err = candle_binding.ClassifyModernBertText(text)
@@ -203,7 +203,7 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 		// Use linear classifier
 		result, err = candle_binding.ClassifyText(text)
 	}
-	
+
 	if err != nil {
 		return "", 0.0, fmt.Errorf("classification error: %w", err)
 	}
@@ -259,7 +259,7 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 			piiTypes[entity.EntityType] = true
 			log.Printf("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
 				entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
-		} 
+		}
 	}
 
 	// Convert to slice

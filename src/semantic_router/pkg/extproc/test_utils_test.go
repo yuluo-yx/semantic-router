@@ -1,21 +1,21 @@
 package extproc_test
 
 import (
-    "context"
-    "fmt"
-    "io"
-    "log"
+	"context"
+	"fmt"
+	"io"
+	"log"
 
-    ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-    "google.golang.org/grpc/metadata"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/grpc/metadata"
 
-    candle_binding "github.com/redhat-et/semantic_route/candle-binding"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/utils/classification"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
+	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/classification"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
 )
 
 // MockStream implements the ext_proc.ExternalProcessor_ProcessServer interface for testing
@@ -50,7 +50,7 @@ func (m *MockStream) Recv() (*ext_proc.ProcessingRequest, error) {
 		return nil, m.RecvError
 	}
 	if m.RecvIndex >= len(m.Requests) {
-        return nil, io.EOF // Simulate end of stream
+		return nil, io.EOF // Simulate end of stream
 	}
 	req := m.Requests[m.RecvIndex]
 	m.RecvIndex++
@@ -61,11 +61,11 @@ func (m *MockStream) Context() context.Context {
 	return m.Ctx
 }
 
-func (m *MockStream) SendMsg(interface{}) error { return nil }
-func (m *MockStream) RecvMsg(interface{}) error { return nil }
-func (m *MockStream) SetHeader(metadata.MD) error { return nil }
+func (m *MockStream) SendMsg(interface{}) error    { return nil }
+func (m *MockStream) RecvMsg(interface{}) error    { return nil }
+func (m *MockStream) SetHeader(metadata.MD) error  { return nil }
 func (m *MockStream) SendHeader(metadata.MD) error { return nil }
-func (m *MockStream) SetTrailer(metadata.MD) {}
+func (m *MockStream) SetTrailer(metadata.MD)       {}
 
 var _ ext_proc.ExternalProcessor_ProcessServer = &MockStream{}
 
@@ -98,10 +98,10 @@ func CreateTestConfig() *config.RouterConfig {
 			LoadAware bool `yaml:"load_aware"`
 		}{
 			CategoryModel: struct {
-				ModelID       string  `yaml:"model_id"`
-				Threshold     float32 `yaml:"threshold"`
-				UseCPU        bool    `yaml:"use_cpu"`
-				UseModernBERT bool    `yaml:"use_modernbert"`
+				ModelID             string  `yaml:"model_id"`
+				Threshold           float32 `yaml:"threshold"`
+				UseCPU              bool    `yaml:"use_cpu"`
+				UseModernBERT       bool    `yaml:"use_modernbert"`
 				CategoryMappingPath string  `yaml:"category_mapping_path"`
 			}{
 				ModelID:             "../../../../models/category_classifier_modernbert-base_model",
@@ -221,7 +221,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 
 	// Create classifier
 	modelTTFT := map[string]float64{
-		"model-a":        2.5,
+		"model-a": 2.5,
 		"model-b": 1.8,
 	}
 	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil, modelTTFT)

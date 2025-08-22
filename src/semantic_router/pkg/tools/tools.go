@@ -15,10 +15,10 @@ import (
 // ToolEntry represents a tool stored in the tools database
 type ToolEntry struct {
 	Tool        openai.ChatCompletionToolParam `json:"tool"`
-	Description string                          `json:"description"` // Used for similarity matching
-	Embedding   []float32                       `json:"-"`           // Generated from description
-	Tags        []string                        `json:"tags,omitempty"`
-	Category    string                          `json:"category,omitempty"`
+	Description string                         `json:"description"` // Used for similarity matching
+	Embedding   []float32                      `json:"-"`           // Generated from description
+	Tags        []string                       `json:"tags,omitempty"`
+	Category    string                         `json:"category,omitempty"`
 }
 
 // ToolsDatabase manages a collection of tools with semantic search capabilities

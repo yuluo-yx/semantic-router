@@ -99,19 +99,19 @@ extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const c
 import "C"
 
 var (
-	initOnce                          sync.Once
-	initErr                           error
-	modelInitialized                  bool
-	classifierInitOnce                sync.Once
-	classifierInitErr                 error
-	piiClassifierInitOnce             sync.Once
-	piiClassifierInitErr              error
-	jailbreakClassifierInitOnce       sync.Once
-	jailbreakClassifierInitErr        error
-	modernbertClassifierInitOnce      sync.Once
-	modernbertClassifierInitErr       error
-	modernbertPiiClassifierInitOnce   sync.Once
-	modernbertPiiClassifierInitErr    error
+	initOnce                              sync.Once
+	initErr                               error
+	modelInitialized                      bool
+	classifierInitOnce                    sync.Once
+	classifierInitErr                     error
+	piiClassifierInitOnce                 sync.Once
+	piiClassifierInitErr                  error
+	jailbreakClassifierInitOnce           sync.Once
+	jailbreakClassifierInitErr            error
+	modernbertClassifierInitOnce          sync.Once
+	modernbertClassifierInitErr           error
+	modernbertPiiClassifierInitOnce       sync.Once
+	modernbertPiiClassifierInitErr        error
 	modernbertJailbreakClassifierInitOnce sync.Once
 	modernbertJailbreakClassifierInitErr  error
 	modernbertPiiTokenClassifierInitOnce  sync.Once
@@ -632,7 +632,7 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	}, nil
 }
 
-// ClassifyModernBertPIITokens performs token-level PII classification using ModernBERT 
+// ClassifyModernBertPIITokens performs token-level PII classification using ModernBERT
 // and returns detected entities with their positions and confidence scores
 func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClassificationResult, error) {
 	// Validate inputs
@@ -646,13 +646,13 @@ func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClas
 	// Convert Go strings to C strings
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
-	
+
 	cConfigPath := C.CString(modelConfigPath)
 	defer C.free(unsafe.Pointer(cConfigPath))
 
 	// Call the Rust function
 	result := C.classify_modernbert_pii_tokens(cText, cConfigPath)
-	
+
 	// Defer memory cleanup - this is crucial to prevent memory leaks
 	defer C.free_modernbert_token_result(result)
 
@@ -676,7 +676,7 @@ func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClas
 	// Convert each C entity to Go entity
 	for i := 0; i < numEntities; i++ {
 		cEntity := &cEntities[i]
-		
+
 		entities[i] = TokenEntity{
 			EntityType: C.GoString(cEntity.entity_type),
 			Start:      int(cEntity.start),
@@ -690,4 +690,3 @@ func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClas
 		Entities: entities,
 	}, nil
 }
-

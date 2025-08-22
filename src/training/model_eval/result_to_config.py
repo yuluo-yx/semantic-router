@@ -1,11 +1,12 @@
 # analyze_mmlu_results.py - Analyzes MMLU-Pro results and generates optimized config.yaml
 
-import os
-import json
-import glob
-import yaml
-from collections import defaultdict
 import argparse
+import glob
+import json
+import os
+from collections import defaultdict
+
+import yaml
 
 
 def parse_args():
@@ -16,19 +17,19 @@ def parse_args():
         "--results-dir",
         type=str,
         default="results",
-        help="Directory containing MMLU-Pro results"
+        help="Directory containing MMLU-Pro results",
     )
     parser.add_argument(
         "--output-file",
         type=str,
         default="config/config.yaml",
-        help="Output file for the config.yaml"
+        help="Output file for the config.yaml",
     )
     parser.add_argument(
         "--similarity-threshold",
         type=float,
         default=0.80,
-        help="Similarity threshold for semantic cache"
+        help="Similarity threshold for semantic cache",
     )
     return parser.parse_args()
 
@@ -37,10 +38,12 @@ def collect_model_accuracies(results_dir):
     """Collect all model accuracies by category from result files."""
     # Dictionary to store category accuracies for each model
     category_accuracies = defaultdict(lambda: defaultdict(float))
-    
+
     # Find all analysis.json files
-    analysis_files = glob.glob(os.path.join(results_dir, "**/analysis.json"), recursive=True)
-    
+    analysis_files = glob.glob(
+        os.path.join(results_dir, "**/analysis.json"), recursive=True
+    )
+
     for file_path in analysis_files:
         # Extract model name from directory path
         dir_name = os.path.basename(os.path.dirname(file_path))
@@ -51,19 +54,21 @@ def collect_model_accuracies(results_dir):
         else:
             model_name = dir_name.replace("_direct", "")
             approach = "direct"
-        
+
         # Convert underscores back to slashes in model name
-        model_name = model_name.replace("_", "/", 1) if "_" in model_name else model_name
+        model_name = (
+            model_name.replace("_", "/", 1) if "_" in model_name else model_name
+        )
         model_display_name = f"{model_name}:{approach}"
-        
+
         # Load analysis data
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             analysis = json.load(f)
-        
+
         # Store category accuracies
         for category, accuracy in analysis.get("category_accuracy", {}).items():
             category_accuracies[category][model_display_name] = accuracy
-    
+
     return category_accuracies
 
 
@@ -74,21 +79,21 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
         "bert_model": {
             "model_id": "sentence-transformers/all-MiniLM-L12-v2",
             "threshold": 0.6,
-            "use_cpu": True
+            "use_cpu": True,
         },
         "semantic_cache": {
             "enabled": True,
             "similarity_threshold": similarity_threshold,
             "max_entries": 1000,
-            "ttl_seconds": 3600
+            "ttl_seconds": 3600,
         },
         "classifier": {
             "model_id": "models/category_classifier_modernbert-base_model",
             "threshold": 0.1,
             "use_cpu": True,
-            "category_mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json"
+            "category_mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json",
         },
-        "categories": []
+        "categories": [],
     }
 
     # Get the best model overall to use as default (excluding 'auto')
@@ -119,14 +124,10 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
         ]
         # Build the model_scores list
         model_scores = [
-            {"model": model, "score": float(acc)}
-            for model, acc in ranked_models
+            {"model": model, "score": float(acc)} for model, acc in ranked_models
         ]
         # Add category to config
-        config["categories"].append({
-            "name": category,
-            "model_scores": model_scores
-        })
+        config["categories"].append({"name": category, "model_scores": model_scores})
 
     return config
 
@@ -135,25 +136,25 @@ def save_config(config, output_file):
     """Save the config dictionary as a YAML file."""
     # Ensure the output directory exists
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    
-    with open(output_file, 'w') as f:
+
+    with open(output_file, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-    
+
     print(f"Config saved to {output_file}")
 
 
 def main():
     args = parse_args()
-    
+
     print(f"Analyzing MMLU-Pro results in {args.results_dir}...")
     category_accuracies = collect_model_accuracies(args.results_dir)
-    
+
     print(f"Generating config.yaml...")
     config = generate_config_yaml(category_accuracies, args.similarity_threshold)
-    
+
     print(f"Saving config to {args.output_file}...")
     save_config(config, args.output_file)
-    
+
     print("Done!")
 
 

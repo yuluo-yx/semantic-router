@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	testPIIModelID          = "../../../../models/pii_classifier_modernbert-base_presidio_token_model"
-	testPIIMappingPath      = "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
-	testPIIThreshold        = 0.5
+	testPIIModelID     = "../../../../models/pii_classifier_modernbert-base_presidio_token_model"
+	testPIIMappingPath = "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+	testPIIThreshold   = 0.5
 )
 
 var _ = Describe("Security Checks", func() {
@@ -43,7 +43,7 @@ var _ = Describe("Security Checks", func() {
 		BeforeEach(func() {
 			cfg.Classifier.PIIModel.ModelID = testPIIModelID
 			cfg.Classifier.PIIModel.PIIMappingPath = testPIIMappingPath
-			
+
 			// Create a restrictive PII policy
 			cfg.ModelConfig["model-a"] = config.ModelParams{
 				PIIPolicy: config.PIIPolicy{
@@ -92,21 +92,21 @@ var _ = Describe("Security Checks", func() {
 			cfg.Classifier.PIIModel.ModelID = testPIIModelID
 			cfg.Classifier.PIIModel.PIIMappingPath = testPIIMappingPath
 			cfg.Classifier.PIIModel.Threshold = testPIIThreshold
-			
+
 			// Reload classifier with PII mapping
 			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
-			
+
 			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil, router.Classifier.ModelTTFT)
 		})
 
 		Describe("ClassifyPII method", func() {
 			It("should detect multiple PII types in text with token classification", func() {
 				text := "My email is john.doe@example.com and my phone is (555) 123-4567"
-				
+
 				piiTypes, err := router.Classifier.ClassifyPII(text)
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				// If PII classifier is available, should detect entities
 				// If not available (candle-binding issues), should return empty slice gracefully
 				if len(piiTypes) > 0 {
@@ -123,7 +123,7 @@ var _ = Describe("Security Checks", func() {
 
 			It("should return empty slice for text with no PII", func() {
 				text := "What is the weather like today? It's a beautiful day."
-				
+
 				piiTypes, err := router.Classifier.ClassifyPII(text)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(piiTypes).To(BeEmpty())
@@ -139,14 +139,14 @@ var _ = Describe("Security Checks", func() {
 				// Set a very high threshold to filter out detections
 				originalThreshold := cfg.Classifier.PIIModel.Threshold
 				cfg.Classifier.PIIModel.Threshold = 0.99
-				
+
 				text := "Contact me at test@example.com"
 				piiTypes, err := router.Classifier.ClassifyPII(text)
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				// With high threshold, should detect fewer entities
 				Expect(len(piiTypes)).To(BeNumerically("<=", 1))
-				
+
 				// Restore original threshold
 				cfg.Classifier.PIIModel.Threshold = originalThreshold
 			})
@@ -168,15 +168,15 @@ var _ = Describe("Security Checks", func() {
 				// Check if PII classifier is available by testing with known PII text
 				testPII, err := router.Classifier.ClassifyPII("test@example.com")
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				if len(testPII) == 0 {
 					Skip("PII classifier not available (candle-binding dependency missing)")
 				}
-				
+
 				for _, tc := range testCases {
 					piiTypes, err := router.Classifier.ClassifyPII(tc.text)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed for case: %s", tc.description))
-					
+
 					if tc.shouldFind {
 						Expect(len(piiTypes)).To(BeNumerically(">", 0), fmt.Sprintf("Should detect PII in: %s", tc.description))
 					}
@@ -193,9 +193,9 @@ var _ = Describe("Security Checks", func() {
 					"This is just regular text",
 					"Another email: user2@test.org and phone (555) 333-4444",
 				}
-				
+
 				detectedPII := router.Classifier.DetectPIIInContent(contentList)
-				
+
 				// If PII classifier is available, should detect entities
 				// If not available (candle-binding issues), should return empty slice gracefully
 				if len(detectedPII) > 0 {
@@ -227,10 +227,10 @@ var _ = Describe("Security Checks", func() {
 					"Valid email: test@example.com",
 					"Normal text without PII",
 				}
-				
+
 				// This should not cause the entire operation to fail
 				detectedPII := router.Classifier.DetectPIIInContent(contentList)
-				
+
 				// Should still process valid content
 				Expect(len(detectedPII)).To(BeNumerically(">=", 0))
 			})
@@ -241,19 +241,19 @@ var _ = Describe("Security Checks", func() {
 				contentList := []string{
 					"Contact John at john.doe@example.com or call (555) 123-4567",
 				}
-				
+
 				hasPII, results, err := router.Classifier.AnalyzeContentForPII(contentList)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(results)).To(Equal(1))
-				
+
 				firstResult := results[0]
 				Expect(firstResult.Content).To(Equal(contentList[0]))
 				Expect(firstResult.ContentIndex).To(Equal(0))
-				
+
 				if hasPII {
 					Expect(firstResult.HasPII).To(BeTrue())
 					Expect(len(firstResult.Entities)).To(BeNumerically(">", 0))
-					
+
 					// Validate entity structure
 					for _, entity := range firstResult.Entities {
 						Expect(entity.EntityType).NotTo(BeEmpty())
@@ -262,7 +262,7 @@ var _ = Describe("Security Checks", func() {
 						Expect(entity.End).To(BeNumerically(">", entity.Start))
 						Expect(entity.Confidence).To(BeNumerically(">=", 0))
 						Expect(entity.Confidence).To(BeNumerically("<=", 1))
-						
+
 						// Verify that the extracted text matches the span
 						if entity.Start < len(firstResult.Content) && entity.End <= len(firstResult.Content) {
 							extractedText := firstResult.Content[entity.Start:entity.End]
@@ -285,11 +285,11 @@ var _ = Describe("Security Checks", func() {
 					"How do I cook pasta?",
 					"Explain quantum physics",
 				}
-				
+
 				hasPII, results, err := router.Classifier.AnalyzeContentForPII(contentList)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(hasPII).To(BeFalse())
-				
+
 				for _, result := range results {
 					Expect(result.HasPII).To(BeFalse())
 					Expect(len(result.Entities)).To(Equal(0))
@@ -298,22 +298,22 @@ var _ = Describe("Security Checks", func() {
 
 			It("should detect various entity types with correct metadata", func() {
 				content := "My name is John Smith, email john@example.com, phone (555) 123-4567"
-				
+
 				hasPII, results, err := router.Classifier.AnalyzeContentForPII([]string{content})
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				if hasPII && len(results) > 0 && results[0].HasPII {
 					entities := results[0].Entities
-					
+
 					// Group entities by type for analysis
 					entityTypes := make(map[string][]classification.PIIDetection)
 					for _, entity := range entities {
 						entityTypes[entity.EntityType] = append(entityTypes[entity.EntityType], entity)
 					}
-					
+
 					// Verify we have some entity types
 					Expect(len(entityTypes)).To(BeNumerically(">", 0))
-					
+
 					// Check that entities don't overlap inappropriately
 					for i, entity1 := range entities {
 						for j, entity2 := range entities {
@@ -335,10 +335,10 @@ var _ = Describe("Security Checks", func() {
 			cfg.Classifier.PIIModel.ModelID = testPIIModelID
 			cfg.Classifier.PIIModel.PIIMappingPath = testPIIMappingPath
 			cfg.Classifier.PIIModel.Threshold = testPIIThreshold
-			
+
 			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
-			
+
 			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil, router.Classifier.ModelTTFT)
 		})
 
@@ -348,10 +348,10 @@ var _ = Describe("Security Checks", func() {
 				longText := strings.Repeat("This is a long sentence. ", 100)
 				longText += "Contact me at test@example.com for more information. "
 				longText += strings.Repeat("More text here. ", 50)
-				
+
 				piiTypes, err := router.Classifier.ClassifyPII(longText)
 				Expect(err).NotTo(HaveOccurred())
-				
+
 				// Should still detect PII in long text
 				Expect(len(piiTypes)).To(BeNumerically(">=", 0))
 			})
@@ -363,7 +363,7 @@ var _ = Describe("Security Checks", func() {
 					"Text with emojis 📧: user@test.com 📞: (555) 987-6543",
 					"Mixed languages: email是test@example.com电话是(555)123-4567",
 				}
-				
+
 				for _, text := range testCases {
 					_, err := router.Classifier.ClassifyPII(text)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed for text: %s", text))
@@ -379,7 +379,7 @@ var _ = Describe("Security Checks", func() {
 					"Almost email: test@",
 					"Almost phone: (555",
 				}
-				
+
 				for _, text := range testCases {
 					_, err := router.Classifier.ClassifyPII(text)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed for text: %s", text))
@@ -390,10 +390,10 @@ var _ = Describe("Security Checks", func() {
 			It("should handle concurrent PII classification calls", func() {
 				const numGoroutines = 10
 				const numCalls = 5
-				
+
 				var wg sync.WaitGroup
 				errorChan := make(chan error, numGoroutines*numCalls)
-				
+
 				testTexts := []string{
 					"Email: test1@example.com",
 					"Phone: (555) 111-2222",
@@ -401,7 +401,7 @@ var _ = Describe("Security Checks", func() {
 					"SSN: 123-45-6789",
 					"Address: 123 Main St",
 				}
-				
+
 				for i := 0; i < numGoroutines; i++ {
 					wg.Add(1)
 					go func(goroutineID int) {
@@ -415,16 +415,16 @@ var _ = Describe("Security Checks", func() {
 						}
 					}(i)
 				}
-				
+
 				wg.Wait()
 				close(errorChan)
-				
+
 				// Check for any errors
 				var errors []error
 				for err := range errorChan {
 					errors = append(errors, err)
 				}
-				
+
 				if len(errors) > 0 {
 					Fail(fmt.Sprintf("Concurrent calls failed with %d errors: %v", len(errors), errors[0]))
 				}
@@ -518,12 +518,12 @@ var _ = Describe("Security Checks", func() {
 			cfg.PromptGuard.Enabled = true
 			cfg.PromptGuard.ModelID = "test-jailbreak-model"
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
-			
+
 			jailbreakMapping := &classification.JailbreakMapping{
 				LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1},
 				IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
 			}
-			
+
 			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, jailbreakMapping, router.Classifier.ModelTTFT)
 		})
 
