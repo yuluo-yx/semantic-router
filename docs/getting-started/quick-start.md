@@ -113,7 +113,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 Look for these headers in the response:
 - `x-selected-model`: Which model was selected
 - `x-routing-confidence`: Confidence score of the routing decision
-- `x-selected-endpoint`: Which backend endpoint was used
+- `x-gateway-destination-endpoint`: Which backend endpoint was used
 
 ## Understanding the Routing Process
 

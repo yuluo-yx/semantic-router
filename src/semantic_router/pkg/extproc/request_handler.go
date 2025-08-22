@@ -36,12 +36,12 @@ func serializeOpenAIRequest(req *openai.ChatCompletionNewParams) ([]byte, error)
 func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
 	var userContent string
 	var nonUser []string
-	
+
 	for _, msg := range req.Messages {
 		// Extract content based on message type
 		var textContent string
 		var role string
-		
+
 		if msg.OfUser != nil {
 			role = "user"
 			// Handle user message content
@@ -86,7 +86,7 @@ func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, 
 				textContent = strings.Join(parts, " ")
 			}
 		}
-		
+
 		// Categorize by role
 		if role == "user" {
 			userContent = textContent
@@ -94,7 +94,7 @@ func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, 
 			nonUser = append(nonUser, textContent)
 		}
 	}
-		
+
 	return userContent, nonUser
 }
 
@@ -376,7 +376,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					}
 					headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:   "x-selected-endpoint",
+							Key:   "x-gateway-destination-endpoint",
 							Value: selectedEndpoint,
 						},
 					})
@@ -440,14 +440,14 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	// If we have an endpoint selected, we need to set headers
 	if selectedEndpoint != "" {
 		var headerMutation *ext_proc.HeaderMutation
-		
+
 		// Get existing header mutation or create a new one
 		if response.GetRequestBody().GetResponse().GetHeaderMutation() != nil {
 			headerMutation = response.GetRequestBody().GetResponse().GetHeaderMutation()
 		} else {
 			headerMutation = &ext_proc.HeaderMutation{}
 		}
-		
+
 		// Initialize SetHeaders if nil
 		if headerMutation.SetHeaders == nil {
 			headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
@@ -456,7 +456,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		// Add endpoint selection header
 		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:   "x-selected-endpoint",
+				Key:   "x-gateway-destination-endpoint",
 				Value: selectedEndpoint,
 			},
 		})
@@ -494,7 +494,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 	} else {
 		return nil // Not auto tool selection
 	}
-	
+
 	// Get text for tools classification
 	var classificationText string
 	if len(userContent) > 0 {
@@ -502,23 +502,23 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 	} else if len(nonUserMessages) > 0 {
 		classificationText = strings.Join(nonUserMessages, " ")
 	}
-	
+
 	if classificationText == "" {
 		log.Printf("No content available for tool classification")
 		return nil
 	}
-	
+
 	if !r.ToolsDatabase.IsEnabled() {
 		log.Printf("Tools database is disabled")
 		return nil
 	}
-	
+
 	// Get configuration for tool selection
 	topK := r.Config.Tools.TopK
 	if topK <= 0 {
 		topK = 3 // Default to 3 tools
 	}
-	
+
 	// Find similar tools based on the query
 	selectedTools, err := r.ToolsDatabase.FindSimilarTools(classificationText, topK)
 	if err != nil {
@@ -529,7 +529,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		}
 		return err
 	}
-	
+
 	if len(selectedTools) == 0 {
 		if r.Config.Tools.FallbackToEmpty {
 			log.Printf("No suitable tools found, falling back to no tools")
@@ -553,11 +553,11 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 			}
 			tools[i] = sdkTool
 		}
-		
+
 		openAIRequest.Tools = tools
 		log.Printf("Auto-selected %d tools for query: %s", len(selectedTools), classificationText)
 	}
-	
+
 	return r.updateRequestWithTools(openAIRequest, response)
 }
 
@@ -568,14 +568,14 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	if err != nil {
 		return err
 	}
-	
+
 	// Create body mutation with the modified body
 	bodyMutation := &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{
 			Body: modifiedBody,
 		},
 	}
-	
+
 	// Create or get existing header mutation
 	var headerMutation *ext_proc.HeaderMutation
 	if (*response).GetRequestBody().GetResponse().GetHeaderMutation() != nil {
@@ -583,12 +583,12 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	} else {
 		headerMutation = &ext_proc.HeaderMutation{}
 	}
-	
+
 	// Add content-length removal if not already present
 	if headerMutation.RemoveHeaders == nil {
 		headerMutation.RemoveHeaders = make([]string, 0)
 	}
-	
+
 	// Check if content-length is already in the remove list
 	hasContentLength := false
 	for _, header := range headerMutation.RemoveHeaders {
@@ -597,11 +597,11 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 			break
 		}
 	}
-	
+
 	if !hasContentLength {
 		headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-length")
 	}
-	
+
 	// Update the response with both mutations
 	*response = &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
@@ -614,6 +614,6 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 			},
 		},
 	}
-	
+
 	return nil
 }
