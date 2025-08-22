@@ -32,6 +32,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: 1.85
+        components: rustfmt, clippy
 
     - name: Install system dependencies
       run: |

@@ -27,7 +27,7 @@ repos:
     hooks:
     -   id: cargo-fmt
         name: cargo fmt
-        entry: bash -c 'cd candle-binding && cargo fmt'
+        entry: bash -c 'cd candle-binding && rustup component add rustfmt 2>/dev/null || true && cargo fmt'
         language: system
         files: \.rs$
         pass_filenames: false
