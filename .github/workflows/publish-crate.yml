@@ -14,9 +14,25 @@ jobs:
     - name: Check out the repo
       uses: actions/checkout@v4
 
-    - name: Extract tag name
+    - name: Extract tag name and validate
       id: extract_tag
-      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      run: |
+        echo "GITHUB_REF: $GITHUB_REF"
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "Valid version tag detected: $TAG_NAME (version: $TAG_VERSION)"
+        elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          echo "Manual workflow dispatch - skipping version check"
+          echo "tag=manual" >> $GITHUB_OUTPUT
+          echo "version=manual" >> $GITHUB_OUTPUT
+        else
+          echo "::error::This workflow should only run on version tags (v*.*.*) or manual dispatch"
+          echo "::error::Current ref: $GITHUB_REF"
+          exit 1
+        fi
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
@@ -43,10 +59,11 @@ jobs:
         key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
 
     - name: Verify crate version matches tag
+      if: steps.extract_tag.outputs.version != 'manual'
       working-directory: candle-binding
       run: |
         CRATE_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-        TAG_VERSION=${GITHUB_REF#refs/tags/v}
+        TAG_VERSION="${{ steps.extract_tag.outputs.version }}"
         echo "Crate version: $CRATE_VERSION"
         echo "Tag version: $TAG_VERSION" 
         if [ "$CRATE_VERSION" != "$TAG_VERSION" ]; then
@@ -77,6 +94,7 @@ jobs:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
 
     - name: Create GitHub Release
+      if: steps.extract_tag.outputs.version != 'manual'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.extract_tag.outputs.tag }}
