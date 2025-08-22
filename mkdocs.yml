@@ -2,7 +2,7 @@ site_name: LLM Semantic Router
 site_description: Intelligent Mixture-of-Models Router using Envoy ExtProc for LLM Applications
 site_author: Semantic Router Team
 repo_name: redhat-et/semantic_route
-repo_url: https://github.com/redhat-et/semantic_route
+repo_url: https://github.com/redhat-et/semantic_router
 edit_uri: edit/main/docs/
 
 theme:
