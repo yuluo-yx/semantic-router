@@ -2,6 +2,18 @@ name: Create and publish Docker image for extproc
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag_suffix:
+        description: 'Custom tag suffix for the Docker image'
+        required: false
+        type: string
+        default: ''
+      is_nightly:
+        description: 'Whether this is a nightly build'
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [ "classify" ]
 
@@ -23,6 +35,11 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Generate date tag for nightly builds
+      id: date
+      if: inputs.is_nightly == true
+      run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
@@ -30,5 +47,5 @@ jobs:
         file: ./Dockerfile.extproc
         push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
         tags: |
-          ghcr.io/${{ github.repository_owner }}/llm_semantic_router/extproc:${{ github.sha }}
-          ghcr.io/${{ github.repository_owner }}/llm_semantic_router/extproc:latest 
+          ${{ inputs.is_nightly == true && format('ghcr.io/{0}/llm_semantic_router/extproc:nightly-{1}', github.repository_owner, steps.date.outputs.date_tag) || format('ghcr.io/{0}/llm_semantic_router/extproc:{1}', github.repository_owner, github.sha) }}
+          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/llm_semantic_router/extproc:latest', github.repository_owner) || '' }} 
