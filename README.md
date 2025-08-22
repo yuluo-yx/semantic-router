@@ -1,5 +1,16 @@
 # LLM Semantic Router
 
+<div align="center">
+
+<img src="docs/logo.png" alt="LLM Semantic Router" width="200"/>
+
+[![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://llm-semantic-router.readthedocs.io/en/latest/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
+**📚 [Complete Documentation](https://llm-semantic-router.readthedocs.io/en/latest/) | 🚀 [Quick Start](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/quick-start/) | 🏗️ [Architecture](https://llm-semantic-router.readthedocs.io/en/latest/architecture/system-architecture/) | 📖 [API Reference](https://llm-semantic-router.readthedocs.io/en/latest/api/router/)**
+
+</div>
+
 ## Auto-selection of model
 
 An Envoy External Processor (ExtProc) that acts as an external **Mixture-of-Models (MoM)** router. It intelligently directs OpenAI API requests to the most suitable backend model from a defined pool based on semantic understanding of the request's intent. This is achieved using BERT classification. Conceptually similar to Mixture-of-Experts (MoE) which lives *within* a model, this system selects the best *entire model* for the nature of the task.
@@ -32,7 +43,20 @@ Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts t
 
 Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
 
-## Usage
+## 📖 Documentation
+
+For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
+
+**👉 [Complete Documentation at Read the Docs](https://llm-semantic-router.readthedocs.io/en/latest/)**
+
+The documentation includes:
+- **[Installation Guide](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/installation/)** - Complete setup instructions
+- **[Quick Start](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/quick-start/)** - Get running in 5 minutes
+- **[System Architecture](https://llm-semantic-router.readthedocs.io/en/latest/architecture/system-architecture/)** - Technical deep dive
+- **[Model Training](https://llm-semantic-router.readthedocs.io/en/latest/training/training-overview/)** - How classification models work
+- **[API Reference](https://llm-semantic-router.readthedocs.io/en/latest/api/router/)** - Complete API documentation
+
+## Quick Usage
 
 ### Prerequisites
 
@@ -96,25 +120,25 @@ Make sure both the Envoy proxy and Router are running:
 make run-envoy  # In one terminal
 make run-router  # In another terminal
 ```
-
+### Running e2e Tests
 Run all tests in sequence:
 ```bash
-python tests/run_all_tests.py
+python e2e-tests/run_all_tests.py
 ```
 
 Run a specific test:
 ```bash
-python tests/00-client-request-test.py
+python e2e-tests/00-client-request-test.py
 ```
 
 Run only tests matching a pattern:
 ```bash
-python tests/run_all_tests.py --pattern "0*-*.py"
+python e2e-tests/run_all_tests.py --pattern "0*-*.py"
 ```
 
 Check if services are running without running tests:
 ```bash
-python tests/run_all_tests.py --check-only
+python e2e-tests/run_all_tests.py --check-only
 ```
 
 The test suite includes:
