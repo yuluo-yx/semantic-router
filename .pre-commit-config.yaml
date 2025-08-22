@@ -1,0 +1,65 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+# Basic hooks for Go, Rust, Python files only
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+    -   id: trailing-whitespace
+        files: \.(go|rs|py)$
+    -   id: end-of-file-fixer
+        files: \.(go|rs|py)$
+    -   id: check-added-large-files
+        args: ['--maxkb=500']
+        files: \.(go|rs|py)$
+
+# Go specific hooks
+-   repo: local
+    hooks:
+    -   id: go-fmt
+        name: go fmt
+        entry: gofmt -w
+        language: system
+        files: \.go$
+
+# Rust specific hooks  
+-   repo: local
+    hooks:
+    -   id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'cd candle-binding && rustup component add rustfmt 2>/dev/null || true && cargo fmt'
+        language: system
+        files: \.rs$
+        pass_filenames: false
+    -   id: cargo-check
+        name: cargo check
+        entry: bash -c 'cd candle-binding && cargo check'
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+# Python specific hooks
+-   repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+    -   id: black
+        language_version: python3
+        files: \.py$
+        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)
+
+-   repo: https://github.com/PyCQA/isort
+    rev: 6.0.1
+    hooks:
+    -   id: isort
+        args: ["--profile", "black"]
+        files: \.py$
+        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)
+
+# Commented out flake8 - only reports issues, doesn't auto-fix
+# -   repo: https://github.com/PyCQA/flake8
+#     rev: 7.3.0
+#     hooks:
+#     -   id: flake8
+#         args: ['--max-line-length=88', '--extend-ignore=E203,W503']
+#         files: \.py$
+#         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)
