@@ -1,32 +1,28 @@
 // This file is a binding for the candle-core and candle-transformers libraries.
 // It is based on https://github.com/huggingface/candle/tree/main/candle-examples/examples/bert
 use std::ffi::{c_char, CStr, CString};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::path::Path;
 
 pub mod modernbert;
 
 // Re-export ModernBERT functions and structures
 pub use modernbert::{
-    ModernBertClassificationResult,
-    init_modernbert_classifier,
-    init_modernbert_pii_classifier,
-    init_modernbert_jailbreak_classifier,
-    classify_modernbert_text,
-    classify_modernbert_pii_text,
-    classify_modernbert_jailbreak_text,
+    classify_modernbert_jailbreak_text, classify_modernbert_pii_text, classify_modernbert_text,
+    init_modernbert_classifier, init_modernbert_jailbreak_classifier,
+    init_modernbert_pii_classifier, ModernBertClassificationResult,
 };
 
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, Tensor};
-use candle_nn::{VarBuilder, Linear};
+use candle_nn::{Linear, VarBuilder};
 use candle_transformers::models::bert::{BertModel, Config, HiddenAct, DTYPE};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
+use tokenizers::TruncationDirection;
 use tokenizers::TruncationParams;
 use tokenizers::TruncationStrategy;
-use tokenizers::TruncationDirection;
 
 // Structure to hold BERT model and tokenizer for semantic similarity
 pub struct BertSimilarity {
@@ -75,63 +71,75 @@ impl BertSimilarity {
             model_id
         };
 
-        let (config_filename, tokenizer_filename, weights_filename, use_pth) = if Path::new(model_id).exists() {
-            // Local model path
-            println!("Loading model from local directory: {}", model_id);
-            let config_path = Path::new(model_id).join("config.json");
-            let tokenizer_path = Path::new(model_id).join("tokenizer.json");
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) =
+            if Path::new(model_id).exists() {
+                // Local model path
+                println!("Loading model from local directory: {model_id}");
+                let config_path = Path::new(model_id).join("config.json");
+                let tokenizer_path = Path::new(model_id).join("tokenizer.json");
 
-            // Check for safetensors first, fall back to PyTorch
-            let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
-                (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
-            } else if Path::new(model_id).join("pytorch_model.bin").exists() {
-                (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                // Check for safetensors first, fall back to PyTorch
+                let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
+                    (
+                        Path::new(model_id)
+                            .join("model.safetensors")
+                            .to_string_lossy()
+                            .to_string(),
+                        false,
+                    )
+                } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                    (
+                        Path::new(model_id)
+                            .join("pytorch_model.bin")
+                            .to_string_lossy()
+                            .to_string(),
+                        true,
+                    )
+                } else {
+                    return Err(E::msg(format!("No model weights found in {model_id}")));
+                };
+
+                (
+                    config_path.to_string_lossy().to_string(),
+                    tokenizer_path.to_string_lossy().to_string(),
+                    weights_path.0,
+                    weights_path.1,
+                )
             } else {
-                return Err(E::msg(format!("No model weights found in {}", model_id)));
-            };
+                // HuggingFace Hub model
+                println!("Loading model from HuggingFace Hub: {model_id}");
+                let repo =
+                    Repo::with_revision(model_id.to_string(), RepoType::Model, "main".to_string());
 
-            (
-                config_path.to_string_lossy().to_string(),
-                tokenizer_path.to_string_lossy().to_string(),
-                weights_path.0,
-                weights_path.1
-            )
-        } else {
-            // HuggingFace Hub model
-            println!("Loading model from HuggingFace Hub: {}", model_id);
-            let repo = Repo::with_revision(
-                model_id.to_string(),
-                RepoType::Model,
-                "main".to_string()
-            );
+                let api = Api::new()?;
+                let api = api.repo(repo);
+                let config = api.get("config.json")?;
+                let tokenizer = api.get("tokenizer.json")?;
 
-            let api = Api::new()?;
-            let api = api.repo(repo);
-            let config = api.get("config.json")?;
-            let tokenizer = api.get("tokenizer.json")?;
-
-            // Try to get safetensors first, if that fails, fall back to pytorch_model.bin. This is for BAAI models
-            // create a special case for BAAI to download the correct weights to avoid downloading the wrong weights
-            let (weights, use_pth) = if model_id.starts_with("BAAI/") {
-                // BAAI models typically use PyTorch model format
-                (api.get("pytorch_model.bin")?, true)
-            } else {
-                match api.get("model.safetensors") {
-                    Ok(weights) => (weights, false),
-                    Err(_) => {
-                        println!("Safetensors model not found, trying PyTorch model instead...");
-                        (api.get("pytorch_model.bin")?, true)
+                // Try to get safetensors first, if that fails, fall back to pytorch_model.bin. This is for BAAI models
+                // create a special case for BAAI to download the correct weights to avoid downloading the wrong weights
+                let (weights, use_pth) = if model_id.starts_with("BAAI/") {
+                    // BAAI models typically use PyTorch model format
+                    (api.get("pytorch_model.bin")?, true)
+                } else {
+                    match api.get("model.safetensors") {
+                        Ok(weights) => (weights, false),
+                        Err(_) => {
+                            println!(
+                                "Safetensors model not found, trying PyTorch model instead..."
+                            );
+                            (api.get("pytorch_model.bin")?, true)
+                        }
                     }
-                }
-            };
+                };
 
-            (
-                config.to_string_lossy().to_string(),
-                tokenizer.to_string_lossy().to_string(),
-                weights.to_string_lossy().to_string(),
-                use_pth
-            )
-        };
+                (
+                    config.to_string_lossy().to_string(),
+                    tokenizer.to_string_lossy().to_string(),
+                    weights.to_string_lossy().to_string(),
+                    use_pth,
+                )
+            };
 
         let config = std::fs::read_to_string(config_filename)?;
         let mut config: Config = serde_json::from_str(&config)?;
@@ -156,18 +164,23 @@ impl BertSimilarity {
     }
 
     // Tokenize a text string
-    pub fn tokenize_text(&self, text: &str, max_length: Option<usize>) -> Result<(Vec<i32>, Vec<String>)> {
+    pub fn tokenize_text(
+        &self,
+        text: &str,
+        max_length: Option<usize>,
+    ) -> Result<(Vec<i32>, Vec<String>)> {
         // Encode the text with the tokenizer
         let mut tokenizer = self.tokenizer.clone();
-        tokenizer.with_truncation(Some(TruncationParams {
-            max_length: max_length.unwrap_or(512),
-            strategy: TruncationStrategy::LongestFirst,
-            stride: 0,
-            direction: TruncationDirection::Right,
-        })).map_err(E::msg)?;
-
-        let encoding = tokenizer.encode(text, true)
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: max_length.unwrap_or(512),
+                strategy: TruncationStrategy::LongestFirst,
+                stride: 0,
+                direction: TruncationDirection::Right,
+            }))
             .map_err(E::msg)?;
+
+        let encoding = tokenizer.encode(text, true).map_err(E::msg)?;
 
         // Get token IDs and tokens
         let token_ids = encoding.get_ids().iter().map(|&id| id as i32).collect();
@@ -180,15 +193,16 @@ impl BertSimilarity {
     pub fn get_embedding(&self, text: &str, max_length: Option<usize>) -> Result<Tensor> {
         // Encode the text with the tokenizer
         let mut tokenizer = self.tokenizer.clone();
-        tokenizer.with_truncation(Some(TruncationParams {
-            max_length: max_length.unwrap_or(512),
-            strategy: TruncationStrategy::LongestFirst,
-            stride: 0,
-            direction: TruncationDirection::Right,
-        })).map_err(E::msg)?;
-
-        let encoding = tokenizer.encode(text, true)
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: max_length.unwrap_or(512),
+                strategy: TruncationStrategy::LongestFirst,
+                stride: 0,
+                direction: TruncationDirection::Right,
+            }))
             .map_err(E::msg)?;
+
+        let encoding = tokenizer.encode(text, true).map_err(E::msg)?;
 
         // Get token IDs and attention mask
         let token_ids = encoding.get_ids().to_vec();
@@ -200,7 +214,11 @@ impl BertSimilarity {
         let token_type_ids = token_ids_tensor.zeros_like()?;
 
         // Run the text through BERT with attention mask
-        let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, Some(&attention_mask_tensor))?;
+        let embeddings = self.model.forward(
+            &token_ids_tensor,
+            &token_type_ids,
+            Some(&attention_mask_tensor),
+        )?;
 
         // Mean pooling: sum over tokens and divide by attention mask sum
         let sum_embeddings = embeddings.sum(1)?;
@@ -214,7 +232,12 @@ impl BertSimilarity {
     }
 
     // Calculate cosine similarity between two texts
-    pub fn calculate_similarity(&self, text1: &str, text2: &str, max_length: Option<usize>) -> Result<f32> {
+    pub fn calculate_similarity(
+        &self,
+        text1: &str,
+        text2: &str,
+        max_length: Option<usize>,
+    ) -> Result<f32> {
         let embedding1 = self.get_embedding(text1, max_length)?;
         let embedding2 = self.get_embedding(text2, max_length)?;
 
@@ -228,7 +251,12 @@ impl BertSimilarity {
     }
 
     // Find most similar text from a list
-    pub fn find_most_similar(&self, query_text: &str, candidates: &[&str], max_length: Option<usize>) -> Result<(usize, f32)> {
+    pub fn find_most_similar(
+        &self,
+        query_text: &str,
+        candidates: &[&str],
+        max_length: Option<usize>,
+    ) -> Result<(usize, f32)> {
         if candidates.is_empty() {
             return Err(E::msg("Empty candidate list"));
         }
@@ -259,7 +287,9 @@ impl BertSimilarity {
 impl BertClassifier {
     pub fn new(model_id: &str, num_classes: usize, use_cpu: bool) -> Result<Self> {
         if num_classes < 2 {
-            return Err(E::msg(format!("Number of classes must be at least 2, got {}", num_classes)));
+            return Err(E::msg(format!(
+                "Number of classes must be at least 2, got {num_classes}"
+            )));
         }
 
         let device = if use_cpu {
@@ -268,7 +298,7 @@ impl BertClassifier {
             Device::cuda_if_available(0)?
         };
 
-        println!("Initializing classifier model: {}", model_id);
+        println!("Initializing classifier model: {model_id}");
 
         // Check if this is a SentenceTransformer linear classifier model
         let is_sentence_transformer = Path::new(model_id).join("modules.json").exists();
@@ -277,81 +307,118 @@ impl BertClassifier {
             println!("Detected SentenceTransformer model with linear classifier head");
         }
 
-        let (config_filename, tokenizer_filename, weights_filename, use_pth) = if Path::new(model_id).exists() {
-            // Local model path
-            println!("Loading model from local directory: {}", model_id);
-            let config_path = Path::new(model_id).join("config.json");
-            let tokenizer_path = Path::new(model_id).join("tokenizer.json");
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) =
+            if Path::new(model_id).exists() {
+                // Local model path
+                println!("Loading model from local directory: {model_id}");
+                let config_path = Path::new(model_id).join("config.json");
+                let tokenizer_path = Path::new(model_id).join("tokenizer.json");
 
-            // For SentenceTransformer models, check both the root and 0_Transformer
-            let weights_path = if is_sentence_transformer {
-                // First check if model weights are at the root level (most common for sentence-transformers)
-                if Path::new(model_id).join("model.safetensors").exists() {
-                    println!("Found model weights at root level");
-                    (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
-                } else if Path::new(model_id).join("pytorch_model.bin").exists() {
-                    println!("Found PyTorch model at root level");
-                    (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
-                }
-                // Otherwise check if there's a 0_Transformer directory
-                else {
-                    let transformer_path = Path::new(model_id).join("0_Transformer");
-                    if transformer_path.exists() {
-                        if transformer_path.join("model.safetensors").exists() {
-                            (transformer_path.join("model.safetensors").to_string_lossy().to_string(), false)
-                        } else if transformer_path.join("pytorch_model.bin").exists() {
-                            (transformer_path.join("pytorch_model.bin").to_string_lossy().to_string(), true)
-                        } else {
-                            return Err(E::msg(format!("No transformer model weights found in {}", transformer_path.display())));
-                        }
-                    } else {
-                        return Err(E::msg(format!("No model weights found in {}", model_id)));
+                // For SentenceTransformer models, check both the root and 0_Transformer
+                let weights_path = if is_sentence_transformer {
+                    // First check if model weights are at the root level (most common for sentence-transformers)
+                    if Path::new(model_id).join("model.safetensors").exists() {
+                        println!("Found model weights at root level");
+                        (
+                            Path::new(model_id)
+                                .join("model.safetensors")
+                                .to_string_lossy()
+                                .to_string(),
+                            false,
+                        )
+                    } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                        println!("Found PyTorch model at root level");
+                        (
+                            Path::new(model_id)
+                                .join("pytorch_model.bin")
+                                .to_string_lossy()
+                                .to_string(),
+                            true,
+                        )
                     }
-                }
-            } else if Path::new(model_id).join("model.safetensors").exists() {
-                (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
-            } else if Path::new(model_id).join("pytorch_model.bin").exists() {
-                (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                    // Otherwise check if there's a 0_Transformer directory
+                    else {
+                        let transformer_path = Path::new(model_id).join("0_Transformer");
+                        if transformer_path.exists() {
+                            if transformer_path.join("model.safetensors").exists() {
+                                (
+                                    transformer_path
+                                        .join("model.safetensors")
+                                        .to_string_lossy()
+                                        .to_string(),
+                                    false,
+                                )
+                            } else if transformer_path.join("pytorch_model.bin").exists() {
+                                (
+                                    transformer_path
+                                        .join("pytorch_model.bin")
+                                        .to_string_lossy()
+                                        .to_string(),
+                                    true,
+                                )
+                            } else {
+                                return Err(E::msg(format!(
+                                    "No transformer model weights found in {}",
+                                    transformer_path.display()
+                                )));
+                            }
+                        } else {
+                            return Err(E::msg(format!("No model weights found in {model_id}")));
+                        }
+                    }
+                } else if Path::new(model_id).join("model.safetensors").exists() {
+                    (
+                        Path::new(model_id)
+                            .join("model.safetensors")
+                            .to_string_lossy()
+                            .to_string(),
+                        false,
+                    )
+                } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                    (
+                        Path::new(model_id)
+                            .join("pytorch_model.bin")
+                            .to_string_lossy()
+                            .to_string(),
+                        true,
+                    )
+                } else {
+                    return Err(E::msg(format!("No model weights found in {model_id}")));
+                };
+
+                (
+                    config_path.to_string_lossy().to_string(),
+                    tokenizer_path.to_string_lossy().to_string(),
+                    weights_path.0,
+                    weights_path.1,
+                )
             } else {
-                return Err(E::msg(format!("No model weights found in {}", model_id)));
+                // HuggingFace Hub model
+                println!("Loading model from HuggingFace Hub: {model_id}");
+                let repo =
+                    Repo::with_revision(model_id.to_string(), RepoType::Model, "main".to_string());
+
+                let api = Api::new()?;
+                let api = api.repo(repo);
+                let config = api.get("config.json")?;
+                let tokenizer = api.get("tokenizer.json")?;
+
+                // Try safetensors first, fall back to PyTorch
+                let (weights, use_pth) = match api.get("model.safetensors") {
+                    Ok(weights) => (weights, false),
+                    Err(_) => {
+                        println!("Safetensors model not found, trying PyTorch model instead...");
+                        (api.get("pytorch_model.bin")?, true)
+                    }
+                };
+
+                (
+                    config.to_string_lossy().to_string(),
+                    tokenizer.to_string_lossy().to_string(),
+                    weights.to_string_lossy().to_string(),
+                    use_pth,
+                )
             };
-
-            (
-                config_path.to_string_lossy().to_string(),
-                tokenizer_path.to_string_lossy().to_string(),
-                weights_path.0,
-                weights_path.1
-            )
-        } else {
-            // HuggingFace Hub model
-            println!("Loading model from HuggingFace Hub: {}", model_id);
-            let repo = Repo::with_revision(
-                model_id.to_string(),
-                RepoType::Model,
-                "main".to_string(),
-            );
-
-            let api = Api::new()?;
-            let api = api.repo(repo);
-            let config = api.get("config.json")?;
-            let tokenizer = api.get("tokenizer.json")?;
-
-            // Try safetensors first, fall back to PyTorch
-            let (weights, use_pth) = match api.get("model.safetensors") {
-                Ok(weights) => (weights, false),
-                Err(_) => {
-                    println!("Safetensors model not found, trying PyTorch model instead...");
-                    (api.get("pytorch_model.bin")?, true)
-                }
-            };
-
-            (
-                config.to_string_lossy().to_string(),
-                tokenizer.to_string_lossy().to_string(),
-                weights.to_string_lossy().to_string(),
-                use_pth
-            )
-        };
 
         let config = std::fs::read_to_string(config_filename)?;
         let mut config: Config = serde_json::from_str(&config)?;
@@ -386,26 +453,47 @@ impl BertClassifier {
 
                 // Get dimensions from the config
                 let in_features = dense_config["in_features"].as_i64().unwrap_or(768) as usize;
-                let out_features = dense_config["out_features"].as_i64().unwrap_or(num_classes as i64) as usize;
+                let out_features = dense_config["out_features"]
+                    .as_i64()
+                    .unwrap_or(num_classes as i64) as usize;
 
-                println!("Dense layer dimensions: in_features={}, out_features={}", in_features, out_features);
+                println!(
+                    "Dense layer dimensions: in_features={in_features}, out_features={out_features}"
+                );
 
                 // Try to load dense weights from safetensors or pytorch files
                 let weights_path = if dense_dir.join("model.safetensors").exists() {
                     println!("Found dense safetensors weights");
-                    (dense_dir.join("model.safetensors").to_string_lossy().to_string(), false)
+                    (
+                        dense_dir
+                            .join("model.safetensors")
+                            .to_string_lossy()
+                            .to_string(),
+                        false,
+                    )
                 } else if dense_dir.join("pytorch_model.bin").exists() {
                     println!("Found dense PyTorch weights");
-                    (dense_dir.join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                    (
+                        dense_dir
+                            .join("pytorch_model.bin")
+                            .to_string_lossy()
+                            .to_string(),
+                        true,
+                    )
                 } else {
-                    return Err(E::msg(format!("No dense layer weights found in {}", dense_dir.display())));
+                    return Err(E::msg(format!(
+                        "No dense layer weights found in {}",
+                        dense_dir.display()
+                    )));
                 };
 
                 // Load the weights
                 let dense_vb = if weights_path.1 {
                     VarBuilder::from_pth(&weights_path.0, DType::F32, &device)?
                 } else {
-                    unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path.0], DType::F32, &device)? }
+                    unsafe {
+                        VarBuilder::from_mmaped_safetensors(&[weights_path.0], DType::F32, &device)?
+                    }
                 };
 
                 // Get the weight and bias tensors - PyTorch uses [out_features, in_features] format
@@ -446,9 +534,7 @@ impl BertClassifier {
 
     pub fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
         // Encode the text with the tokenizer
-        let encoding = self.tokenizer
-            .encode(text, true)
-            .map_err(E::msg)?;
+        let encoding = self.tokenizer.encode(text, true).map_err(E::msg)?;
 
         let token_ids = encoding.get_ids().to_vec();
         let attention_mask = encoding.get_attention_mask().to_vec();
@@ -457,7 +543,11 @@ impl BertClassifier {
         let attention_mask_tensor = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
 
         // Run the text through BERT
-        let embeddings = self.model.forward(&token_ids_tensor, &token_type_ids, Some(&attention_mask_tensor))?;
+        let embeddings = self.model.forward(
+            &token_ids_tensor,
+            &token_type_ids,
+            Some(&attention_mask_tensor),
+        )?;
 
         // Implement proper mean pooling for SentenceTransformer
         // Sum over token dimension (dim=1) and divide by attention mask sum to get mean
@@ -470,7 +560,11 @@ impl BertClassifier {
 
         // Apply the linear layer (classification head) manually
         let weights = self.classification_head.weight().to_dtype(DType::F32)?;
-        let bias = self.classification_head.bias().unwrap().to_dtype(DType::F32)?;
+        let bias = self
+            .classification_head
+            .bias()
+            .unwrap()
+            .to_dtype(DType::F32)?;
 
         // Use matmul with the weights matrix
         // If weights are already transposed to [in_features, out_features]
@@ -494,7 +588,8 @@ impl BertClassifier {
         let probabilities: Vec<f32> = exp_values.iter().map(|&x| x / exp_sum).collect();
 
         // Get the predicted class with highest probability
-        let (predicted_idx, &max_prob) = probabilities.iter()
+        let (predicted_idx, &max_prob) = probabilities
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((0, &0.0));
@@ -517,12 +612,14 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
     let text = unsafe {
         match CStr::from_ptr(text).to_str() {
             Ok(s) => s,
-            Err(_) => return TokenizationResult {
-                token_ids: std::ptr::null_mut(),
-                token_count: 0,
-                tokens: std::ptr::null_mut(),
-                error: true
-            },
+            Err(_) => {
+                return TokenizationResult {
+                    token_ids: std::ptr::null_mut(),
+                    token_count: 0,
+                    tokens: std::ptr::null_mut(),
+                    error: true,
+                }
+            }
         }
     };
 
@@ -535,12 +632,16 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
                 token_ids: std::ptr::null_mut(),
                 token_count: 0,
                 tokens: std::ptr::null_mut(),
-                error: true
+                error: true,
             };
         }
     };
 
-    let max_length_opt = if max_length <= 0 { None } else { Some(max_length as usize) };
+    let max_length_opt = if max_length <= 0 {
+        None
+    } else {
+        Some(max_length as usize)
+    };
     match bert.tokenize_text(text, max_length_opt) {
         Ok((token_ids, tokens)) => {
             let count = token_ids.len() as i32;
@@ -549,7 +650,8 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
             let ids_ptr = token_ids.as_ptr() as *mut i32;
 
             // Allocate memory for tokens
-            let c_tokens: Vec<*mut c_char> = tokens.iter()
+            let c_tokens: Vec<*mut c_char> = tokens
+                .iter()
                 .map(|s| CString::new(s.as_str()).unwrap().into_raw())
                 .collect();
 
@@ -563,16 +665,16 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
                 token_ids: ids_ptr,
                 token_count: count,
                 tokens: tokens_ptr,
-                error: false
+                error: false,
             }
-        },
+        }
         Err(e) => {
-            eprintln!("Error tokenizing text: {}", e);
+            eprintln!("Error tokenizing text: {e}");
             TokenizationResult {
                 token_ids: std::ptr::null_mut(),
                 token_count: 0,
                 tokens: std::ptr::null_mut(),
-                error: true
+                error: true,
             }
         }
     }
@@ -584,11 +686,16 @@ pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
     if !result.token_ids.is_null() && result.token_count > 0 {
         unsafe {
             // Reconstruct and drop the token_ids vector
-            let _ids_vec = Vec::from_raw_parts(result.token_ids, result.token_count as usize, result.token_count as usize);
+            let _ids_vec = Vec::from_raw_parts(
+                result.token_ids,
+                result.token_count as usize,
+                result.token_count as usize,
+            );
 
             // Reconstruct and drop each token string
             if !result.tokens.is_null() {
-                let tokens_slice = std::slice::from_raw_parts(result.tokens, result.token_count as usize);
+                let tokens_slice =
+                    std::slice::from_raw_parts(result.tokens, result.token_count as usize);
                 for &token_ptr in tokens_slice {
                     if !token_ptr.is_null() {
                         let _ = CString::from_raw(token_ptr);
@@ -596,7 +703,11 @@ pub extern "C" fn free_tokenization_result(result: TokenizationResult) {
                 }
 
                 // Reconstruct and drop the tokens vector
-                let _tokens_vec = Vec::from_raw_parts(result.tokens, result.token_count as usize, result.token_count as usize);
+                let _tokens_vec = Vec::from_raw_parts(
+                    result.tokens,
+                    result.token_count as usize,
+                    result.token_count as usize,
+                );
             }
         }
     }
@@ -619,7 +730,7 @@ pub extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu: bool) 
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize BERT: {}", e);
+            eprintln!("Failed to initialize BERT: {e}");
             false
         }
     }
@@ -628,8 +739,8 @@ pub extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu: bool) 
 // Structure to hold similarity result
 #[repr(C)]
 pub struct SimilarityResult {
-    pub index: i32,  // Index of the most similar text
-    pub score: f32,  // Similarity score
+    pub index: i32, // Index of the most similar text
+    pub score: f32, // Similarity score
 }
 
 // Structure to hold embedding result
@@ -646,11 +757,13 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
     let text = unsafe {
         match CStr::from_ptr(text).to_str() {
             Ok(s) => s,
-            Err(_) => return EmbeddingResult {
-                data: std::ptr::null_mut(),
-                length: 0,
-                error: true
-            },
+            Err(_) => {
+                return EmbeddingResult {
+                    data: std::ptr::null_mut(),
+                    length: 0,
+                    error: true,
+                }
+            }
         }
     };
 
@@ -662,12 +775,16 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
             return EmbeddingResult {
                 data: std::ptr::null_mut(),
                 length: 0,
-                error: true
+                error: true,
             };
         }
     };
 
-    let max_length_opt = if max_length <= 0 { None } else { Some(max_length as usize) };
+    let max_length_opt = if max_length <= 0 {
+        None
+    } else {
+        Some(max_length as usize)
+    };
     match bert.get_embedding(text, max_length_opt) {
         Ok(embedding) => {
             match embedding.flatten_all() {
@@ -681,29 +798,29 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
                             EmbeddingResult {
                                 data,
                                 length,
-                                error: false
+                                error: false,
                             }
-                        },
+                        }
                         Err(_) => EmbeddingResult {
                             data: std::ptr::null_mut(),
                             length: 0,
-                            error: true
-                        }
+                            error: true,
+                        },
                     }
-                },
+                }
                 Err(_) => EmbeddingResult {
                     data: std::ptr::null_mut(),
                     length: 0,
-                    error: true
-                }
+                    error: true,
+                },
             }
-        },
+        }
         Err(e) => {
-            eprintln!("Error getting embedding: {}", e);
+            eprintln!("Error getting embedding: {e}");
             EmbeddingResult {
                 data: std::ptr::null_mut(),
                 length: 0,
-                error: true
+                error: true,
             }
         }
     }
@@ -711,7 +828,11 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
 
 // Calculate similarity between two texts (called from Go)
 #[no_mangle]
-pub extern "C" fn calculate_similarity(text1: *const c_char, text2: *const c_char, max_length: i32) -> f32 {
+pub extern "C" fn calculate_similarity(
+    text1: *const c_char,
+    text2: *const c_char,
+    max_length: i32,
+) -> f32 {
     let text1 = unsafe {
         match CStr::from_ptr(text1).to_str() {
             Ok(s) => s,
@@ -735,11 +856,15 @@ pub extern "C" fn calculate_similarity(text1: *const c_char, text2: *const c_cha
         }
     };
 
-    let max_length_opt = if max_length <= 0 { None } else { Some(max_length as usize) };
+    let max_length_opt = if max_length <= 0 {
+        None
+    } else {
+        Some(max_length as usize)
+    };
     match bert.calculate_similarity(text1, text2, max_length_opt) {
         Ok(similarity) => similarity,
         Err(e) => {
-            eprintln!("Error calculating similarity: {}", e);
+            eprintln!("Error calculating similarity: {e}");
             -1.0
         }
     }
@@ -751,12 +876,17 @@ pub extern "C" fn find_most_similar(
     query: *const c_char,
     candidates_ptr: *const *const c_char,
     num_candidates: i32,
-    max_length: i32
+    max_length: i32,
 ) -> SimilarityResult {
     let query = unsafe {
         match CStr::from_ptr(query).to_str() {
             Ok(s) => s,
-            Err(_) => return SimilarityResult { index: -1, score: -1.0 },
+            Err(_) => {
+                return SimilarityResult {
+                    index: -1,
+                    score: -1.0,
+                }
+            }
         }
     };
 
@@ -768,7 +898,12 @@ pub extern "C" fn find_most_similar(
         for &cstr in candidates_slice {
             match CStr::from_ptr(cstr).to_str() {
                 Ok(s) => result.push(s),
-                Err(_) => return SimilarityResult { index: -1, score: -1.0 },
+                Err(_) => {
+                    return SimilarityResult {
+                        index: -1,
+                        score: -1.0,
+                    }
+                }
             }
         }
 
@@ -780,19 +915,29 @@ pub extern "C" fn find_most_similar(
         Some(b) => b,
         None => {
             eprintln!("BERT model not initialized");
-            return SimilarityResult { index: -1, score: -1.0 };
+            return SimilarityResult {
+                index: -1,
+                score: -1.0,
+            };
         }
     };
 
-    let max_length_opt = if max_length <= 0 { None } else { Some(max_length as usize) };
+    let max_length_opt = if max_length <= 0 {
+        None
+    } else {
+        Some(max_length as usize)
+    };
     match bert.find_most_similar(query, &candidates, max_length_opt) {
         Ok((idx, score)) => SimilarityResult {
             index: idx as i32,
-            score
+            score,
         },
         Err(e) => {
-            eprintln!("Error finding most similar: {}", e);
-            SimilarityResult { index: -1, score: -1.0 }
+            eprintln!("Error finding most similar: {e}");
+            SimilarityResult {
+                index: -1,
+                score: -1.0,
+            }
         }
     }
 }
@@ -834,7 +979,11 @@ pub struct ClassificationResult {
 
 // Initialize the BERT classifier model (called from Go)
 #[no_mangle]
-pub extern "C" fn init_classifier(model_id: *const c_char, num_classes: i32, use_cpu: bool) -> bool {
+pub extern "C" fn init_classifier(
+    model_id: *const c_char,
+    num_classes: i32,
+    use_cpu: bool,
+) -> bool {
     let model_id = unsafe {
         match CStr::from_ptr(model_id).to_str() {
             Ok(s) => s,
@@ -844,7 +993,7 @@ pub extern "C" fn init_classifier(model_id: *const c_char, num_classes: i32, use
 
     // Ensure num_classes is valid
     if num_classes < 2 {
-        eprintln!("Number of classes must be at least 2, got {}", num_classes);
+        eprintln!("Number of classes must be at least 2, got {num_classes}");
         return false;
     }
 
@@ -855,7 +1004,7 @@ pub extern "C" fn init_classifier(model_id: *const c_char, num_classes: i32, use
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize BERT classifier: {}", e);
+            eprintln!("Failed to initialize BERT classifier: {e}");
             false
         }
     }
@@ -863,7 +1012,11 @@ pub extern "C" fn init_classifier(model_id: *const c_char, num_classes: i32, use
 
 // Initialize the BERT PII classifier model (called from Go)
 #[no_mangle]
-pub extern "C" fn init_pii_classifier(model_id: *const c_char, num_classes: i32, use_cpu: bool) -> bool {
+pub extern "C" fn init_pii_classifier(
+    model_id: *const c_char,
+    num_classes: i32,
+    use_cpu: bool,
+) -> bool {
     let model_id = unsafe {
         match CStr::from_ptr(model_id).to_str() {
             Ok(s) => s,
@@ -873,7 +1026,7 @@ pub extern "C" fn init_pii_classifier(model_id: *const c_char, num_classes: i32,
 
     // Ensure num_classes is valid
     if num_classes < 2 {
-        eprintln!("Number of classes must be at least 2, got {}", num_classes);
+        eprintln!("Number of classes must be at least 2, got {num_classes}");
         return false;
     }
 
@@ -884,7 +1037,7 @@ pub extern "C" fn init_pii_classifier(model_id: *const c_char, num_classes: i32,
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize BERT PII classifier: {}", e);
+            eprintln!("Failed to initialize BERT PII classifier: {e}");
             false
         }
     }
@@ -892,7 +1045,11 @@ pub extern "C" fn init_pii_classifier(model_id: *const c_char, num_classes: i32,
 
 // Initialize the BERT jailbreak classifier model (called from Go)
 #[no_mangle]
-pub extern "C" fn init_jailbreak_classifier(model_id: *const c_char, num_classes: i32, use_cpu: bool) -> bool {
+pub extern "C" fn init_jailbreak_classifier(
+    model_id: *const c_char,
+    num_classes: i32,
+    use_cpu: bool,
+) -> bool {
     let model_id = unsafe {
         match CStr::from_ptr(model_id).to_str() {
             Ok(s) => s,
@@ -902,7 +1059,7 @@ pub extern "C" fn init_jailbreak_classifier(model_id: *const c_char, num_classes
 
     // Ensure num_classes is valid
     if num_classes < 2 {
-        eprintln!("Number of classes must be at least 2, got {}", num_classes);
+        eprintln!("Number of classes must be at least 2, got {num_classes}");
         return false;
     }
 
@@ -913,7 +1070,7 @@ pub extern "C" fn init_jailbreak_classifier(model_id: *const c_char, num_classes
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize BERT jailbreak classifier: {}", e);
+            eprintln!("Failed to initialize BERT jailbreak classifier: {e}");
             false
         }
     }
@@ -942,7 +1099,7 @@ pub extern "C" fn classify_text(text: *const c_char) -> ClassificationResult {
                 confidence,
             },
             Err(e) => {
-                eprintln!("Error classifying text: {}", e);
+                eprintln!("Error classifying text: {e}");
                 default_result
             }
         },
@@ -976,7 +1133,7 @@ pub extern "C" fn classify_pii_text(text: *const c_char) -> ClassificationResult
                 confidence,
             },
             Err(e) => {
-                eprintln!("Error classifying PII text: {}", e);
+                eprintln!("Error classifying PII text: {e}");
                 default_result
             }
         },
@@ -1010,7 +1167,7 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
                 confidence,
             },
             Err(e) => {
-                eprintln!("Error classifying jailbreak text: {}", e);
+                eprintln!("Error classifying jailbreak text: {e}");
                 default_result
             }
         },

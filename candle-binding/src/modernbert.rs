@@ -1,23 +1,24 @@
 // ModernBERT binding for classification tasks
 // Based on ModernBERT implementation in candle-transformers
 
-
 use std::ffi::{c_char, CStr};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::path::Path;
 
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, Tensor};
-use candle_nn::VarBuilder;
-use candle_transformers::models::modernbert::{ModernBert, Config, ClassifierConfig, ClassifierPooling};
-use candle_nn::Module;
-use candle_core::{D, IndexOp};
+use candle_core::{IndexOp, D};
 use candle_nn::ops;
-use std::collections::HashMap;
-use tokenizers::{Tokenizer, PaddingParams, PaddingStrategy};
-use serde_json;
+use candle_nn::Module;
+use candle_nn::VarBuilder;
+use candle_transformers::models::modernbert::{
+    ClassifierConfig, ClassifierPooling, Config, ModernBert,
+};
 use libc;
+use serde_json;
+use std::collections::HashMap;
+use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
 // ================================================================================================
 // FIXED MODERNBERT IMPLEMENTATION
@@ -77,7 +78,7 @@ impl FixedModernBertHead {
         let layer_norm = candle_nn::LayerNorm::new(
             vb.get((config.hidden_size,), "norm.weight")?,
             // Create a zero bias tensor since LayerNorm::new requires it but the model doesn't have one
-            Tensor::zeros((config.hidden_size,), DType::F32, &vb.device())?,
+            Tensor::zeros((config.hidden_size,), DType::F32, vb.device())?,
             1e-12,
         );
 
@@ -97,7 +98,7 @@ impl Module for FixedModernBertHead {
 /// Fixed ModernBERT sequence classification model that properly handles embeddings
 #[derive(Clone)]
 pub struct FixedModernBertForSequenceClassification {
-    model: ModernBert, // Use the base model (this should work)
+    model: ModernBert,                 // Use the base model (this should work)
     head: Option<FixedModernBertHead>, // Head might not exist in some ModernBERT models
     classifier: FixedModernBertClassifier,
     classifier_pooling: ClassifierPooling,
@@ -137,7 +138,7 @@ impl Module for FixedModernBertTokenClassifier {
 /// Fixed ModernBERT token classification model that properly handles embeddings
 #[derive(Clone)]
 pub struct FixedModernBertForTokenClassification {
-    model: ModernBert, // Use the base model
+    model: ModernBert,                 // Use the base model
     head: Option<FixedModernBertHead>, // Head might not exist in some ModernBERT models
     classifier: FixedModernBertTokenClassifier,
 }
@@ -147,12 +148,15 @@ impl FixedModernBertForTokenClassification {
         let model = ModernBert::load(vb.clone(), config)?;
 
         // Try to load head - it might not exist in all ModernBERT models
-        let head = match vb.get((config.hidden_size, config.hidden_size), "head.dense.weight") {
+        let head = match vb.get(
+            (config.hidden_size, config.hidden_size),
+            "head.dense.weight",
+        ) {
             Ok(_) => {
                 let head_vb = vb.pp("head");
                 Some(FixedModernBertHead::load(head_vb, config)?)
             }
-            Err(_) => None
+            Err(_) => None,
         };
 
         let classifier = FixedModernBertTokenClassifier::load(vb.clone(), config)?;
@@ -167,8 +171,8 @@ impl FixedModernBertForTokenClassification {
     pub fn forward(&self, xs: &Tensor, mask: &Tensor) -> Result<Tensor> {
         // Get embeddings from the base model
         let output = self.model.forward(xs, mask).map_err(|e| {
-            let error_str = format!("{}", e);
-            E::msg(format!("Base model failed: {}", error_str))
+            let error_str = format!("{e}");
+            E::msg(format!("Base model failed: {error_str}"))
         })?;
 
         // Apply head (dense + layer norm) if it exists
@@ -189,12 +193,15 @@ impl FixedModernBertForSequenceClassification {
         let model = ModernBert::load(vb.clone(), config)?;
 
         // Try to load head - it might not exist in all ModernBERT models
-        let head = match vb.get((config.hidden_size, config.hidden_size), "head.dense.weight") {
+        let head = match vb.get(
+            (config.hidden_size, config.hidden_size),
+            "head.dense.weight",
+        ) {
             Ok(_) => {
                 let head_vb = vb.pp("head");
                 Some(FixedModernBertHead::load(head_vb, config)?)
             }
-            Err(_) => None
+            Err(_) => None,
         };
 
         let classifier = FixedModernBertClassifier::load(vb.clone(), config)?;
@@ -216,15 +223,13 @@ impl FixedModernBertForSequenceClassification {
     pub fn forward(&self, xs: &Tensor, mask: &Tensor) -> Result<Tensor> {
         // Get embeddings from the base model
         let output = self.model.forward(xs, mask).map_err(|e| {
-            let error_str = format!("{}", e);
-                E::msg(format!("Base model failed: {}", error_str))
+            let error_str = format!("{e}");
+            E::msg(format!("Base model failed: {error_str}"))
         })?;
 
         // Apply correct pooling logic
         let pooled = match self.classifier_pooling {
-            ClassifierPooling::CLS => {
-                output.i((.., 0, ..))?
-            }
+            ClassifierPooling::CLS => output.i((.., 0, ..))?,
             ClassifierPooling::MEAN => {
                 let mask_expanded = mask.unsqueeze(D::Minus1)?.to_dtype(DType::F32)?;
                 let masked_output = output.broadcast_mul(&mask_expanded)?;
@@ -252,8 +257,6 @@ pub enum ModernBertModel {
     Sequence(FixedModernBertForSequenceClassification),
     Token(FixedModernBertForTokenClassification),
 }
-
-
 
 // Structure to hold ModernBERT model and tokenizer for text classification
 pub struct ModernBertClassifier {
@@ -314,29 +317,44 @@ impl ModernBertClassifier {
         // Check if this is a SentenceTransformer ModernBERT model
         let _is_sentence_transformer = Path::new(model_id).join("modules.json").exists();
 
-        let (config_filename, tokenizer_filename, weights_filename, use_pth) = if Path::new(model_id).exists() {
-            // Local model path
-            let config_path = Path::new(model_id).join("config.json");
-            let tokenizer_path = Path::new(model_id).join("tokenizer.json");
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) =
+            if Path::new(model_id).exists() {
+                // Local model path
+                let config_path = Path::new(model_id).join("config.json");
+                let tokenizer_path = Path::new(model_id).join("tokenizer.json");
 
-            // Check for safetensors first, fall back to PyTorch
-            let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
-                (Path::new(model_id).join("model.safetensors").to_string_lossy().to_string(), false)
-            } else if Path::new(model_id).join("pytorch_model.bin").exists() {
-                (Path::new(model_id).join("pytorch_model.bin").to_string_lossy().to_string(), true)
+                // Check for safetensors first, fall back to PyTorch
+                let weights_path = if Path::new(model_id).join("model.safetensors").exists() {
+                    (
+                        Path::new(model_id)
+                            .join("model.safetensors")
+                            .to_string_lossy()
+                            .to_string(),
+                        false,
+                    )
+                } else if Path::new(model_id).join("pytorch_model.bin").exists() {
+                    (
+                        Path::new(model_id)
+                            .join("pytorch_model.bin")
+                            .to_string_lossy()
+                            .to_string(),
+                        true,
+                    )
+                } else {
+                    return Err(E::msg(format!("No model weights found in {model_id}")));
+                };
+
+                (
+                    config_path.to_string_lossy().to_string(),
+                    tokenizer_path.to_string_lossy().to_string(),
+                    weights_path.0,
+                    weights_path.1,
+                )
             } else {
-                return Err(E::msg(format!("No model weights found in {}", model_id)));
+                return Err(E::msg(format!(
+                    "HuggingFace Hub loading for ModernBERT {model_id} not yet implemented"
+                )));
             };
-
-            (
-                config_path.to_string_lossy().to_string(),
-                tokenizer_path.to_string_lossy().to_string(),
-                weights_path.0,
-                weights_path.1
-            )
-        } else {
-            return Err(E::msg(format!("HuggingFace Hub loading for ModernBERT {} not yet implemented", model_id)));
-        };
 
         let config_str = std::fs::read_to_string(&config_filename)?;
         let config: Config = serde_json::from_str(&config_str)?;
@@ -345,16 +363,17 @@ impl ModernBertClassifier {
         let vb = if use_pth {
             VarBuilder::from_pth(&weights_filename, DType::F32, &device)?
         } else {
-            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_filename], DType::F32, &device)? }
+            unsafe {
+                VarBuilder::from_mmaped_safetensors(&[weights_filename], DType::F32, &device)?
+            }
         };
-
-
 
         // Check if we have id2label and label2id mappings either in classifier_config or at the top level
         let mut config = config;
 
         // Check if classifier_config exists and has mappings
-        let has_classifier_config = config.classifier_config
+        let has_classifier_config = config
+            .classifier_config
             .as_ref()
             .map(|cc| !cc.id2label.is_empty())
             .unwrap_or(false);
@@ -368,7 +387,7 @@ impl ModernBertClassifier {
 
             if let (Some(id2label), Some(label2id)) = (
                 config_json.get("id2label").and_then(|v| v.as_object()),
-                config_json.get("label2id").and_then(|v| v.as_object())
+                config_json.get("label2id").and_then(|v| v.as_object()),
             ) {
                 // Convert JSON objects to HashMap<String, String>
                 let id2label_map: HashMap<String, String> = id2label
@@ -382,7 +401,8 @@ impl ModernBertClassifier {
                     .collect();
 
                 // Extract classifier_pooling from top-level config
-                let classifier_pooling = config_json.get("classifier_pooling")
+                let classifier_pooling = config_json
+                    .get("classifier_pooling")
                     .and_then(|v| v.as_str())
                     .map(|s| match s {
                         "cls" => ClassifierPooling::CLS,
@@ -399,7 +419,9 @@ impl ModernBertClassifier {
 
                 config.classifier_config = Some(classifier_config);
             } else {
-                return Err(E::msg("No id2label/label2id mappings found in config - required for classification"));
+                return Err(E::msg(
+                    "No id2label/label2id mappings found in config - required for classification",
+                ));
             }
         }
 
@@ -410,7 +432,10 @@ impl ModernBertClassifier {
                 Ok(model) => ModernBertModel::Token(model),
                 Err(_) => {
                     // Try with _orig_mod prefix (torch.compile models)
-                    ModernBertModel::Token(FixedModernBertForTokenClassification::load(vb.pp("_orig_mod"), &config)?)
+                    ModernBertModel::Token(FixedModernBertForTokenClassification::load(
+                        vb.pp("_orig_mod"),
+                        &config,
+                    )?)
                 }
             }
         } else {
@@ -418,7 +443,10 @@ impl ModernBertClassifier {
                 Ok(model) => ModernBertModel::Sequence(model),
                 Err(_) => {
                     // Try with _orig_mod prefix (torch.compile models)
-                    ModernBertModel::Sequence(FixedModernBertForSequenceClassification::load(vb.pp("_orig_mod"), &config)?)
+                    ModernBertModel::Sequence(FixedModernBertForSequenceClassification::load(
+                        vb.pp("_orig_mod"),
+                        &config,
+                    )?)
                 }
             }
         };
@@ -434,7 +462,9 @@ impl ModernBertClassifier {
 
     pub fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
         if self.is_token_classification {
-            return Err(E::msg("Use classify_tokens for token classification models"));
+            return Err(E::msg(
+                "Use classify_tokens for token classification models",
+            ));
         }
 
         // Set up tokenizer
@@ -457,7 +487,7 @@ impl ModernBertClassifier {
         let token_ids = tokens
             .iter()
             .map(|tokens| {
-                let tokens: Vec<u32> = tokens.get_ids().iter().map(|&x| x as u32).collect();
+                let tokens: Vec<u32> = tokens.get_ids().to_vec();
                 Tensor::new(tokens.as_slice(), &self.device)
             })
             .collect::<candle_core::Result<Vec<_>>>()?;
@@ -465,7 +495,7 @@ impl ModernBertClassifier {
         let attention_mask = tokens
             .iter()
             .map(|tokens| {
-                let tokens: Vec<u32> = tokens.get_attention_mask().iter().map(|&x| x as u32).collect();
+                let tokens: Vec<u32> = tokens.get_attention_mask().to_vec();
                 Tensor::new(tokens.as_slice(), &self.device)
             })
             .collect::<candle_core::Result<Vec<_>>>()?;
@@ -475,19 +505,35 @@ impl ModernBertClassifier {
 
         // Input validation
         if input_ids.dims().len() != 2 {
-            return Err(E::msg(format!("Expected input_ids to have 2 dimensions [batch_size, seq_len], got {:?}", input_ids.dims())));
+            return Err(E::msg(format!(
+                "Expected input_ids to have 2 dimensions [batch_size, seq_len], got {:?}",
+                input_ids.dims()
+            )));
         }
         if attention_mask.dims().len() != 2 {
-            return Err(E::msg(format!("Expected attention_mask to have 2 dimensions [batch_size, seq_len], got {:?}", attention_mask.dims())));
+            return Err(E::msg(format!(
+                "Expected attention_mask to have 2 dimensions [batch_size, seq_len], got {:?}",
+                attention_mask.dims()
+            )));
         }
-        if input_ids.dims()[0] != attention_mask.dims()[0] || input_ids.dims()[1] != attention_mask.dims()[1] {
-            return Err(E::msg(format!("input_ids and attention_mask must have same shape, got {:?} vs {:?}", input_ids.dims(), attention_mask.dims())));
+        if input_ids.dims()[0] != attention_mask.dims()[0]
+            || input_ids.dims()[1] != attention_mask.dims()[1]
+        {
+            return Err(E::msg(format!(
+                "input_ids and attention_mask must have same shape, got {:?} vs {:?}",
+                input_ids.dims(),
+                attention_mask.dims()
+            )));
         }
 
         // Run through ModernBERT model
         let output = match &self.model {
             ModernBertModel::Sequence(model) => model.forward(&input_ids, &attention_mask)?,
-            ModernBertModel::Token(_) => return Err(E::msg("Internal error: token model in sequence classification")),
+            ModernBertModel::Token(_) => {
+                return Err(E::msg(
+                    "Internal error: token model in sequence classification",
+                ))
+            }
         };
 
         // Remove batch dimension if present
@@ -501,7 +547,8 @@ impl ModernBertClassifier {
         let probabilities_vec = probabilities.to_vec1::<f32>()?;
 
         // Get the predicted class with highest probability
-        let (predicted_idx, &max_prob) = probabilities_vec.iter()
+        let (predicted_idx, &max_prob) = probabilities_vec
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or((0, &0.0));
@@ -509,9 +556,15 @@ impl ModernBertClassifier {
         Ok((predicted_idx, max_prob))
     }
 
-    pub fn classify_tokens(&self, text: &str, id2label: &HashMap<String, String>) -> Result<Vec<TokenEntity>> {
+    pub fn classify_tokens(
+        &self,
+        text: &str,
+        id2label: &HashMap<String, String>,
+    ) -> Result<Vec<TokenEntity>> {
         if !self.is_token_classification {
-            return Err(E::msg("Use classify_text for sequence classification models"));
+            return Err(E::msg(
+                "Use classify_text for sequence classification models",
+            ));
         }
 
         // Set up tokenizer with offset mapping for span reconstruction
@@ -536,27 +589,37 @@ impl ModernBertClassifier {
 
         // Create tensors - convert to u32 for ModernBERT
         let token_ids = {
-            let tokens: Vec<u32> = token_encoding.get_ids().iter().map(|&x| x as u32).collect();
+            let tokens: Vec<u32> = token_encoding.get_ids().to_vec();
             Tensor::new(tokens.as_slice(), &self.device)?.unsqueeze(0)?
         };
 
         let attention_mask = {
-            let tokens: Vec<u32> = token_encoding.get_attention_mask().iter().map(|&x| x as u32).collect();
+            let tokens: Vec<u32> = token_encoding.get_attention_mask().to_vec();
             Tensor::new(tokens.as_slice(), &self.device)?.unsqueeze(0)?
         };
 
         // Input validation
         if token_ids.dims().len() != 2 {
-            return Err(E::msg(format!("Expected token_ids to have 2 dimensions [batch_size, seq_len], got {:?}", token_ids.dims())));
+            return Err(E::msg(format!(
+                "Expected token_ids to have 2 dimensions [batch_size, seq_len], got {:?}",
+                token_ids.dims()
+            )));
         }
         if attention_mask.dims().len() != 2 {
-            return Err(E::msg(format!("Expected attention_mask to have 2 dimensions [batch_size, seq_len], got {:?}", attention_mask.dims())));
+            return Err(E::msg(format!(
+                "Expected attention_mask to have 2 dimensions [batch_size, seq_len], got {:?}",
+                attention_mask.dims()
+            )));
         }
 
         // Run through ModernBERT token classification model
         let logits = match &self.model {
             ModernBertModel::Token(model) => model.forward(&token_ids, &attention_mask)?,
-            ModernBertModel::Sequence(_) => return Err(E::msg("Internal error: sequence model in token classification")),
+            ModernBertModel::Sequence(_) => {
+                return Err(E::msg(
+                    "Internal error: sequence model in token classification",
+                ))
+            }
         };
 
         // Apply softmax to get probabilities for each token position
@@ -584,7 +647,10 @@ impl ModernBertClassifier {
             }
 
             // Get label from prediction ID
-            let label = id2label.get(&pred_id.to_string()).unwrap_or(&"O".to_string()).clone();
+            let label = id2label
+                .get(&pred_id.to_string())
+                .unwrap_or(&"O".to_string())
+                .clone();
             let confidence = probabilities_2d[i][pred_id as usize];
 
             if label.starts_with("B-") {
@@ -601,10 +667,10 @@ impl ModernBertClassifier {
                     text: text[offset.0..offset.1].to_string(),
                     confidence,
                 });
-            } else if label.starts_with("I-") {
+            } else if let Some(entity_type) = label.strip_prefix("I-") {
                 // Inside current entity
                 if let Some(ref mut entity) = current_entity {
-                    let entity_type = &label[2..]; // Remove 'I-' prefix
+                    // Remove 'I-' prefix
                     if entity.entity_type == entity_type {
                         // Extend current entity
                         entity.end = offset.1;
@@ -661,7 +727,7 @@ pub extern "C" fn init_modernbert_classifier(model_id: *const c_char, use_cpu: b
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize ModernBERT classifier: {}", e);
+            eprintln!("Failed to initialize ModernBERT classifier: {e}");
             false
         }
     }
@@ -684,7 +750,7 @@ pub extern "C" fn init_modernbert_pii_classifier(model_id: *const c_char, use_cp
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize ModernBERT PII classifier: {}", e);
+            eprintln!("Failed to initialize ModernBERT PII classifier: {e}");
             false
         }
     }
@@ -692,7 +758,10 @@ pub extern "C" fn init_modernbert_pii_classifier(model_id: *const c_char, use_cp
 
 // Initialize the ModernBERT PII token classifier model (called from Go)
 #[no_mangle]
-pub extern "C" fn init_modernbert_pii_token_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+pub extern "C" fn init_modernbert_pii_token_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
     let model_id = unsafe {
         match CStr::from_ptr(model_id).to_str() {
             Ok(s) => s,
@@ -707,7 +776,7 @@ pub extern "C" fn init_modernbert_pii_token_classifier(model_id: *const c_char, 
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize ModernBERT PII token classifier: {}", e);
+            eprintln!("Failed to initialize ModernBERT PII token classifier: {e}");
             false
         }
     }
@@ -715,7 +784,10 @@ pub extern "C" fn init_modernbert_pii_token_classifier(model_id: *const c_char, 
 
 // Initialize the ModernBERT jailbreak classifier model (called from Go)
 #[no_mangle]
-pub extern "C" fn init_modernbert_jailbreak_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+pub extern "C" fn init_modernbert_jailbreak_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
     let model_id = unsafe {
         match CStr::from_ptr(model_id).to_str() {
             Ok(s) => s,
@@ -730,7 +802,7 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(model_id: *const c_char, 
             true
         }
         Err(e) => {
-            eprintln!("Failed to initialize ModernBERT jailbreak classifier: {}", e);
+            eprintln!("Failed to initialize ModernBERT jailbreak classifier: {e}");
             false
         }
     }
@@ -759,7 +831,7 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
                 confidence,
             },
             Err(e) => {
-                eprintln!("Error classifying text with ModernBERT: {}", e);
+                eprintln!("Error classifying text with ModernBERT: {e}");
                 default_result
             }
         },
@@ -772,7 +844,9 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
 
 // Classify text for PII using ModernBERT (called from Go)
 #[no_mangle]
-pub extern "C" fn classify_modernbert_pii_text(text: *const c_char) -> ModernBertClassificationResult {
+pub extern "C" fn classify_modernbert_pii_text(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
     let default_result = ModernBertClassificationResult {
         class: -1,
         confidence: 0.0,
@@ -793,7 +867,7 @@ pub extern "C" fn classify_modernbert_pii_text(text: *const c_char) -> ModernBer
                 confidence,
             },
             Err(e) => {
-                eprintln!("Error classifying PII text with ModernBERT: {}", e);
+                eprintln!("Error classifying PII text with ModernBERT: {e}");
                 default_result
             }
         },
@@ -806,7 +880,9 @@ pub extern "C" fn classify_modernbert_pii_text(text: *const c_char) -> ModernBer
 
 // Classify text for jailbreak detection using ModernBERT (called from Go)
 #[no_mangle]
-pub extern "C" fn classify_modernbert_jailbreak_text(text: *const c_char) -> ModernBertClassificationResult {
+pub extern "C" fn classify_modernbert_jailbreak_text(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
     let default_result = ModernBertClassificationResult {
         class: -1,
         confidence: 0.0,
@@ -827,7 +903,7 @@ pub extern "C" fn classify_modernbert_jailbreak_text(text: *const c_char) -> Mod
                 confidence,
             },
             Err(e) => {
-                eprintln!("Error classifying jailbreak text with ModernBERT: {}", e);
+                eprintln!("Error classifying jailbreak text with ModernBERT: {e}");
                 default_result
             }
         },
@@ -845,7 +921,10 @@ fn load_id2label_from_config(config_path: &str) -> Result<HashMap<String, String
 
     // Try to get id2label from classifier_config first
     if let Some(classifier_config) = config_json.get("classifier_config") {
-        if let Some(id2label) = classifier_config.get("id2label").and_then(|v| v.as_object()) {
+        if let Some(id2label) = classifier_config
+            .get("id2label")
+            .and_then(|v| v.as_object())
+        {
             let id2label_map: HashMap<String, String> = id2label
                 .iter()
                 .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("UNKNOWN").to_string()))
@@ -868,7 +947,10 @@ fn load_id2label_from_config(config_path: &str) -> Result<HashMap<String, String
 
 // Classify text for PII token classification using ModernBERT (called from Go)
 #[no_mangle]
-pub extern "C" fn classify_modernbert_pii_tokens(text: *const c_char, model_config_path: *const c_char) -> ModernBertTokenClassificationResult {
+pub extern "C" fn classify_modernbert_pii_tokens(
+    text: *const c_char,
+    model_config_path: *const c_char,
+) -> ModernBertTokenClassificationResult {
     let default_result = ModernBertTokenClassificationResult {
         entities: std::ptr::null_mut(),
         num_entities: -1,
@@ -892,7 +974,7 @@ pub extern "C" fn classify_modernbert_pii_tokens(text: *const c_char, model_conf
     let id2label = match load_id2label_from_config(config_path) {
         Ok(mapping) => mapping,
         Err(e) => {
-            eprintln!("Error loading id2label mapping: {}", e);
+            eprintln!("Error loading id2label mapping: {e}");
             return default_result;
         }
     };
@@ -912,7 +994,9 @@ pub extern "C" fn classify_modernbert_pii_tokens(text: *const c_char, model_conf
 
                 // Allocate memory for entities array
                 let entities_ptr = unsafe {
-                    libc::malloc(num_entities as usize * std::mem::size_of::<ModernBertTokenEntity>()) as *mut ModernBertTokenEntity
+                    libc::malloc(
+                        num_entities as usize * std::mem::size_of::<ModernBertTokenEntity>(),
+                    ) as *mut ModernBertTokenEntity
                 };
 
                 if entities_ptr.is_null() {
@@ -922,7 +1006,8 @@ pub extern "C" fn classify_modernbert_pii_tokens(text: *const c_char, model_conf
 
                 // Fill the entities array
                 for (i, entity) in entities.iter().enumerate() {
-                    let entity_type_cstr = std::ffi::CString::new(entity.entity_type.clone()).unwrap_or_default();
+                    let entity_type_cstr =
+                        std::ffi::CString::new(entity.entity_type.clone()).unwrap_or_default();
                     let text_cstr = std::ffi::CString::new(entity.text.clone()).unwrap_or_default();
 
                     unsafe {
@@ -940,9 +1025,9 @@ pub extern "C" fn classify_modernbert_pii_tokens(text: *const c_char, model_conf
                     entities: entities_ptr,
                     num_entities,
                 }
-            },
+            }
             Err(e) => {
-                eprintln!("Error classifying PII tokens with ModernBERT: {}", e);
+                eprintln!("Error classifying PII tokens with ModernBERT: {e}");
                 default_result
             }
         },
