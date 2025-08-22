@@ -8,8 +8,7 @@ on:
 
 jobs:
   nightly-test:
-    runs-on:
-      labels: ubuntu-20.04-16core
+    runs-on: ubuntu-latest
     
     steps:
     - name: Check out the repo
