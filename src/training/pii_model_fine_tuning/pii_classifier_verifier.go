@@ -8,8 +8,6 @@ import (
 	candle "github.com/redhat-et/semantic_route/candle-binding"
 )
 
-
-
 // Configuration for model type
 type ModelConfig struct {
 	PIITokenModelPath         string
@@ -17,16 +15,12 @@ type ModelConfig struct {
 	EnableTokenClassification bool
 }
 
-
-
-
-
 // initializeModels initializes the PII token classifier
 func initializeModels(config ModelConfig) error {
 	// Initialize PII token classifier
 	if config.EnableTokenClassification {
 		fmt.Printf("\nInitializing PII token classifier (ModernBERT): %s\n", config.PIITokenModelPath)
-		
+
 		err := candle.InitModernBertPIITokenClassifier(config.PIITokenModelPath, config.UseCPU)
 		if err != nil {
 			return fmt.Errorf("failed to initialize PII token classifier: %v", err)
@@ -48,9 +42,9 @@ func classifyPIITokens(text string, config ModelConfig) (candle.TokenClassificat
 func main() {
 	// Parse command line flags
 	var (
-		piiTokenPath          = flag.String("pii-token-model", "../../../models/pii_classifier_modernbert-base_presidio_token_model", "Path to PII token classifier model")
+		piiTokenPath              = flag.String("pii-token-model", "../../../models/pii_classifier_modernbert-base_presidio_token_model", "Path to PII token classifier model")
 		enableTokenClassification = flag.Bool("token-classification", true, "Enable token-level PII classification")
-		useCPU                = flag.Bool("cpu", false, "Use CPU instead of GPU")
+		useCPU                    = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)
 	flag.Parse()
 
@@ -61,7 +55,6 @@ func main() {
 	}
 	fmt.Println("PII Classifier Verifier")
 	fmt.Println("========================")
-	
 
 	var err error
 	// Initialize models
@@ -104,29 +97,29 @@ func main() {
 					fmt.Printf("PII Tokens: No entities detected\n")
 				} else {
 					fmt.Printf("PII Tokens: %d entities detected:\n", len(tokenResult.Entities))
-					
+
 					// Group entities by type for summary
 					entityTypes := make(map[string]int)
-					
+
 					for i, entity := range tokenResult.Entities {
-						fmt.Printf("   %d. %s: \"%s\" [%d-%d] (confidence: %.3f)\n", 
+						fmt.Printf("   %d. %s: \"%s\" [%d-%d] (confidence: %.3f)\n",
 							i+1, entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
-						
+
 						// Verify span extraction
 						if entity.Start >= 0 && entity.End <= len(test.text) && entity.Start < entity.End {
 							extractedText := test.text[entity.Start:entity.End]
 							if extractedText != entity.Text {
-								fmt.Printf("      WARNING: Span mismatch: expected '%s', extracted '%s'\n", 
+								fmt.Printf("      WARNING: Span mismatch: expected '%s', extracted '%s'\n",
 									entity.Text, extractedText)
 							}
 						} else {
-							fmt.Printf("      WARNING: Invalid span: %d-%d for text length %d\n", 
+							fmt.Printf("      WARNING: Invalid span: %d-%d for text length %d\n",
 								entity.Start, entity.End, len(test.text))
 						}
-						
+
 						entityTypes[entity.EntityType]++
 					}
-					
+
 					// Display entity type summary
 					if len(entityTypes) > 0 {
 						fmt.Printf("   Entity types: ")

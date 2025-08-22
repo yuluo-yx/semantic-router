@@ -1,11 +1,12 @@
-import os
 import json
-import torch
+import os
+
 import numpy as np
+import torch
 from datasets import load_dataset
-from sentence_transformers import SentenceTransformer, models, losses, InputExample
-from torch.utils.data import DataLoader
+from sentence_transformers import InputExample, SentenceTransformer, losses, models
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
 
 # Load the MMLU-Pro dataset
 dataset = load_dataset("TIGER-Lab/MMLU-Pro")
@@ -31,19 +32,22 @@ train_questions, val_questions, train_categories, val_categories = train_test_sp
 )
 
 # Create a custom model with classification head
-word_embedding_model = models.Transformer('sentence-transformers/all-MiniLM-L12-v2')
+word_embedding_model = models.Transformer("sentence-transformers/all-MiniLM-L12-v2")
 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
 dense_model = models.Dense(
     in_features=pooling_model.get_sentence_embedding_dimension(),
     out_features=len(unique_categories),
-    activation_function=torch.nn.Identity()
+    activation_function=torch.nn.Identity(),
 )
 
 # Create the full model pipeline
 model = SentenceTransformer(modules=[word_embedding_model, pooling_model, dense_model])
 
 # Prepare training data
-train_samples = [(question, category) for question, category in zip(train_questions, train_categories)]
+train_samples = [
+    (question, category)
+    for question, category in zip(train_questions, train_categories)
+]
 
 # Define the loss function (cross entropy for classification)
 train_loss = losses.BatchHardSoftMarginTripletLoss(model=model)
@@ -66,61 +70,73 @@ model.fit(
     epochs=num_epochs,
     warmup_steps=warmup_steps,
     evaluator=None,
-    output_path="category_classifier_model"
+    output_path="category_classifier_model",
 )
 
 # Save the category mapping
 with open("category_classifier_model/category_mapping.json", "w") as f:
-    json.dump({
-        "category_to_idx": category_to_idx,
-        "idx_to_category": {str(k): v for k, v in idx_to_category.items()}
-    }, f)
+    json.dump(
+        {
+            "category_to_idx": category_to_idx,
+            "idx_to_category": {str(k): v for k, v in idx_to_category.items()},
+        },
+        f,
+    )
+
 
 # Function to predict category using the model
-def predict_category(model, question, mapping_path="category_classifier_model/category_mapping.json"):
+def predict_category(
+    model, question, mapping_path="category_classifier_model/category_mapping.json"
+):
     # Load the category mapping
     with open(mapping_path, "r") as f:
         mapping = json.load(f)
         idx_to_category = {int(k): v for k, v in mapping["idx_to_category"].items()}
-    
+
     # Get the embedding for the question
     embedding = model.encode(question)
-    
+
     # Find nearest category using cosine similarity
     # Create a reference set of embeddings for each category
     embeddings_per_category = {}
     for idx, cat_name in idx_to_category.items():
         # Use random samples from training set for this category
-        cat_questions = [q for q, c in zip(train_questions, train_categories) if c == idx]
+        cat_questions = [
+            q for q, c in zip(train_questions, train_categories) if c == idx
+        ]
         if cat_questions:
             # Take up to 5 samples per category
-            samples = cat_questions[:min(5, len(cat_questions))]
+            samples = cat_questions[: min(5, len(cat_questions))]
             cat_embeddings = model.encode(samples)
             embeddings_per_category[idx] = np.mean(cat_embeddings, axis=0)
-    
+
     # Calculate similarity to each category
     similarities = {}
     for cat_idx, cat_embedding in embeddings_per_category.items():
-        similarity = np.dot(embedding, cat_embedding) / (np.linalg.norm(embedding) * np.linalg.norm(cat_embedding))
+        similarity = np.dot(embedding, cat_embedding) / (
+            np.linalg.norm(embedding) * np.linalg.norm(cat_embedding)
+        )
         similarities[cat_idx] = similarity
-    
+
     # Find the most similar category
     predicted_idx = max(similarities, key=similarities.get)
     predicted_category = idx_to_category[predicted_idx]
-    
+
     return predicted_category, similarities
+
 
 # Evaluate on validation set
 def evaluate_classifier(model, questions, categories):
     correct = 0
     total = len(questions)
-    
+
     for question, true_category in zip(questions, categories):
         predicted_category, _ = predict_category(model, question)
         if idx_to_category[true_category] == predicted_category:
             correct += 1
-    
+
     return correct / total
+
 
 # Evaluate the model
 print("\nEvaluating on validation set...")
@@ -135,9 +151,11 @@ for idx, cat_name in idx_to_category.items():
     cat_questions = [q for q, c in zip(train_questions, train_categories) if c == idx]
     if cat_questions:
         # Take up to 5 samples per category
-        samples = cat_questions[:min(5, len(cat_questions))]
+        samples = cat_questions[: min(5, len(cat_questions))]
         cat_embeddings = model.encode(samples)
-        embeddings_per_category[idx] = np.mean(cat_embeddings, axis=0).tolist()  # Convert to list for JSON serialization
+        embeddings_per_category[idx] = np.mean(
+            cat_embeddings, axis=0
+        ).tolist()  # Convert to list for JSON serialization
 
 # Save category embeddings
 with open("category_classifier_model/category_embeddings.json", "w") as f:

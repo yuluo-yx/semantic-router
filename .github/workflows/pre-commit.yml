@@ -1,0 +1,98 @@
+name: Pre-commit
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    name: Run pre-commit hooks on Go, Rust, and Python files
+
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for pre-commit
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: 1.85
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          make \
+          build-essential \
+          pkg-config
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          candle-binding/target/
+        key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+
+    - name: Cache Go dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
+
+    - name: Cache pre-commit environments
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+    - name: Install pre-commit
+      run: pip install pre-commit
+
+    - name: Run pre-commit on Go, Rust, and Python files
+      run: |
+        # Find all Go, Rust, and Python files (excluding vendored/generated code)
+        FILES=$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" \) \
+          ! -path "./target/*" \
+          ! -path "./candle-binding/target/*" \
+          ! -path "./.git/*" \
+          ! -path "./vendor/*" \
+          ! -path "./__pycache__/*" \
+          ! -path "./site/*" \
+          ! -name "*.pb.go" \
+          | tr '\n' ' ')
+        
+        if [ -n "$FILES" ]; then
+          echo "Running pre-commit on files: $FILES"
+          pre-commit run --files $FILES
+        else
+          echo "No Go, Rust, or Python files found to check"
+        fi
+
+    - name: Show pre-commit results
+      if: failure()
+      run: |
+        echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
+        echo "To run pre-commit locally:"
+        echo "  pip install pre-commit"
+        echo "  pre-commit install"
+        echo "  pre-commit run --all-files"

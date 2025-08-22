@@ -241,7 +241,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 		It("should handle rapid sequential requests", func() {
 			const numRequests = 20
-			
+
 			for i := 0; i < numRequests; i++ {
 				request := map[string]interface{}{
 					"model": "model-b",
@@ -315,7 +315,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 		It("should handle requests with many repeated patterns", func() {
 			// Create content with many repeated patterns
 			repeatedPattern := strings.Repeat("The quick brown fox jumps over the lazy dog. ", 100)
-			
+
 			request := cache.OpenAIRequest{
 				Model: "model-a",
 				Messages: []cache.ChatMessage{
@@ -375,7 +375,7 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			request := cache.OpenAIRequest{
 				Model: "model-a",
 				Messages: []cache.ChatMessage{
-					{Role: "user", Content: ""},     // Empty content
+					{Role: "user", Content: ""},      // Empty content
 					{Role: "assistant", Content: ""}, // Empty content
 					{Role: "user", Content: "Now respond to this"},
 				},

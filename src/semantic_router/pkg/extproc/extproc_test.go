@@ -40,7 +40,7 @@ var _ = Describe("ExtProc Package", func() {
 			// Intentionally use invalid paths to test error handling
 			cfg.Classifier.CategoryModel.CategoryMappingPath = "/nonexistent/path/category_mapping.json"
 			cfg.Classifier.PIIModel.PIIMappingPath = "/nonexistent/path/pii_mapping.json"
-			
+
 			_, err := CreateTestRouter(cfg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
@@ -50,7 +50,7 @@ var _ = Describe("ExtProc Package", func() {
 	Describe("Configuration Validation", func() {
 		It("should validate required configuration fields", func() {
 			cfg := CreateTestConfig()
-			
+
 			// Test essential fields are present
 			Expect(cfg.BertModel.ModelID).NotTo(BeEmpty())
 			Expect(cfg.DefaultModel).NotTo(BeEmpty())
@@ -61,7 +61,7 @@ var _ = Describe("ExtProc Package", func() {
 
 		It("should have valid cache configuration", func() {
 			cfg := CreateTestConfig()
-			
+
 			Expect(cfg.SemanticCache.MaxEntries).To(BeNumerically(">", 0))
 			Expect(cfg.SemanticCache.TTLSeconds).To(BeNumerically(">", 0))
 			Expect(cfg.SemanticCache.SimilarityThreshold).NotTo(BeNil())
@@ -71,7 +71,7 @@ var _ = Describe("ExtProc Package", func() {
 
 		It("should have valid classifier configuration", func() {
 			cfg := CreateTestConfig()
-			
+
 			Expect(cfg.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
 			Expect(cfg.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
 			Expect(cfg.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
@@ -80,7 +80,7 @@ var _ = Describe("ExtProc Package", func() {
 
 		It("should have valid tools configuration", func() {
 			cfg := CreateTestConfig()
-			
+
 			Expect(cfg.Tools.TopK).To(BeNumerically(">", 0))
 			Expect(cfg.Tools.FallbackToEmpty).To(BeTrue())
 		})
@@ -90,7 +90,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create mock stream successfully", func() {
 			requests := []*ext_proc.ProcessingRequest{}
 			stream := NewMockStream(requests)
-			
+
 			Expect(stream).NotTo(BeNil())
 			Expect(stream.Requests).To(HaveLen(0))
 			Expect(stream.Responses).To(HaveLen(0))
@@ -100,12 +100,12 @@ var _ = Describe("ExtProc Package", func() {
 
 		It("should handle mock stream operations", func() {
 			stream := NewMockStream([]*ext_proc.ProcessingRequest{})
-			
+
 			// Test Recv on empty stream
 			_, err := stream.Recv()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("EOF"))
-			
+
 			// Test Send
 			response := &ext_proc.ProcessingResponse{}
 			err = stream.Send(response)

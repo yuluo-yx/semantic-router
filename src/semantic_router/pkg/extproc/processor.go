@@ -3,18 +3,18 @@ package extproc
 import (
 	"context"
 	"errors"
-    "io"
-    "log"
+	"io"
+	"log"
 
-    ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-    "google.golang.org/grpc/codes"
-    "google.golang.org/grpc/status"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Process implements the ext_proc calls
 func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
 	log.Println("Started processing a new request")
-	
+
 	// Initialize request context
 	ctx := &RequestContext{
 		Headers: make(map[string]string),
@@ -22,31 +22,31 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 	for {
 		req, err := stream.Recv()
-        if err != nil {
-            // Handle EOF - this indicates the client has closed the stream gracefully
-            if err == io.EOF {
-                log.Println("Stream ended gracefully")
-                return nil
-            }
+		if err != nil {
+			// Handle EOF - this indicates the client has closed the stream gracefully
+			if err == io.EOF {
+				log.Println("Stream ended gracefully")
+				return nil
+			}
 
-            // Handle gRPC status-based cancellations/timeouts
-            if s, ok := status.FromError(err); ok {
-                switch s.Code() {
-                case codes.Canceled, codes.DeadlineExceeded:
-                    log.Println("Stream canceled gracefully")
-                    return nil
-                }
-            }
+			// Handle gRPC status-based cancellations/timeouts
+			if s, ok := status.FromError(err); ok {
+				switch s.Code() {
+				case codes.Canceled, codes.DeadlineExceeded:
+					log.Println("Stream canceled gracefully")
+					return nil
+				}
+			}
 
-            // Handle context cancellation from the server-side context
-            if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-                log.Println("Stream canceled gracefully")
-                return nil
-            }
+			// Handle context cancellation from the server-side context
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				log.Println("Stream canceled gracefully")
+				return nil
+			}
 
-            log.Printf("Error receiving request: %v", err)
-            return err
-        }
+			log.Printf("Error receiving request: %v", err)
+			return err
+		}
 
 		log.Printf("Processing message type: %T", req.Request)
 

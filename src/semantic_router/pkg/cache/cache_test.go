@@ -26,7 +26,7 @@ var _ = BeforeSuite(func() {
 
 var _ = Describe("Cache Package", func() {
 	var (
-		semanticCache *cache.SemanticCache
+		semanticCache  *cache.SemanticCache
 		defaultOptions cache.SemanticCacheOptions
 	)
 
@@ -117,7 +117,7 @@ var _ = Describe("Cache Package", func() {
 
 						err := semanticCache.AddEntry(model, query, requestBody, responseBody)
 						Expect(err).To(Or(BeNil(), HaveOccurred())) // Embedding generation might fail in test
-						
+
 						// Small delay to ensure different timestamps
 						time.Sleep(time.Millisecond)
 					}
@@ -279,9 +279,9 @@ var _ = Describe("Cache Package", func() {
 					model := "model-a"
 					query := "Weather information"
 
-									_, _, err := semanticCache.FindSimilar(model, query)
-				Expect(err).NotTo(HaveOccurred())
-				// Result depends on embedding similarity and threshold
+					_, _, err := semanticCache.FindSimilar(model, query)
+					Expect(err).NotTo(HaveOccurred())
+					// Result depends on embedding similarity and threshold
 				})
 
 				It("should not find entries for different models", func() {

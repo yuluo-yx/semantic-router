@@ -191,11 +191,11 @@ tools:
 				Expect(cfg.VLLMEndpoints[0].Models).To(ContainElements("model-a", "model-b"))
 				Expect(cfg.VLLMEndpoints[0].Weight).To(Equal(1))
 				Expect(cfg.VLLMEndpoints[0].HealthCheckPath).To(Equal("/health"))
-				
+
 				Expect(cfg.VLLMEndpoints[1].Name).To(Equal("endpoint2"))
 				Expect(cfg.VLLMEndpoints[1].Address).To(Equal("192.168.1.11"))
 				Expect(cfg.VLLMEndpoints[1].Weight).To(Equal(2))
-				
+
 				// Verify model preferred endpoints
 				Expect(cfg.ModelConfig["model-a"].PreferredEndpoints).To(ContainElement("endpoint1"))
 				Expect(cfg.ModelConfig["model-b"].PreferredEndpoints).To(ContainElements("endpoint1", "endpoint2"))

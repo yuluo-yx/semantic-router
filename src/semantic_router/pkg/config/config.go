@@ -375,7 +375,7 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 // Otherwise, returns all endpoints that list the model in their Models array
 func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
 	var availableEndpoints []VLLMEndpoint
-	
+
 	// First, find all endpoints that can serve this model
 	for _, endpoint := range c.VLLMEndpoints {
 		for _, model := range endpoint.Models {
@@ -385,7 +385,7 @@ func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
 			}
 		}
 	}
-	
+
 	// Check if model has preferred endpoints configured
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
 		var preferredEndpoints []VLLMEndpoint
@@ -401,7 +401,7 @@ func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
 			return preferredEndpoints
 		}
 	}
-	
+
 	return availableEndpoints
 }
 
@@ -419,7 +419,7 @@ func (c *RouterConfig) GetEndpointByName(name string) (*VLLMEndpoint, bool) {
 func (c *RouterConfig) GetAllModels() []string {
 	modelSet := make(map[string]bool)
 	var models []string
-	
+
 	for _, endpoint := range c.VLLMEndpoints {
 		for _, model := range endpoint.Models {
 			if !modelSet[model] {
@@ -428,7 +428,7 @@ func (c *RouterConfig) GetAllModels() []string {
 			}
 		}
 	}
-	
+
 	return models
 }
 
@@ -439,12 +439,12 @@ func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, boo
 	if len(endpoints) == 0 {
 		return "", false
 	}
-	
+
 	// If only one endpoint, return it
 	if len(endpoints) == 1 {
 		return endpoints[0].Name, true
 	}
-	
+
 	// Select endpoint with highest weight
 	bestEndpoint := endpoints[0]
 	for _, endpoint := range endpoints[1:] {
@@ -452,7 +452,7 @@ func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, boo
 			bestEndpoint = endpoint
 		}
 	}
-	
+
 	return bestEndpoint.Name, true
 }
 
@@ -465,12 +465,12 @@ func (c *RouterConfig) ValidateEndpoints() error {
 			allCategoryModels[modelScore.Model] = true
 		}
 	}
-	
+
 	// Add default model
 	if c.DefaultModel != "" {
 		allCategoryModels[c.DefaultModel] = true
 	}
-	
+
 	// Check that each model has at least one endpoint
 	for model := range allCategoryModels {
 		endpoints := c.GetEndpointsForModel(model)
@@ -478,6 +478,6 @@ func (c *RouterConfig) ValidateEndpoints() error {
 			return fmt.Errorf("model '%s' has no available endpoints", model)
 		}
 	}
-	
+
 	return nil
 }

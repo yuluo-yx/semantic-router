@@ -1,20 +1,20 @@
 package extproc_test
 
 import (
-    "context"
-    "fmt"
-    "strings"
+	"context"
+	"fmt"
+	"strings"
 
-    . "github.com/onsi/ginkgo/v2"
-    . "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
-    core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-    ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-    "google.golang.org/grpc/codes"
-    "google.golang.org/grpc/status"
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-    "github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
 )
 
 var _ = Describe("Process Stream Handling", func() {
@@ -153,7 +153,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			// Verify both requests were processed successfully
 			Expect(len(stream.Responses)).To(Equal(2))
-			
+
 			// Both responses should indicate successful processing
 			Expect(stream.Responses[0].GetRequestHeaders().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
 			Expect(stream.Responses[1].GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
@@ -193,21 +193,21 @@ var _ = Describe("Process Stream Handling", func() {
 			Expect(err.Error()).To(ContainSubstring("send failed"))
 		})
 
-        It("should handle context cancellation gracefully", func() {
-            stream := NewMockStream([]*ext_proc.ProcessingRequest{})
-            stream.RecvError = context.Canceled
+		It("should handle context cancellation gracefully", func() {
+			stream := NewMockStream([]*ext_proc.ProcessingRequest{})
+			stream.RecvError = context.Canceled
 
-            err := router.Process(stream)
-            Expect(err).NotTo(HaveOccurred()) // Context cancellation should be handled gracefully
-        })
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred()) // Context cancellation should be handled gracefully
+		})
 
-        It("should handle gRPC cancellation gracefully", func() {
-            stream := NewMockStream([]*ext_proc.ProcessingRequest{})
-            stream.RecvError = status.Error(codes.Canceled, "context canceled")
+		It("should handle gRPC cancellation gracefully", func() {
+			stream := NewMockStream([]*ext_proc.ProcessingRequest{})
+			stream.RecvError = status.Error(codes.Canceled, "context canceled")
 
-            err := router.Process(stream)
-            Expect(err).NotTo(HaveOccurred()) // Context cancellation should be handled gracefully
-        })
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred()) // Context cancellation should be handled gracefully
+		})
 
 		It("should handle intermittent errors gracefully", func() {
 			requests := []*ext_proc.ProcessingRequest{
@@ -232,11 +232,11 @@ var _ = Describe("Process Stream Handling", func() {
 			}
 
 			stream := NewMockStream(requests)
-			
+
 			// Process first request successfully
 			err := router.Process(stream)
 			Expect(err).NotTo(HaveOccurred()) // Stream should end gracefully
-			
+
 			// At least the first request should have been processed
 			Expect(len(stream.Responses)).To(BeNumerically(">=", 1))
 		})
@@ -258,7 +258,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			// Should still send a response for unknown types
 			Expect(len(stream.Responses)).To(Equal(1))
-			
+
 			// The response should be a body response with CONTINUE status
 			bodyResp := stream.Responses[0].GetRequestBody()
 			Expect(bodyResp).NotTo(BeNil())
@@ -296,11 +296,11 @@ var _ = Describe("Process Stream Handling", func() {
 
 			// All requests should get responses
 			Expect(len(stream.Responses)).To(Equal(3))
-			
+
 			// Known types should be handled correctly
 			Expect(stream.Responses[0].GetRequestHeaders()).NotTo(BeNil())
 			Expect(stream.Responses[2].GetRequestBody()).NotTo(BeNil())
-			
+
 			// Unknown type should get default response
 			Expect(stream.Responses[1].GetRequestBody()).NotTo(BeNil())
 		})
@@ -310,7 +310,7 @@ var _ = Describe("Process Stream Handling", func() {
 		It("should handle rapid successive requests", func() {
 			const numRequests = 20
 			requests := make([]*ext_proc.ProcessingRequest, numRequests)
-			
+
 			// Create alternating header and body requests
 			for i := 0; i < numRequests; i++ {
 				if i%2 == 0 {
@@ -342,7 +342,7 @@ var _ = Describe("Process Stream Handling", func() {
 
 			// All requests should be processed
 			Expect(len(stream.Responses)).To(Equal(numRequests))
-			
+
 			// Verify all responses are valid
 			for i, response := range stream.Responses {
 				if i%2 == 0 {
@@ -354,7 +354,7 @@ var _ = Describe("Process Stream Handling", func() {
 		})
 
 		It("should handle large request bodies in stream", func() {
-			largeContent := fmt.Sprintf(`{"model": "model-a", "messages": [{"role": "user", "content": "%s"}]}`, 
+			largeContent := fmt.Sprintf(`{"model": "model-a", "messages": [{"role": "user", "content": "%s"}]}`,
 				fmt.Sprintf("Large content: %s", strings.Repeat("x", 1000))) // 1KB content
 
 			requests := []*ext_proc.ProcessingRequest{

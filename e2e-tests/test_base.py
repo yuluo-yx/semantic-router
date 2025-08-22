@@ -1,6 +1,7 @@
-import unittest
 import json
+import unittest
 from typing import Any, Dict, Optional
+
 
 class SemanticRouterTestBase(unittest.TestCase):
     def print_test_header(self, test_name: str, description: Optional[str] = None):
@@ -21,12 +22,14 @@ class SemanticRouterTestBase(unittest.TestCase):
         print(expectations)
         print("-" * 40)
 
-    def print_response_info(self, response, additional_info: Optional[Dict[str, Any]] = None):
+    def print_response_info(
+        self, response, additional_info: Optional[Dict[str, Any]] = None
+    ):
         """Print information about the response received."""
         print("\nResponse Details:")
         print("-" * 40)
         print(f"Status Code: {response.status_code}")
-        
+
         try:
             response_json = response.json()
             print("\nResponse Body:")
@@ -52,4 +55,4 @@ class SemanticRouterTestBase(unittest.TestCase):
         """Print a header for subtests within a test case."""
         print(f"\n{'-'*40}")
         print(f"Subtest: {name}")
-        print(f"{'-'*40}") 
+        print(f"{'-'*40}")

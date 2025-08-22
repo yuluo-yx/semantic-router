@@ -12,7 +12,6 @@ import (
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
 	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
-
 )
 
 var _ = Describe("Caching Functionality", func() {
@@ -24,7 +23,7 @@ var _ = Describe("Caching Functionality", func() {
 	BeforeEach(func() {
 		cfg = CreateTestConfig()
 		cfg.SemanticCache.Enabled = true
-		
+
 		var err error
 		router, err = CreateTestRouter(cfg)
 		Expect(err).NotTo(HaveOccurred())
@@ -177,7 +176,7 @@ var _ = Describe("Caching Functionality", func() {
 			request := map[string]interface{}{
 				"model": "model-a",
 				"messages": []map[string]interface{}{
-					{"role": "user", "content": ""},  // Empty content might cause issues
+					{"role": "user", "content": ""}, // Empty content might cause issues
 				},
 			}
 
