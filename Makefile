@@ -134,15 +134,15 @@ download-models:
 	@echo "Downloading models..."
 	@mkdir -p models
 	@if [ ! -d "models/category_classifier_modernbert-base_model" ]; then \
-		hf download HuaminChen/category_classifier_modernbert-base_model --local-dir models/category_classifier_modernbert-base_model; \
+		hf download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir models/category_classifier_modernbert-base_model; \
 	fi
 	@if [ ! -d "models/pii_classifier_modernbert-base_model" ]; then \
-		hf download HuaminChen/pii_classifier_modernbert-base_model --local-dir models/pii_classifier_modernbert-base_model; \
+		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir models/pii_classifier_modernbert-base_model; \
 	fi
 	@if [ ! -d "models/jailbreak_classifier_modernbert-base_model" ]; then \
-		hf download HuaminChen/jailbreak_classifier_modernbert-base_model --local-dir models/jailbreak_classifier_modernbert-base_model; \
+		hf download LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model --local-dir models/jailbreak_classifier_modernbert-base_model; \
 	fi
 
 	@if [ ! -d "models/pii_classifier_modernbert_base_presidio_token_model" ]; then \
-		hf download HuaminChen/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
+		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
 	fi
