@@ -31,7 +31,7 @@ static_resources:
                   upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                   request_id: "%REQ(X-REQUEST-ID)%"
                   selected_model: "%REQ(X-SELECTED-MODEL)%"
-                  selected_endpoint: "%REQ(X-SELECTED-ENDPOINT)%"
+                  selected_endpoint: "%REQ(X-GATEWAY-DESTINATION-ENDPOINT)%"
           route_config:
             name: local_route
             virtual_hosts:
@@ -42,7 +42,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-selected-endpoint"
+                  - name: "x-gateway-destination-endpoint"
                     string_match:
                       exact: "endpoint1"
                 route:
@@ -51,7 +51,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-selected-endpoint"
+                  - name: "x-gateway-destination-endpoint"
                     string_match:
                       exact: "endpoint2"
                 route:
@@ -60,7 +60,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-selected-endpoint"
+                  - name: "x-gateway-destination-endpoint"
                     string_match:
                       exact: "endpoint3"
                 route:

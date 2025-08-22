@@ -73,9 +73,9 @@ var _ = Describe("Endpoint Selection", func() {
 					// Verify that endpoint selection header is present
 					var endpointHeaderFound bool
 					var modelHeaderFound bool
-					
+
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-selected-endpoint" {
+						if header.Header.Key == "x-gateway-destination-endpoint" {
 							endpointHeaderFound = true
 							// Should be one of the configured endpoints
 							Expect(header.Header.Value).To(BeElementOf("test-endpoint1", "test-endpoint2"))
@@ -86,7 +86,7 @@ var _ = Describe("Endpoint Selection", func() {
 							Expect(header.Header.Value).To(BeElementOf("model-a", "model-b"))
 						}
 					}
-					
+
 					// At least one of these should be true (endpoint header should be set when model routing occurs)
 					Expect(endpointHeaderFound || modelHeaderFound).To(BeTrue())
 				}
@@ -137,15 +137,15 @@ var _ = Describe("Endpoint Selection", func() {
 				if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
 					var endpointHeaderFound bool
 					var selectedEndpoint string
-					
+
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-selected-endpoint" {
+						if header.Header.Key == "x-gateway-destination-endpoint" {
 							endpointHeaderFound = true
 							selectedEndpoint = header.Header.Value
 							break
 						}
 					}
-					
+
 					if endpointHeaderFound {
 						// model-a should be routed to test-endpoint1 based on preferred endpoints
 						Expect(selectedEndpoint).To(Equal("test-endpoint1"))
@@ -154,70 +154,70 @@ var _ = Describe("Endpoint Selection", func() {
 			})
 
 			It("should handle model with multiple preferred endpoints", func() {
-			// Create a request with model-b which has multiple preferred endpoints
-			openAIRequest := map[string]interface{}{
-				"model": "model-b",
-				"messages": []map[string]interface{}{
-					{
-						"role":    "user",
-						"content": "Test message",
+				// Create a request with model-b which has multiple preferred endpoints
+				openAIRequest := map[string]interface{}{
+					"model": "model-b",
+					"messages": []map[string]interface{}{
+						{
+							"role":    "user",
+							"content": "Test message",
+						},
 					},
-				},
-			}
+				}
 
-			requestBody, err := json.Marshal(openAIRequest)
-			Expect(err).NotTo(HaveOccurred())
+				requestBody, err := json.Marshal(openAIRequest)
+				Expect(err).NotTo(HaveOccurred())
 
-			// Create processing request
-			processingRequest := &ext_proc.ProcessingRequest{
-				Request: &ext_proc.ProcessingRequest_RequestBody{
-					RequestBody: &ext_proc.HttpBody{
-						Body: requestBody,
+				// Create processing request
+				processingRequest := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
 					},
-				},
-			}
+				}
 
-			// Create mock stream
-			stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
+				// Create mock stream
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
 
-			// Process the request
-			err = router.Process(stream)
-			Expect(err).NotTo(HaveOccurred())
+				// Process the request
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
 
-			// Verify response was sent
-			Expect(stream.Responses).To(HaveLen(1))
-			response := stream.Responses[0]
+				// Verify response was sent
+				Expect(stream.Responses).To(HaveLen(1))
+				response := stream.Responses[0]
 
-			// Check if headers were set for endpoint selection
-			requestBodyResponse := response.GetRequestBody()
-			Expect(requestBodyResponse).NotTo(BeNil())
+				// Check if headers were set for endpoint selection
+				requestBodyResponse := response.GetRequestBody()
+				Expect(requestBodyResponse).NotTo(BeNil())
 
-			headerMutation := requestBodyResponse.GetResponse().GetHeaderMutation()
-			if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
-				var endpointHeaderFound bool
-				var selectedEndpoint string
-				
-				for _, header := range headerMutation.SetHeaders {
-					if header.Header.Key == "x-selected-endpoint" {
-						endpointHeaderFound = true
-						selectedEndpoint = header.Header.Value
-						break
+				headerMutation := requestBodyResponse.GetResponse().GetHeaderMutation()
+				if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
+					var endpointHeaderFound bool
+					var selectedEndpoint string
+
+					for _, header := range headerMutation.SetHeaders {
+						if header.Header.Key == "x-gateway-destination-endpoint" {
+							endpointHeaderFound = true
+							selectedEndpoint = header.Header.Value
+							break
+						}
+					}
+
+					if endpointHeaderFound {
+						// model-b should be routed to test-endpoint2 (higher weight) or test-endpoint1
+						Expect(selectedEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
 					}
 				}
-				
-				if endpointHeaderFound {
-					// model-b should be routed to test-endpoint2 (higher weight) or test-endpoint1
-					Expect(selectedEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
-				}
-			}
-		})
+			})
 		})
 	})
 
 	Describe("Endpoint Configuration Validation", func() {
 		It("should have valid endpoint configuration in test config", func() {
 			Expect(cfg.VLLMEndpoints).To(HaveLen(2))
-			
+
 			// Verify first endpoint
 			endpoint1 := cfg.VLLMEndpoints[0]
 			Expect(endpoint1.Name).To(Equal("test-endpoint1"))
@@ -281,16 +281,16 @@ var _ = Describe("Endpoint Selection", func() {
 				},
 			}
 
-		// Create mock stream with headers
-		stream := NewMockStream([]*ext_proc.ProcessingRequest{requestHeaders})
+			// Create mock stream with headers
+			stream := NewMockStream([]*ext_proc.ProcessingRequest{requestHeaders})
 
-		// Process the request
-		err := router.Process(stream)
-		Expect(err).NotTo(HaveOccurred())
+			// Process the request
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Should have received a response
 			Expect(stream.Responses).To(HaveLen(1))
-			
+
 			// Headers should be processed and allowed to continue
 			response := stream.Responses[0]
 			headersResponse := response.GetRequestHeaders()

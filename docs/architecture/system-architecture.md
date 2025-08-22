@@ -230,7 +230,7 @@ graph TB
     
     ToolsSelection --> RoutingDecision[Make Routing Decision<br/>Select Optimal Model]
     
-    RoutingDecision --> SetHeaders[Set Routing Headers<br/>x-selected-endpoint<br/>x-selected-model]
+    RoutingDecision --> SetHeaders[Set Routing Headers<br/>x-gateway-destination-endpoint<br/>x-selected-model]
     
     SetHeaders --> EnvoyRoute[Envoy Routes to<br/>Selected Backend]
     
