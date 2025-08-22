@@ -1,6 +1,7 @@
 # LLM Semantic Router
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
 [![Go Report Card](https://goreportcard.com/badge/github.com/redhat-et/semantic_route)](https://goreportcard.com/report/github.com/redhat-et/semantic_route)
 
 An intelligent **Mixture-of-Models (MoM)** router that acts as an Envoy External Processor (ExtProc) to intelligently direct OpenAI API requests to the most suitable backend model from a defined pool. Using BERT-based semantic understanding and classification, it optimizes both performance and cost efficiency.
