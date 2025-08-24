@@ -113,6 +113,7 @@ graph TB
 ```
 
 **Reliability Benefits:**
+
 - **Fault Tolerance**: Failure of one model doesn't break the entire system
 - **Graceful Degradation**: Can route to backup models automatically
 - **Provider Diversity**: Mix models from different providers (OpenAI, Anthropic, local)

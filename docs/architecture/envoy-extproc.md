@@ -23,6 +23,7 @@ External Processing (ExtProc) is an Envoy filter that allows external services t
 | **HTTP Callouts** | External API calls | High | High | High |
 
 **Why ExtProc for Semantic Routing?**
+
 - **Complex ML Models**: Need full Python/Go ecosystem for BERT models
 - **Dynamic Decision Making**: Requires sophisticated classification logic
 - **State Management**: Needs caching and request tracking
@@ -79,6 +80,7 @@ processing_mode:
 ```
 
 **Mode Options:**
+
 - `SKIP`: Don't send to ExtProc (fastest)
 - `SEND`: Send headers/trailers only
 - `BUFFERED`: Send entire body (required for content analysis)

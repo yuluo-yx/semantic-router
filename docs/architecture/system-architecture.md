@@ -72,6 +72,7 @@ graph TB
 **Role**: Acts as the entry point and traffic director for all LLM requests.
 
 **Key Responsibilities**:
+
 - **Load Balancing**: Distributes requests across backend model endpoints
 - **Health Checking**: Monitors backend model availability and health
 - **Request/Response Processing**: Handles HTTP protocol management

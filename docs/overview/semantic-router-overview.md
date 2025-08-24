@@ -23,6 +23,7 @@ graph LR
 ```
 
 **Problems:**
+
 - High cost for simple queries
 - Suboptimal performance for specialized tasks
 - Poor resource utilization
@@ -42,6 +43,7 @@ graph TB
 ```
 
 **Benefits:**
+
 - Cost-effective routing
 - Specialized model performance
 - Efficient resource utilization
@@ -70,6 +72,7 @@ graph TB
 ```
 
 **Characteristics:**
+
 - Single model with internal routing
 - Shared parameters and architecture
 - Fixed expert capacity during inference
@@ -96,6 +99,7 @@ graph TB
 ```
 
 **Advantages:**
+
 - **Flexibility**: Can mix different model architectures, sizes, and providers
 - **Cost Optimization**: Use expensive models only when necessary
 - **Specialization**: Leverage purpose-built models for specific domains
@@ -109,6 +113,7 @@ graph TB
 [RouteLLM](https://arxiv.org/abs/2406.18665) pioneered efficient semantic routing using human preference data:
 
 **Key Innovations:**
+
 - **Human Preference Training**: Uses Chatbot Arena data where users compare model outputs
 - **Multiple Router Architectures**: 
   - Similarity-weighted ranking
@@ -135,6 +140,7 @@ router_model.train(
 GPT-5 introduces a revolutionary **router-as-coordinator** architecture:
 
 **Architecture Principles:**
+
 - **Modular Design**: Multiple specialized sub-models instead of monolithic architecture
 - **Dynamic Coordination**: Router selects and coordinates multiple models per request
 - **Reliability**: Individual components can be updated without full system retraining
@@ -158,6 +164,7 @@ sequenceDiagram
 ```
 
 **Business Impact:**
+
 - Reduced computational costs
 - Improved response quality through specialization
 - Enhanced system reliability
