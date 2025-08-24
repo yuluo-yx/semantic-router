@@ -13,9 +13,13 @@
 
 </div>
 
-## Auto-selection of model
+## Overview
 
-An Envoy External Processor (ExtProc) that acts as an external **Mixture-of-Models (MoM)** router. It intelligently directs OpenAI API requests to the most suitable backend model from a defined pool based on semantic understanding of the request's intent. This is achieved using BERT classification. Conceptually similar to Mixture-of-Experts (MoE) which lives *within* a model, this system selects the best *entire model* for the nature of the task.
+### Auto-Selection of Models
+
+An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models from a defined pool based on **Semantic Understanding** of the request's intent.
+
+This is achieved using BERT classification. Conceptually similar to Mixture-of-Experts (MoE) which lives *within* a model, this system selects the best *entire model* for the nature of the task.
 
 As such, the overall inference accuracy is improved by using a pool of models that are better suited for different types of tasks:
 
@@ -29,19 +33,19 @@ The screenshot below shows the LLM Router dashboard in Grafana.
 
 The router is implemented in two ways: Golang (with Rust FFI based on Candle) and Python. Benchmarking will be conducted to determine the best implementation.
 
-## Auto-selection of tools
+### Auto-Selection of Tools
 
 Select the tools to use based on the prompt, avoiding the use of tools that are not relevant to the prompt so as to reduce the number of prompt tokens and improve tool selection accuracy by the LLM.
 
-## PII detection
+### PII detection
 
 Detect PII in the prompt, avoiding sending PII to the LLM so as to protect the privacy of the user.
 
-## Prompt guard
+### Prompt guard
 
 Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving.
 
-## Semantic cache
+### Semantic Caching
 
 Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
 
@@ -150,4 +154,3 @@ The test suite includes:
 - Semantic cache tests
 - Category-specific tests
 - Metrics validation tests
-
