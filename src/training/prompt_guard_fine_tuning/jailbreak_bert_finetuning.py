@@ -1589,6 +1589,39 @@ def predict_jailbreak_type(model, tokenizer, text, idx_to_label_map, device):
     return predicted_type, confidence
 
 
+# Function to save the model without the torch.compile prefix
+def save_model_without_compile_prefix(model, tokenizer, output_path):
+    """Save model and tokenizer without _orig_mod prefix from torch.compile."""
+
+    if hasattr(model, "_orig_mod"):
+        logger.info(
+            "Detected torch.compile wrapper, extracting original model for saving..."
+        )
+        original_model = model._orig_mod
+
+        # Verify parameters are the same (optional debug check)
+        compiled_state = {
+            k.replace("_orig_mod.", ""): v for k, v in model.state_dict().items()
+        }
+        original_state = original_model.state_dict()
+
+        # This should be True - parameters are shared
+        params_match = all(
+            torch.equal(compiled_state[k], original_state[k])
+            for k in original_state.keys()
+        )
+        logger.info(f"Parameter verification: {params_match}")
+
+        original_model.save_pretrained(output_path)
+    else:
+        # Regular save for non-compiled models
+        model.save_pretrained(output_path)
+
+    # Always save tokenizer normally
+    tokenizer.save_pretrained(output_path)
+    logger.info(f"Model and tokenizer saved to {output_path} without compile prefixes")
+
+
 # Evaluate on validation set using the classification model
 def evaluate_jailbreak_classifier(
     model, tokenizer, texts_list, true_label_indices_list, idx_to_label_map, device
@@ -2293,8 +2326,7 @@ def main_single_attempt(
         raise
 
     # Save the model and tokenizer
-    trainer.save_model(output_model_path)
-    tokenizer.save_pretrained(output_model_path)
+    save_model_without_compile_prefix(model, tokenizer, output_model_path)
 
     # Save the label mapping
     mapping_path = os.path.join(output_model_path, "jailbreak_type_mapping.json")
