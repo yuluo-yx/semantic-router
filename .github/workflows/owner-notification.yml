@@ -10,6 +10,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     
     steps:
       - name: Checkout code
@@ -91,9 +92,34 @@ jobs:
               return;
             }
 
+            // Collect all unique owners for assignment
+            const allOwners = new Set();
+            for (const [, info] of ownerMap) {
+              for (const owner of info.owners) {
+                // Remove @ prefix for API call
+                allOwners.add(owner.replace('@', ''));
+              }
+            }
+
+            // Assign owners to the PR
+            if (allOwners.size > 0) {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  assignees: Array.from(allOwners)
+                });
+                console.log(`Assigned PR to: ${Array.from(allOwners).join(', ')}`);
+              } catch (error) {
+                console.log(`Failed to assign PR: ${error.message}`);
+                // Continue with comment creation even if assignment fails
+              }
+            }
+
             // Create comment content
             let commentBody = '## 👥 Owner Notification\n\n';
-            commentBody += 'The following owners have been identified for the changed files in this PR:\n\n';
+            commentBody += 'The following owners have been identified for the changed files in this PR and have been automatically assigned:\n\n';
 
             for (const [dirPath, info] of ownerMap) {
               commentBody += `### 📁 \`${dirPath === '.' ? 'Root Directory' : dirPath}\`\n`;
