@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
-[![Go Report Card](https://goreportcard.com/badge/github.com/redhat-et/semantic_route)](https://goreportcard.com/report/github.com/redhat-et/semantic_route)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vllm-project/semantic-router)](https://goreportcard.com/report/github.com/vllm-project/semantic-router)
 
 An intelligent **Mixture-of-Models (MoM)** router that acts as an Envoy External Processor (ExtProc) to intelligently direct OpenAI API requests to the most suitable backend model from a defined pool. Using BERT-based semantic understanding and classification, it optimizes both performance and cost efficiency.
 
@@ -107,7 +107,7 @@ Explore how classification models are trained, what datasets are used, and the p
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/redhat-et/semantic_router/blob/main/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
 
 ## 📄 License
 

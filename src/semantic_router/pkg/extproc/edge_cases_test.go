@@ -11,9 +11,9 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/cache"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/extproc"
 )
 
 var _ = Describe("Edge Cases and Error Conditions", func() {

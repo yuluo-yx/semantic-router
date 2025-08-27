@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
 )
 
 func TestConfig(t *testing.T) {

@@ -3,7 +3,7 @@ package pii
 import (
 	"log"
 
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
 )
 
 // PolicyChecker handles PII policy validation

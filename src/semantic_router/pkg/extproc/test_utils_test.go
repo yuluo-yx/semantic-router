@@ -9,13 +9,13 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/metadata"
 
-	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/classification"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/cache"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/tools"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/pii"
 )
 
 // MockStream implements the ext_proc.ExternalProcessor_ProcessServer interface for testing

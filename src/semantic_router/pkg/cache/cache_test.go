@@ -10,8 +10,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	candle "github.com/redhat-et/semantic_route/candle-binding"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
+	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/cache"
 )
 
 func TestCache(t *testing.T) {

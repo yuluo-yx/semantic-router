@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/metrics"
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/metrics"
 )
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content

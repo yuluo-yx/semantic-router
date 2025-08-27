@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go"
-	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // ToolEntry represents a tool stored in the tools database

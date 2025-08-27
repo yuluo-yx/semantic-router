@@ -1,7 +1,7 @@
 package ttft
 
 import (
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
 )
 
 // Calculator handles TTFT (Time To First Token) calculations

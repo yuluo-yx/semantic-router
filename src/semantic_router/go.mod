@@ -1,11 +1,11 @@
-module github.com/redhat-et/semantic_route/semantic_router
+module github.com/vllm-project/semantic-router/semantic_router
 
 go 1.24.1
 
 replace (
-	github.com/redhat-et/semantic_route/candle-binding => ../../candle-binding
-	github.com/redhat-et/semantic_route/semantic_router/pkg/config => ./pkg/config
-	github.com/redhat-et/semantic_route/semantic_router/pkg/extproc => ./pkg/extproc
+	github.com/vllm-project/semantic-router/candle-binding => ../../candle-binding
+	github.com/vllm-project/semantic-router/semantic_router/pkg/config => ./pkg/config
+	github.com/vllm-project/semantic-router/semantic_router/pkg/extproc => ./pkg/extproc
 )
 
 require (
@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.0
-	github.com/redhat-et/semantic_route/candle-binding v0.0.0-00010101000000-000000000000
+	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.71.1
 	gopkg.in/yaml.v3 v3.0.1
 )

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // CacheEntry represents a cached request-response pair

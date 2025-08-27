@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/extproc"
 )
 
 var _ = Describe("Process Stream Handling", func() {

@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	candle "github.com/redhat-et/semantic_route/candle-binding"
+	candle "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // JailbreakMapping matches the JSON structure for jailbreak type mappings

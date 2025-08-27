@@ -7,13 +7,13 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	candle_binding "github.com/redhat-et/semantic_route/candle-binding"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/cache"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/config"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/tools"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/classification"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/pii"
-	"github.com/redhat-et/semantic_route/semantic_router/pkg/utils/ttft"
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/cache"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/tools"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/pii"
+	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/ttft"
 )
 
 var (
