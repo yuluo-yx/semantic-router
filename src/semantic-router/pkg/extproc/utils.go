@@ -8,6 +8,8 @@ import (
 
 // sendResponse sends a response with proper error handling and logging
 func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext_proc.ProcessingResponse, msgType string) error {
+	log.Printf("Sending at Stage [%s]: %+v", msgType, response)
+
 	// log.Printf("Sending %s response: %+v", msgType, response)
 	if err := stream.Send(response); err != nil {
 		log.Printf("Error sending %s response: %v", msgType, err)

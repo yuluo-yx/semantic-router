@@ -213,9 +213,11 @@ type ModelScore struct {
 }
 
 type Category struct {
-	Name        string       `yaml:"name"`
-	Description string       `yaml:"description,omitempty"`
-	ModelScores []ModelScore `yaml:"model_scores"`
+	Name                 string       `yaml:"name"`
+	Description          string       `yaml:"description,omitempty"`
+	UseReasoning         bool         `yaml:"use_reasoning"`
+	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
+	ModelScores          []ModelScore `yaml:"model_scores"`
 }
 
 var (

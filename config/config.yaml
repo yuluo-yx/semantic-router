@@ -94,6 +94,8 @@ classifier:
   load_aware: false
 categories:
 - name: business
+  use_reasoning: false
+  reasoning_description: "Business content is typically conversational"
   model_scores:
   - model: phi4
     score: 0.8
@@ -102,6 +104,8 @@ categories:
   - model: mistral-small3.1
     score: 0.2
 - name: law
+  use_reasoning: false
+  reasoning_description: "Legal content is typically explanatory"
   model_scores:
   - model: gemma3:27b
     score: 0.8
@@ -110,6 +114,8 @@ categories:
   - model: mistral-small3.1
     score: 0.4
 - name: psychology
+  use_reasoning: false
+  reasoning_description: "Psychology content is usually explanatory"
   model_scores:
   - model: mistral-small3.1
     score: 0.6
@@ -118,6 +124,8 @@ categories:
   - model: phi4
     score: 0.4
 - name: biology
+  use_reasoning: true
+  reasoning_description: "Biological processes benefit from structured analysis"
   model_scores:
   - model: mistral-small3.1
     score: 0.8
@@ -126,6 +134,8 @@ categories:
   - model: phi4
     score: 0.2
 - name: chemistry
+  use_reasoning: true
+  reasoning_description: "Chemical reactions and formulas require systematic thinking"
   model_scores:
   - model: mistral-small3.1
     score: 0.8
@@ -134,6 +144,8 @@ categories:
   - model: phi4
     score: 0.6
 - name: history
+  use_reasoning: false
+  reasoning_description: "Historical content is narrative-based"
   model_scores:
   - model: mistral-small3.1
     score: 0.8
@@ -142,6 +154,8 @@ categories:
   - model: gemma3:27b
     score: 0.4
 - name: other
+  use_reasoning: false
+  reasoning_description: "General content doesn't require reasoning"
   model_scores:
   - model: gemma3:27b
     score: 0.8
@@ -150,6 +164,8 @@ categories:
   - model: mistral-small3.1
     score: 0.6
 - name: health
+  use_reasoning: false
+  reasoning_description: "Health information is typically informational"
   model_scores:
   - model: gemma3:27b
     score: 0.8
@@ -158,6 +174,8 @@ categories:
   - model: mistral-small3.1
     score: 0.6
 - name: economics
+  use_reasoning: false
+  reasoning_description: "Economic discussions are usually explanatory"
   model_scores:
   - model: gemma3:27b
     score: 0.8
@@ -166,6 +184,8 @@ categories:
   - model: phi4
     score: 0.0
 - name: math
+  use_reasoning: true
+  reasoning_description: "Mathematical problems require step-by-step reasoning"
   model_scores:
   - model: phi4
     score: 1.0
@@ -174,6 +194,8 @@ categories:
   - model: gemma3:27b
     score: 0.6
 - name: physics
+  use_reasoning: true
+  reasoning_description: "Physics concepts need logical analysis"
   model_scores:
   - model: gemma3:27b
     score: 0.4
@@ -182,6 +204,8 @@ categories:
   - model: mistral-small3.1
     score: 0.4
 - name: computer science
+  use_reasoning: true
+  reasoning_description: "Programming and algorithms need logical reasoning"
   model_scores:
   - model: gemma3:27b
     score: 0.6
@@ -190,6 +214,8 @@ categories:
   - model: phi4
     score: 0.0
 - name: philosophy
+  use_reasoning: false
+  reasoning_description: "Philosophical discussions are conversational"
   model_scores:
   - model: phi4
     score: 0.6
@@ -198,6 +224,8 @@ categories:
   - model: mistral-small3.1
     score: 0.2
 - name: engineering
+  use_reasoning: true
+  reasoning_description: "Engineering problems require systematic problem-solving"
   model_scores:
   - model: gemma3:27b
     score: 0.6

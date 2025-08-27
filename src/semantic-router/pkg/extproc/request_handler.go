@@ -117,13 +117,20 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 	// Store headers for later use
 	headers := v.RequestHeaders.Headers
+	log.Printf("Processing %d request headers", len(headers.Headers))
 	for _, h := range headers.Headers {
-		ctx.Headers[h.Key] = h.Value
+		// Use RawValue instead of Value for header values
+		headerValue := string(h.RawValue)
+
+		ctx.Headers[h.Key] = headerValue
 		// Store request ID if present
 		if strings.ToLower(h.Key) == "x-request-id" {
-			ctx.RequestID = h.Value
+			ctx.RequestID = headerValue
 		}
 	}
+
+	// Headers will be set in body phase to avoid conflicts (body phase replaces header phase)
+	log.Printf("DEBUG: [Header Phase] Skipping header setting - will be handled in body phase to avoid conflicts")
 
 	// Allow the request to continue
 	response := &ext_proc.ProcessingResponse{
@@ -131,6 +138,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			RequestHeaders: &ext_proc.HeadersResponse{
 				Response: &ext_proc.CommonResponse{
 					Status: ext_proc.CommonResponse_CONTINUE,
+					// No HeaderMutation - will be handled in body phase
 				},
 			},
 		},
@@ -329,6 +337,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				log.Printf("Routing to model: %s", matchedModel)
 
+				// Check reasoning mode for this category
+				useReasoning := r.shouldUseReasoningMode(userContent)
+				log.Printf("Reasoning mode decision for this query: %v", useReasoning)
+
 				// Track the model load for the selected model
 				r.Classifier.IncrementModelLoad(matchedModel)
 
@@ -357,6 +369,15 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 				}
 
+				// Add reasoning mode to the request body if needed
+				if useReasoning {
+					modifiedBody, err = r.addReasoningModeToRequestBody(modifiedBody)
+					if err != nil {
+						log.Printf("Error adding reasoning mode to request: %v", err)
+						return nil, status.Errorf(codes.Internal, "error adding reasoning mode: %v", err)
+					}
+				}
+
 				// Create body mutation with the modified body
 				bodyMutation := &ext_proc.BodyMutation{
 					Mutation: &ext_proc.BodyMutation_Body{
@@ -364,36 +385,38 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					},
 				}
 
-				// Create header mutation to remove content-length and add endpoint selection
-				headerMutation := &ext_proc.HeaderMutation{
-					RemoveHeaders: []string{"content-length"},
-				}
-
-				// Add endpoint and model selection headers
+				// Create header mutation with content-length removal AND all necessary routing headers
+				// (body phase HeaderMutation replaces header phase completely)
+				log.Printf("DEBUG: Creating headers - selectedEndpoint='%s', actualModel='%s'", selectedEndpoint, actualModel)
+				setHeaders := []*core.HeaderValueOption{}
 				if selectedEndpoint != "" {
-					if headerMutation.SetHeaders == nil {
-						headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
-					}
-					headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
+					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:   "x-gateway-destination-endpoint",
+							Key:   "x-semantic-destination-endpoint",
 							Value: selectedEndpoint,
 						},
 					})
 				}
-
-				// Always add the selected model header for logging/debugging
-				if headerMutation.SetHeaders == nil {
-					headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
+				if actualModel != "" {
+					setHeaders = append(setHeaders, &core.HeaderValueOption{
+						Header: &core.HeaderValue{
+							Key:   "x-selected-model",
+							Value: actualModel,
+						},
+					})
 				}
-				headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
-					Header: &core.HeaderValue{
-						Key:   "x-selected-model",
-						Value: actualModel,
-					},
-				})
+				log.Printf("DEBUG: Created headers array with %d headers", len(setHeaders))
 
-				// Set the response with both mutations
+				headerMutation := &ext_proc.HeaderMutation{
+					RemoveHeaders: []string{"content-length"},
+					SetHeaders:    setHeaders,
+				}
+
+				log.Printf("DEBUG: Body phase - removing content-length AND setting headers (Authorization left untouched):")
+				log.Printf("DEBUG: selectedEndpoint = '%s'", selectedEndpoint)
+				log.Printf("DEBUG: actualModel = '%s'", actualModel)
+
+				// Set the response with body mutation and content-length removal
 				response = &ext_proc.ProcessingResponse{
 					Response: &ext_proc.ProcessingResponse_RequestBody{
 						RequestBody: &ext_proc.BodyResponse{
@@ -437,41 +460,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	// Save the actual model that will be used for token tracking
 	ctx.RequestModel = actualModel
 
-	// If we have an endpoint selected, we need to set headers
-	if selectedEndpoint != "" {
-		var headerMutation *ext_proc.HeaderMutation
-
-		// Get existing header mutation or create a new one
-		if response.GetRequestBody().GetResponse().GetHeaderMutation() != nil {
-			headerMutation = response.GetRequestBody().GetResponse().GetHeaderMutation()
-		} else {
-			headerMutation = &ext_proc.HeaderMutation{}
-		}
-
-		// Initialize SetHeaders if nil
-		if headerMutation.SetHeaders == nil {
-			headerMutation.SetHeaders = make([]*core.HeaderValueOption, 0)
-		}
-
-		// Add endpoint selection header
-		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:   "x-gateway-destination-endpoint",
-				Value: selectedEndpoint,
-			},
-		})
-
-		// Add selected model header for logging/debugging
-		headerMutation.SetHeaders = append(headerMutation.SetHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:   "x-selected-model",
-				Value: actualModel,
-			},
-		})
-
-		// Update the response with header mutation
-		response.GetRequestBody().GetResponse().HeaderMutation = headerMutation
-	}
+	// Endpoint selection headers already handled in header phase - no additional logic needed
+	log.Printf("DEBUG: Endpoint selection complete - all headers handled in header phase")
 
 	// Handle tool selection based on tool_choice field
 	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
@@ -525,7 +515,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		if r.Config.Tools.FallbackToEmpty {
 			log.Printf("Tool selection failed, falling back to no tools: %v", err)
 			openAIRequest.Tools = nil
-			return r.updateRequestWithTools(openAIRequest, response)
+			return r.updateRequestWithTools(openAIRequest, response, ctx)
 		}
 		return err
 	}
@@ -558,11 +548,11 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		log.Printf("Auto-selected %d tools for query: %s", len(selectedTools), classificationText)
 	}
 
-	return r.updateRequestWithTools(openAIRequest, response)
+	return r.updateRequestWithTools(openAIRequest, response, ctx)
 }
 
 // updateRequestWithTools updates the request body with the selected tools
-func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse) error {
+func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
 	// Re-serialize the request with modified tools
 	modifiedBody, err := serializeOpenAIRequest(openAIRequest)
 	if err != nil {
@@ -576,33 +566,54 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		},
 	}
 
-	// Create or get existing header mutation
-	var headerMutation *ext_proc.HeaderMutation
-	if (*response).GetRequestBody().GetResponse().GetHeaderMutation() != nil {
-		headerMutation = (*response).GetRequestBody().GetResponse().GetHeaderMutation()
-	} else {
-		headerMutation = &ext_proc.HeaderMutation{}
-	}
+	// Create header mutation with content-length removal AND all necessary routing headers
+	// (body phase HeaderMutation replaces header phase completely)
 
-	// Add content-length removal if not already present
-	if headerMutation.RemoveHeaders == nil {
-		headerMutation.RemoveHeaders = make([]string, 0)
-	}
+	// Get the headers that should have been set in the main routing
+	var selectedEndpoint, actualModel string
 
-	// Check if content-length is already in the remove list
-	hasContentLength := false
-	for _, header := range headerMutation.RemoveHeaders {
-		if strings.ToLower(header) == "content-length" {
-			hasContentLength = true
-			break
+	// These should be available from the existing response
+	if (*response).GetRequestBody() != nil && (*response).GetRequestBody().GetResponse() != nil &&
+		(*response).GetRequestBody().GetResponse().GetHeaderMutation() != nil &&
+		(*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() != nil {
+		for _, header := range (*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
+			switch header.Header.Key {
+			case "x-semantic-destination-endpoint":
+				selectedEndpoint = header.Header.Value
+			case "x-selected-model":
+				actualModel = header.Header.Value
+			}
 		}
 	}
 
-	if !hasContentLength {
-		headerMutation.RemoveHeaders = append(headerMutation.RemoveHeaders, "content-length")
+	setHeaders := []*core.HeaderValueOption{}
+	if selectedEndpoint != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:   "x-semantic-destination-endpoint",
+				Value: selectedEndpoint,
+			},
+		})
+	}
+	if actualModel != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:   "x-selected-model",
+				Value: actualModel,
+			},
+		})
 	}
 
-	// Update the response with both mutations
+	// Intentionally do not mutate Authorization header here
+
+	headerMutation := &ext_proc.HeaderMutation{
+		RemoveHeaders: []string{"content-length"},
+		SetHeaders:    setHeaders,
+	}
+
+	log.Printf("DEBUG: Tool selection - removing content-length AND preserving routing headers (body phase replaces header phase)")
+
+	// Update the response with body mutation and content-length removal
 	*response = &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
