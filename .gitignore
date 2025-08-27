@@ -65,6 +65,7 @@ bin/
 # Allow README files in model directories
 !*/trained_model/README.md
 !*/models/README.md
+models/
 
 # Added by Claude Task Master
 # Logs
