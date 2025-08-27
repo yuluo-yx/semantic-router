@@ -103,6 +103,24 @@ make build
    make test-jailbreak-classifier
    ```
 
+### Manual Testing
+
+Test different routing scenarios:
+
+```bash
+# Test model auto-selection
+make test-prompt
+
+# Test PII detection
+make test-pii
+
+# Test prompt guard (jailbreak detection)
+make test-prompt-guard
+
+# Test tools auto-selection
+make test-tools
+```
+
 ### End-to-End Tests
 
 Ensure both Envoy and the router are running, then:
@@ -121,23 +139,14 @@ python e2e-tests/run_all_tests.py --pattern "0*-*.py"
 python e2e-tests/run_all_tests.py --check-only
 ```
 
-### Manual Testing
+The test suite includes:
 
-Test different routing scenarios:
-
-```bash
-# Test model auto-selection
-make test-prompt
-
-# Test PII detection
-make test-pii
-
-# Test prompt guard (jailbreak detection)
-make test-prompt-guard
-
-# Test tools auto-selection
-make test-tools
-```
++ Basic client request tests
++ Envoy ExtProc interaction tests
++ Router classification tests
++ Semantic cache tests
++ Category-specific tests
++ Metrics validation tests
 
 ## Development Workflow
 
