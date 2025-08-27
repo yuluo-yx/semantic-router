@@ -24,12 +24,12 @@ FROM golang:1.24 as go-builder
 WORKDIR /app
 
 # Copy Go module files first for better layer caching
-RUN mkdir -p src/semantic_router
-COPY src/semantic_router/go.mod src/semantic_router/go.sum src/semantic_router/
-COPY candle-binding/go.mod candle-binding/semantic_router.go candle-binding/
+RUN mkdir -p src/semantic-router
+COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
 
-# Copy semantic_router source code
-COPY src/semantic_router/ src/semantic_router/
+# Copy semantic-router source code
+COPY src/semantic-router/ src/semantic-router/
 
 # Copy the built Rust library from rust-builder
 COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
@@ -39,7 +39,7 @@ ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
 
 # Build the router binary
-RUN mkdir -p bin && cd src/semantic_router && go build -o ../../bin/router cmd/main.go
+RUN mkdir -p bin && cd src/semantic-router && go build -o ../../bin/router cmd/main.go
 
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream9

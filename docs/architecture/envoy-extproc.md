@@ -476,7 +476,7 @@ static_resources:
       unhealthy_threshold: 3
       healthy_threshold: 2
       grpc_health_check:
-        service_name: "semantic_router"
+        service_name: "semantic-router"
 
   # Model endpoint clusters
   - name: math_model_cluster

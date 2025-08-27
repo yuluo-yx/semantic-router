@@ -1,4 +1,4 @@
-module semantic_router/classifier
+module semantic-router/classifier
 
 go 1.24.1
 

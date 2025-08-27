@@ -10,12 +10,12 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/cache"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/extproc"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/tools"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/classification"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/utils/pii"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/tools"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/pii"
 )
 
 // MockStream implements the ext_proc.ExternalProcessor_ProcessServer interface for testing

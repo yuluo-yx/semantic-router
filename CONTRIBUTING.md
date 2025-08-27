@@ -31,7 +31,7 @@ Before you begin, ensure you have the following installed:
 1. **Clone the repository:**
    ```bash
    git clone <repository-url>
-   cd semantic_router
+   cd semantic-router
    ```
 
 2. **Download required models:**
@@ -217,7 +217,7 @@ make test-tools
 
 ```
 ├── candle-binding/          # Rust library for BERT classification
-├── src/semantic_router/     # Go implementation of the router
+├── src/semantic-router/     # Go implementation of the router
 ├── src/training/           # Model training scripts
 ├── e2e-tests/              # End-to-end test suite
 ├── config/                 # Configuration files

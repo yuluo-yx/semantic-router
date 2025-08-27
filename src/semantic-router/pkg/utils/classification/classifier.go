@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
 )
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content

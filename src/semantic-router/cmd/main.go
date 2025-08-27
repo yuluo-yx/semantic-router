@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/vllm-project/semantic-router/semantic_router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/extproc"
 )
 
 func main() {

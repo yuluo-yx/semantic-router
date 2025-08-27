@@ -1,4 +1,4 @@
-module semantic_router/jailbreak_classifier
+module semantic-router/jailbreak_classifier
 
 go 1.24.1
 

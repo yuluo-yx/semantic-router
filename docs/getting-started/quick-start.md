@@ -19,13 +19,13 @@ Open two terminals and start the required services:
 
 **Terminal 1 - Start Envoy Proxy:**
 ```bash
-cd semantic_router
+cd semantic-router
 make run-envoy
 ```
 
 **Terminal 2 - Start Semantic Router:**
 ```bash
-cd semantic_router  
+cd semantic-router  
 make run-router
 ```
 
@@ -186,7 +186,7 @@ The test suite covers:
 
 ```bash
 # Check Envoy statistics
-curl http://localhost:8801/stats | grep semantic_router
+curl http://localhost:8801/stats | grep semantic-router
 
 # Check router health
 curl http://localhost:50051/health

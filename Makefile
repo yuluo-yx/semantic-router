@@ -18,7 +18,7 @@ rust:
 build-router: rust
 	@echo "Building router..."
 	@mkdir -p bin
-	@cd src/semantic_router && go build -o ../../bin/router cmd/main.go
+	@cd src/semantic-router && go build -o ../../bin/router cmd/main.go
 
 # Run the router
 run-router: build-router
@@ -55,11 +55,11 @@ test-jailbreak-classifier: rust
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
-# Unit test semantic_router
+# Unit test semantic-router
 test-semantic-router: build-router
-	@echo "Testing semantic_router..."
+	@echo "Testing semantic-router..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		cd src/semantic_router && CGO_ENABLED=1 go test -v ./...
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
 test: download-models test-binding test-semantic-router

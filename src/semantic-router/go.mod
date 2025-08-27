@@ -1,11 +1,11 @@
-module github.com/vllm-project/semantic-router/semantic_router
+module github.com/vllm-project/semantic-router/semantic-router
 
 go 1.24.1
 
 replace (
 	github.com/vllm-project/semantic-router/candle-binding => ../../candle-binding
-	github.com/vllm-project/semantic-router/semantic_router/pkg/config => ./pkg/config
-	github.com/vllm-project/semantic-router/semantic_router/pkg/extproc => ./pkg/extproc
+	github.com/vllm-project/semantic-router/semantic-router/pkg/config => ./pkg/config
+	github.com/vllm-project/semantic-router/semantic-router/pkg/extproc => ./pkg/extproc
 )
 
 require (
