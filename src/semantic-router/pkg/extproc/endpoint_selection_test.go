@@ -75,7 +75,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var modelHeaderFound bool
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
 							// Should be one of the configured endpoints
 							Expect(header.Header.Value).To(BeElementOf("test-endpoint1", "test-endpoint2"))
@@ -139,7 +139,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var selectedEndpoint string
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
 							selectedEndpoint = header.Header.Value
 							break
@@ -198,7 +198,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var selectedEndpoint string
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
 							selectedEndpoint = header.Header.Value
 							break

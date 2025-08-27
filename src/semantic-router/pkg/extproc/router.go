@@ -150,6 +150,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		pendingRequests:      make(map[string][]byte),
 	}
 
+	// Log reasoning configuration after router is created
+	router.logReasoningConfiguration()
+
 	return router, nil
 }
 
