@@ -26,10 +26,19 @@ run-router: build-router
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		./bin/router -config=config/config.yaml
 
+# Prepare Envoy
+prepare-envoy:
+	curl https://func-e.io/install.sh | sudo bash -s -- -b /usr/local/bin
+
 # Run Envoy proxy
 run-envoy:
+	@echo "Checking for func-e..."
+	@if ! command -v func-e >/dev/null 2>&1; then \
+		echo "func-e not found, installing..."; \
+		$(MAKE) prepare-envoy; \
+	fi
 	@echo "Starting Envoy..."
-	envoy --config-path config/envoy.yaml --component-log-level "ext_proc:trace,router:trace,http:trace"
+	func-e run --config-path config/envoy.yaml --component-log-level "ext_proc:trace,router:trace,http:trace"
 
 # Test the Rust library
 test-binding: rust
