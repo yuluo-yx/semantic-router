@@ -10,6 +10,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/classification"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/pii"
@@ -131,6 +132,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	ttftCalculator := ttft.NewCalculator(cfg.GPUConfig)
 	modelTTFT := ttftCalculator.InitializeModelTTFT(cfg)
 	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping, modelTTFT)
+
+	// Create global classification service for API access
+	services.NewClassificationService(classifier, cfg)
 
 	// Initialize jailbreak classifier if enabled
 	if jailbreakMapping != nil {

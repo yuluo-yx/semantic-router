@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/api"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/extproc"
 )
 
@@ -15,8 +16,10 @@ func main() {
 	// Parse command-line flags
 	var (
 		configPath  = flag.String("config", "config/config.yaml", "Path to the configuration file")
-		port        = flag.Int("port", 50051, "Port to listen on")
+		port        = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
+		apiPort     = flag.Int("api-port", 8080, "Port to listen on for Classification API")
 		metricsPort = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
+		enableAPI   = flag.Bool("enable-api", true, "Enable Classification API server")
 	)
 	flag.Parse()
 
@@ -35,14 +38,25 @@ func main() {
 		}
 	}()
 
-	// Create and start the server
+	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port)
 	if err != nil {
-		log.Fatalf("Failed to create server: %v", err)
+		log.Fatalf("Failed to create ExtProc server: %v", err)
 	}
 
 	log.Printf("Starting LLM Semantic Router ExtProc with config: %s", *configPath)
+
+	// Start Classification API server if enabled
+	if *enableAPI {
+		go func() {
+			log.Printf("Starting Classification API server on port %d", *apiPort)
+			if err := api.StartClassificationAPI(*configPath, *apiPort); err != nil {
+				log.Printf("Classification API server error: %v", err)
+			}
+		}()
+	}
+
 	if err := server.Start(); err != nil {
-		log.Fatalf("Server error: %v", err)
+		log.Fatalf("ExtProc server error: %v", err)
 	}
 }

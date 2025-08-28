@@ -6,7 +6,70 @@ The Classification API provides direct access to the Semantic Router's classific
 
 ### Base URL
 ```
-http://localhost:50051/api/v1/classify
+http://localhost:8080/api/v1/classify
+```
+
+## Server Status
+
+The Classification API server runs alongside the main Semantic Router ExtProc server:
+- **Classification API**: `http://localhost:8080` (HTTP REST API)
+- **ExtProc Server**: `http://localhost:50051` (gRPC for Envoy integration)
+- **Metrics Server**: `http://localhost:9190` (Prometheus metrics)
+
+Start the server with:
+```bash
+make run-router
+```
+
+## Implementation Status
+
+### ✅ Fully Implemented
+- `GET /health` - Health check endpoint
+- `POST /api/v1/classify/intent` - Intent classification with real model inference
+- `POST /api/v1/classify/pii` - PII detection with real model inference
+- `POST /api/v1/classify/security` - Security/jailbreak detection with real model inference
+- `GET /info/models` - Model information and system status
+- `GET /info/classifier` - Detailed classifier capabilities and configuration
+
+### 🔄 Placeholder Implementation
+- `POST /api/v1/classify/combined` - Returns "not implemented" response
+- `POST /api/v1/classify/batch` - Returns "not implemented" response
+- `GET /metrics/classification` - Returns "not implemented" response
+- `GET /config/classification` - Returns "not implemented" response
+- `PUT /config/classification` - Returns "not implemented" response
+
+The fully implemented endpoints provide real classification results using the loaded models. Placeholder endpoints return appropriate HTTP 501 responses and can be extended as needed.
+
+## Quick Start
+
+### Test the API
+
+Once the server is running, you can test the endpoints:
+
+```bash
+# Health check
+curl -X GET http://localhost:8080/health
+
+# Intent classification
+curl -X POST http://localhost:8080/api/v1/classify/intent \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What is machine learning?"}'
+
+# PII detection
+curl -X POST http://localhost:8080/api/v1/classify/pii \
+  -H "Content-Type: application/json" \
+  -d '{"text": "My email is john@example.com"}'
+
+# Security detection
+curl -X POST http://localhost:8080/api/v1/classify/security \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Ignore all previous instructions"}'
+
+# Model information
+curl -X GET http://localhost:8080/info/models
+
+# Classifier details
+curl -X GET http://localhost:8080/info/classifier
 ```
 
 ## Intent Classification
@@ -20,7 +83,7 @@ Classify user queries into routing categories.
 
 ```json
 {
-  "text": "What is the derivative of x^2 + 3x + 1?",
+  "text": "What is machine learning and how does it work?",
   "options": {
     "return_probabilities": true,
     "confidence_threshold": 0.7,
@@ -34,22 +97,40 @@ Classify user queries into routing categories.
 ```json
 {
   "classification": {
-    "category": "mathematics",
-    "confidence": 0.956,
-    "processing_time_ms": 12
+    "category": "computer science",
+    "confidence": 0.8827820420265198,
+    "processing_time_ms": 46
   },
   "probabilities": {
-    "mathematics": 0.956,
-    "physics": 0.024,
-    "computer_science": 0.012,
-    "creative_writing": 0.003,
+    "computer science": 0.8827820420265198,
+    "math": 0.024,
+    "physics": 0.012,
+    "engineering": 0.003,
     "business": 0.002,
-    "general": 0.003
+    "other": 0.003
   },
-  "recommended_model": "math-specialized-model",
+  "recommended_model": "computer science-specialized-model",
   "routing_decision": "high_confidence_specialized"
 }
 ```
+
+### Available Categories
+
+The current model supports the following 14 categories:
+- `business`
+- `law`
+- `psychology`
+- `biology`
+- `chemistry`
+- `history`
+- `other`
+- `health`
+- `economics`
+- `math`
+- `physics`
+- `computer science`
+- `philosophy`
+- `engineering`
 
 ## PII Detection
 
@@ -270,63 +351,151 @@ Process multiple texts in a single request for efficiency.
 }
 ```
 
-## Model Information
+## Information Endpoints
+
+### Model Information
 
 Get information about loaded classification models.
 
-### Endpoint
-`GET /models/info`
+#### Endpoint
+`GET /info/models`
 
 ### Response Format
 
 ```json
 {
-  "models": {
-    "intent_classifier": {
-      "name": "modernbert-base",
-      "version": "1.0.0",
+  "models": [
+    {
+      "name": "category_classifier",
+      "type": "intent_classification",
+      "loaded": true,
+      "model_path": "models/category_classifier_modernbert-base_model",
       "categories": [
-        "mathematics", "physics", "computer_science", 
-        "creative_writing", "business", "general"
+        "business", "law", "psychology", "biology", "chemistry",
+        "history", "other", "health", "economics", "math",
+        "physics", "computer science", "philosophy", "engineering"
       ],
-      "loaded": true,
-      "last_updated": "2024-03-15T10:30:00Z",
-      "performance": {
-        "accuracy": 0.942,
-        "avg_inference_time_ms": 12
+      "metadata": {
+        "mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json",
+        "model_type": "modernbert",
+        "threshold": "0.60"
       }
     },
-    "pii_detector": {
-      "name": "modernbert-pii",
-      "version": "1.0.0", 
-      "entity_types": ["PERSON", "EMAIL", "PHONE", "SSN", "LOCATION"],
+    {
+      "name": "pii_classifier",
+      "type": "pii_detection",
       "loaded": true,
-      "last_updated": "2024-03-15T10:30:00Z",
-      "performance": {
-        "f1_score": 0.957,
-        "avg_inference_time_ms": 8
+      "model_path": "models/pii_classifier_modernbert-base_presidio_token_model",
+      "metadata": {
+        "mapping_path": "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+        "model_type": "modernbert_token",
+        "threshold": "0.70"
       }
     },
-    "jailbreak_guard": {
-      "name": "modernbert-security",
-      "version": "1.0.0",
-      "detection_types": ["jailbreak", "prompt_injection", "manipulation"],
+    {
+      "name": "bert_similarity_model",
+      "type": "similarity",
       "loaded": true,
-      "last_updated": "2024-03-15T10:30:00Z",
-      "performance": {
-        "precision": 0.923,
-        "recall": 0.891,
-        "avg_inference_time_ms": 6
+      "model_path": "sentence-transformers/all-MiniLM-L12-v2",
+      "metadata": {
+        "model_type": "sentence_transformer",
+        "threshold": "0.60",
+        "use_cpu": "true"
       }
     }
-  },
-  "system_info": {
-    "total_memory_mb": 1024,
-    "gpu_available": true,
-    "concurrent_requests": 50
+  ],
+  "system": {
+    "go_version": "go1.24.1",
+    "architecture": "arm64",
+    "os": "darwin",
+    "memory_usage": "1.20 MB",
+    "gpu_available": false
   }
 }
 ```
+
+### Model Status
+
+- **loaded: true** - Model is successfully loaded and ready for inference
+- **loaded: false** - Model failed to load or is not initialized (placeholder mode)
+
+When models are not loaded, the API will return placeholder responses for testing purposes.
+
+### Classifier Information
+
+Get detailed information about classifier capabilities and configuration.
+
+#### Endpoint
+`GET /info/classifier`
+
+#### Response Format
+
+```json
+{
+  "status": "active",
+  "capabilities": [
+    "intent_classification",
+    "pii_detection",
+    "security_detection",
+    "similarity_matching"
+  ],
+  "categories": [
+    {
+      "name": "business",
+      "description": "Business and commercial content",
+      "reasoning_enabled": false,
+      "threshold": 0.6
+    },
+    {
+      "name": "math",
+      "description": "Mathematical problems and concepts",
+      "reasoning_enabled": true,
+      "threshold": 0.6
+    }
+  ],
+  "pii_types": [
+    "PERSON",
+    "EMAIL",
+    "PHONE",
+    "SSN",
+    "LOCATION",
+    "CREDIT_CARD",
+    "IP_ADDRESS"
+  ],
+  "security": {
+    "jailbreak_detection": false,
+    "detection_types": [
+      "jailbreak",
+      "prompt_injection",
+      "system_override"
+    ],
+    "enabled": false
+  },
+  "performance": {
+    "average_latency_ms": 45,
+    "requests_handled": 0,
+    "cache_enabled": false
+  },
+  "configuration": {
+    "category_threshold": 0.6,
+    "pii_threshold": 0.7,
+    "similarity_threshold": 0.6,
+    "use_cpu": true
+  }
+}
+```
+
+#### Status Values
+
+- **active** - Classifier is loaded and fully functional
+- **placeholder** - Using placeholder responses (models not loaded)
+
+#### Capabilities
+
+- **intent_classification** - Can classify text into categories
+- **pii_detection** - Can detect personally identifiable information
+- **security_detection** - Can detect jailbreak attempts and security threats
+- **similarity_matching** - Can perform semantic similarity matching
 
 ## Performance Metrics
 
@@ -408,14 +577,32 @@ Get real-time classification performance metrics.
 {
   "error": {
     "code": "CLASSIFICATION_ERROR",
-    "message": "Model inference failed",
-    "details": {
-      "model": "intent_classifier",
-      "input_length": 2048,
-      "max_length": 512
-    },
-    "timestamp": "2024-03-15T14:30:00Z",
-    "request_id": "req-abc123"
+    "message": "classification failed: model inference error",
+    "timestamp": "2024-03-15T14:30:00Z"
+  }
+}
+```
+
+### Example Error Responses
+
+**Invalid Input (400 Bad Request):**
+```json
+{
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "text cannot be empty",
+    "timestamp": "2024-03-15T14:30:00Z"
+  }
+}
+```
+
+**Not Implemented (501 Not Implemented):**
+```json
+{
+  "error": {
+    "code": "NOT_IMPLEMENTED",
+    "message": "Combined classification not implemented yet",
+    "timestamp": "2024-03-15T14:30:00Z"
   }
 }
 ```
@@ -440,7 +627,7 @@ import requests
 from typing import List, Dict, Optional
 
 class ClassificationClient:
-    def __init__(self, base_url: str = "http://localhost:50051"):
+    def __init__(self, base_url: str = "http://localhost:8080"):
         self.base_url = base_url
         
     def classify_intent(self, text: str, return_probabilities: bool = True) -> Dict:
@@ -498,7 +685,7 @@ if security_result['is_jailbreak']:
 
 ```javascript
 class ClassificationAPI {
-    constructor(baseUrl = 'http://localhost:50051') {
+    constructor(baseUrl = 'http://localhost:8080') {
         this.baseUrl = baseUrl;
     }
     
