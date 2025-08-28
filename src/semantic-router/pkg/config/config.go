@@ -458,6 +458,30 @@ func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, boo
 	return bestEndpoint.Name, true
 }
 
+// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port
+// Returns the endpoint address:port string and whether selection was successful
+func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool) {
+	endpoints := c.GetEndpointsForModel(modelName)
+	if len(endpoints) == 0 {
+		return "", false
+	}
+
+	// If only one endpoint, return it
+	if len(endpoints) == 1 {
+		return fmt.Sprintf("%s:%d", endpoints[0].Address, endpoints[0].Port), true
+	}
+
+	// Select endpoint with highest weight
+	bestEndpoint := endpoints[0]
+	for _, endpoint := range endpoints[1:] {
+		if endpoint.Weight > bestEndpoint.Weight {
+			bestEndpoint = endpoint
+		}
+	}
+
+	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
+}
+
 // ValidateEndpoints validates that all configured models have at least one endpoint
 func (c *RouterConfig) ValidateEndpoints() error {
 	// Get all models from categories

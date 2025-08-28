@@ -77,8 +77,8 @@ var _ = Describe("Endpoint Selection", func() {
 					for _, header := range headerMutation.SetHeaders {
 						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
-							// Should be one of the configured endpoints
-							Expect(header.Header.Value).To(BeElementOf("test-endpoint1", "test-endpoint2"))
+							// Should be one of the configured endpoint addresses
+							Expect(header.Header.Value).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
 						}
 						if header.Header.Key == "x-selected-model" {
 							modelHeaderFound = true
@@ -148,7 +148,7 @@ var _ = Describe("Endpoint Selection", func() {
 
 					if endpointHeaderFound {
 						// model-a should be routed to test-endpoint1 based on preferred endpoints
-						Expect(selectedEndpoint).To(Equal("test-endpoint1"))
+						Expect(selectedEndpoint).To(Equal("127.0.0.1:8000"))
 					}
 				}
 			})
@@ -207,7 +207,7 @@ var _ = Describe("Endpoint Selection", func() {
 
 					if endpointHeaderFound {
 						// model-b should be routed to test-endpoint2 (higher weight) or test-endpoint1
-						Expect(selectedEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
+						Expect(selectedEndpoint).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
 					}
 				}
 			})
@@ -256,6 +256,11 @@ var _ = Describe("Endpoint Selection", func() {
 			bestEndpoint, found := cfg.SelectBestEndpointForModel("model-b")
 			Expect(found).To(BeTrue())
 			Expect(bestEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
+
+			// Test best endpoint address selection
+			bestEndpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-b")
+			Expect(found).To(BeTrue())
+			Expect(bestEndpointAddress).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
 		})
 	})
 

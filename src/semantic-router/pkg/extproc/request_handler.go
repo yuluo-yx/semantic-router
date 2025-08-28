@@ -344,10 +344,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				actualModel = matchedModel
 
 				// Select the best endpoint for this model
-				endpoint, endpointFound := r.Config.SelectBestEndpointForModel(matchedModel)
+				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
 				if endpointFound {
-					selectedEndpoint = endpoint
-					log.Printf("Selected endpoint: %s for model: %s", selectedEndpoint, matchedModel)
+					selectedEndpoint = endpointAddress
+					log.Printf("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
 				} else {
 					log.Printf("Warning: No endpoint found for model %s, using fallback", matchedModel)
 				}
@@ -386,7 +386,6 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
 							Key:      "x-semantic-destination-endpoint",
-							Value:    selectedEndpoint,
 							RawValue: []byte(selectedEndpoint),
 						},
 					})
@@ -416,10 +415,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					Response: &ext_proc.ProcessingResponse_RequestBody{
 						RequestBody: &ext_proc.BodyResponse{
 							Response: &ext_proc.CommonResponse{
-								ClearRouteCache: true,
-								Status:          ext_proc.CommonResponse_CONTINUE_AND_REPLACE,
-								HeaderMutation:  headerMutation,
-								BodyMutation:    bodyMutation,
+								Status:         ext_proc.CommonResponse_CONTINUE,
+								HeaderMutation: headerMutation,
+								BodyMutation:   bodyMutation,
 							},
 						},
 					},
@@ -444,12 +442,35 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 
 		// Select the best endpoint for the specified model
-		endpoint, endpointFound := r.Config.SelectBestEndpointForModel(originalModel)
+		endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(originalModel)
 		if endpointFound {
-			selectedEndpoint = endpoint
-			log.Printf("Selected endpoint: %s for model: %s", selectedEndpoint, originalModel)
+			selectedEndpoint = endpointAddress
+			log.Printf("Selected endpoint address: %s for model: %s", selectedEndpoint, originalModel)
 		} else {
+			// TOOD(Xunzhuo): pick a random endpoint from the list of all available endpoints
 			log.Printf("Warning: No endpoint found for model %s, using fallback", originalModel)
+		}
+		setHeaders := []*core.HeaderValueOption{}
+		if selectedEndpoint != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      "x-semantic-destination-endpoint",
+					RawValue: []byte(selectedEndpoint),
+				},
+			})
+		}
+		// Set the response with body mutation and content-length removal
+		response = &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestBody{
+				RequestBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+						HeaderMutation: &ext_proc.HeaderMutation{
+							SetHeaders: setHeaders,
+						},
+					},
+				},
+			},
 		}
 	}
 
