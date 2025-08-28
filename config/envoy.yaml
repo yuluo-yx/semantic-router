@@ -120,16 +120,6 @@ static_resources:
     connect_timeout: 300s
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
-    health_checks:
-    - timeout: 5s
-      interval: 10s
-      unhealthy_threshold: 3
-      healthy_threshold: 2
-      http_health_check:
-        path: "/health"
-        expected_statuses:
-        - start: 200
-          end: 299
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
@@ -150,16 +140,6 @@ static_resources:
     connect_timeout: 300s
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
-    health_checks:
-    - timeout: 5s
-      interval: 10s
-      unhealthy_threshold: 3
-      healthy_threshold: 2
-      http_health_check:
-        path: "/health"
-        expected_statuses:
-        - start: 200
-          end: 299
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
@@ -180,16 +160,6 @@ static_resources:
     connect_timeout: 300s
     type: STRICT_DNS
     lb_policy: ROUND_ROBIN
-    health_checks:
-    - timeout: 5s
-      interval: 10s
-      unhealthy_threshold: 3
-      healthy_threshold: 2
-      http_health_check:
-        path: "/health"
-        expected_statuses:
-        - start: 200
-          end: 299
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
