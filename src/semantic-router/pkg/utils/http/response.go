@@ -55,14 +55,14 @@ func CreatePIIViolationResponse(model string, deniedPII []string) *ext_proc.Proc
 			SetHeaders: []*core.HeaderValueOption{
 				{
 					Header: &core.HeaderValue{
-						Key:   "content-type",
-						Value: "application/json",
+						Key:      "content-type",
+						RawValue: []byte("application/json"),
 					},
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:   "x-pii-violation",
-						Value: "true",
+						Key:      "x-pii-violation",
+						RawValue: []byte("true"),
 					},
 				},
 			},
@@ -162,14 +162,14 @@ func CreateCacheHitResponse(cachedResponse []byte) *ext_proc.ProcessingResponse 
 			SetHeaders: []*core.HeaderValueOption{
 				{
 					Header: &core.HeaderValue{
-						Key:   "content-type",
-						Value: "application/json",
+						Key:      "content-type",
+						RawValue: []byte("application/json"),
 					},
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:   "x-cache-hit",
-						Value: "true",
+						Key:      "x-cache-hit",
+						RawValue: []byte("true"),
 					},
 				},
 			},

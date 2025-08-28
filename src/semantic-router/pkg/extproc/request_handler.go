@@ -385,16 +385,18 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				if selectedEndpoint != "" {
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:   "x-semantic-destination-endpoint",
-							Value: selectedEndpoint,
+							Key:      "x-semantic-destination-endpoint",
+							Value:    selectedEndpoint,
+							RawValue: []byte(selectedEndpoint),
 						},
 					})
 				}
 				if actualModel != "" {
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:   "x-selected-model",
-							Value: actualModel,
+							Key:      "x-selected-model",
+							Value:    actualModel,
+							RawValue: []byte(actualModel),
 						},
 					})
 				}
@@ -414,9 +416,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					Response: &ext_proc.ProcessingResponse_RequestBody{
 						RequestBody: &ext_proc.BodyResponse{
 							Response: &ext_proc.CommonResponse{
-								Status:         ext_proc.CommonResponse_CONTINUE,
-								HeaderMutation: headerMutation,
-								BodyMutation:   bodyMutation,
+								ClearRouteCache: true,
+								Status:          ext_proc.CommonResponse_CONTINUE_AND_REPLACE,
+								HeaderMutation:  headerMutation,
+								BodyMutation:    bodyMutation,
 							},
 						},
 					},
@@ -583,16 +586,16 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	if selectedEndpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:   "x-semantic-destination-endpoint",
-				Value: selectedEndpoint,
+				Key:      "x-semantic-destination-endpoint",
+				RawValue: []byte(selectedEndpoint),
 			},
 		})
 	}
 	if actualModel != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:   "x-selected-model",
-				Value: actualModel,
+				Key:      "x-selected-model",
+				RawValue: []byte(actualModel),
 			},
 		})
 	}
