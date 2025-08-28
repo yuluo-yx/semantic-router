@@ -39,25 +39,6 @@ func (r *OpenAIRouter) shouldUseReasoningMode(query string) bool {
 	return false
 }
 
-// buildRequestBody builds the request body for vLLM inference server with proper reasoning mode settings
-func buildRequestBody(model string, messages []map[string]string, useReasoning bool, stream bool) map[string]interface{} {
-	requestBody := map[string]interface{}{
-		"model":    model,
-		"messages": messages,
-		"stream":   stream,
-	}
-
-	// Add chat template kwargs if reasoning is enabled
-	if useReasoning {
-		requestBody["chat_template_kwargs"] = getChatTemplateKwargs(true)
-		log.Printf("Added reasoning mode to request for model: %s", model)
-	} else {
-		log.Printf("Using standard mode (no reasoning) for model: %s", model)
-	}
-
-	return requestBody
-}
-
 // getChatTemplateKwargs returns the appropriate chat template kwargs based on reasoning mode and streaming
 func getChatTemplateKwargs(useReasoning bool) map[string]interface{} {
 	if useReasoning {

@@ -190,13 +190,6 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 func (r *OpenAIRouter) performSecurityChecks(userContent string, nonUserMessages []string) (*ext_proc.ProcessingResponse, bool) {
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
-	detectedPII := r.Classifier.DetectPIIInContent(allContent)
-
-	if len(detectedPII) > 0 {
-		log.Printf("Total detected PII types: %v", detectedPII)
-	} else {
-		log.Printf("No PII detected in request content")
-	}
 
 	// Perform jailbreak detection on all message content
 	if r.Classifier.IsJailbreakEnabled() {
