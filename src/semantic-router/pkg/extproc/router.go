@@ -127,7 +127,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Create utility components
-	piiChecker := pii.NewPolicyChecker(cfg.ModelConfig)
+	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
 	ttftCalculator := ttft.NewCalculator(cfg.GPUConfig)
 	modelTTFT := ttftCalculator.InitializeModelTTFT(cfg)
 	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping, modelTTFT)

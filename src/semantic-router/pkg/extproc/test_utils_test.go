@@ -227,7 +227,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil, modelTTFT)
 
 	// Create PII checker
-	piiChecker := pii.NewPolicyChecker(cfg.ModelConfig)
+	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
 
 	// Create router manually with proper initialization
 	router := &extproc.OpenAIRouter{

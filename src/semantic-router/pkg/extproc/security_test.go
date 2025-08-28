@@ -51,7 +51,7 @@ var _ = Describe("Security Checks", func() {
 					PIITypes:       []string{"NO_PII"},
 				},
 			}
-			router.PIIChecker = pii.NewPolicyChecker(cfg.ModelConfig)
+			router.PIIChecker = pii.NewPolicyChecker(cfg, cfg.ModelConfig)
 			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, nil, router.Classifier.ModelTTFT)
 		})
 
@@ -463,7 +463,7 @@ var _ = Describe("Security Checks", func() {
 						PIITypes:       []string{"NO_PII"},
 					},
 				}
-				router.PIIChecker = pii.NewPolicyChecker(cfg.ModelConfig)
+				router.PIIChecker = pii.NewPolicyChecker(cfg, cfg.ModelConfig)
 
 				response, err := router.HandleRequestBody(bodyRequest, ctx)
 				Expect(err).NotTo(HaveOccurred())

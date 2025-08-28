@@ -8,18 +8,30 @@ import (
 
 // PolicyChecker handles PII policy validation
 type PolicyChecker struct {
+	Config       *config.RouterConfig
 	ModelConfigs map[string]config.ModelParams
 }
 
+// IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured
+func (c *PolicyChecker) IsPIIEnabled() bool {
+	return c.Config.PromptGuard.Enabled
+}
+
 // NewPolicyChecker creates a new PII policy checker
-func NewPolicyChecker(modelConfigs map[string]config.ModelParams) *PolicyChecker {
+func NewPolicyChecker(cfg *config.RouterConfig, modelConfigs map[string]config.ModelParams) *PolicyChecker {
 	return &PolicyChecker{
+		Config:       cfg,
 		ModelConfigs: modelConfigs,
 	}
 }
 
 // CheckPolicy checks if the detected PII types are allowed for the given model
 func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, []string, error) {
+	if !pc.IsPIIEnabled() {
+		log.Printf("PII detection is disabled, allowing request")
+		return true, nil, nil
+	}
+
 	modelConfig, exists := pc.ModelConfigs[model]
 	if !exists {
 		// If no specific config, allow by default
