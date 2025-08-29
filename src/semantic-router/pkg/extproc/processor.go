@@ -48,11 +48,8 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			return err
 		}
 
-		log.Printf("Processing message type: %T", req.Request)
-
 		switch v := req.Request.(type) {
 		case *ext_proc.ProcessingRequest_RequestHeaders:
-			log.Printf("DEBUG: Processing request headers")
 			response, err := r.handleRequestHeaders(v, ctx)
 			if err != nil {
 				log.Printf("ERROR: handleRequestHeaders failed: %v", err)
@@ -62,10 +59,10 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				log.Printf("ERROR: sendResponse for headers failed: %v", err)
 				return err
 			}
-			log.Printf("DEBUG: Request headers processed successfully")
 
 		case *ext_proc.ProcessingRequest_RequestBody:
-			log.Printf("DEBUG: Processing request body - THIS IS WHERE ROUTING HAPPENS")
+			log.Printf("DEBUG: Processing Request Body - THIS IS WHERE ROUTING HAPPENS")
+
 			response, err := r.handleRequestBody(v, ctx)
 			if err != nil {
 				log.Printf("ERROR: handleRequestBody failed: %v", err)
@@ -75,7 +72,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				log.Printf("ERROR: sendResponse for body failed: %v", err)
 				return err
 			}
-			log.Printf("DEBUG: Request body processed successfully")
 
 		case *ext_proc.ProcessingRequest_ResponseHeaders:
 			response, err := r.handleResponseHeaders(v)
@@ -113,7 +109,5 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				return err
 			}
 		}
-
-		log.Printf("DEBUG: Finished processing message, continuing to next...")
 	}
 }

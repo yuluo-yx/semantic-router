@@ -13,7 +13,6 @@ import (
 
 // handleResponseHeaders processes the response headers
 func (r *OpenAIRouter) handleResponseHeaders(_ *ext_proc.ProcessingRequest_ResponseHeaders) (*ext_proc.ProcessingResponse, error) {
-	log.Println("Received response headers")
 
 	// Allow the response to continue without modification
 	response := &ext_proc.ProcessingResponse{
@@ -32,7 +31,6 @@ func (r *OpenAIRouter) handleResponseHeaders(_ *ext_proc.ProcessingRequest_Respo
 // handleResponseBody processes the response body
 func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_ResponseBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	completionLatency := time.Since(ctx.StartTime)
-	log.Println("Received response body")
 
 	// Process the response for caching
 	responseBody := v.ResponseBody.Body

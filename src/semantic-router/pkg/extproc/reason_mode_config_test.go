@@ -123,7 +123,7 @@ categories:
   - model: phi4
     score: 1.0
 
-- name: business  
+- name: business
   use_reasoning: false
   reasoning_description: "Business content is typically conversational"
   model_scores:
@@ -172,7 +172,7 @@ categories:
 - name: math
   use_reasoning: true
   reasoning_description: "Mathematical problems require step-by-step reasoning"
-  
+
 - name: creative_writing
   use_reasoning: false
   reasoning_description: "Creative content flows better without structured reasoning"
@@ -220,7 +220,7 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 	fmt.Printf("Original request body:\n%s\n\n", string(originalBody))
 
 	// Add reasoning mode
-	modifiedBody, err := router.addReasoningModeToRequestBody(originalBody)
+	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true)
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode: %v\n", err)
 		return
@@ -273,7 +273,7 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 		return
 	}
 
-	modifiedComplexBody, err := router.addReasoningModeToRequestBody(complexBody)
+	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true)
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode to complex request: %v\n", err)
 		return

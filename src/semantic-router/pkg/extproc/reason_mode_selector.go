@@ -43,14 +43,14 @@ func (r *OpenAIRouter) shouldUseReasoningMode(query string) bool {
 func getChatTemplateKwargs(useReasoning bool) map[string]interface{} {
 	if useReasoning {
 		return map[string]interface{}{
-			"thinking": true,
+			"thinking": useReasoning,
 		}
 	}
 	return nil
 }
 
-// addReasoningModeToRequestBody adds chat_template_kwargs to the JSON request body
-func (r *OpenAIRouter) addReasoningModeToRequestBody(requestBody []byte) ([]byte, error) {
+// setReasoningModeToRequestBody adds chat_template_kwargs to the JSON request body
+func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool) ([]byte, error) {
 	// Parse the JSON request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
@@ -58,7 +58,20 @@ func (r *OpenAIRouter) addReasoningModeToRequestBody(requestBody []byte) ([]byte
 	}
 
 	// Add chat_template_kwargs for reasoning mode
-	requestMap["chat_template_kwargs"] = getChatTemplateKwargs(true)
+	requestMap["chat_template_kwargs"] = getChatTemplateKwargs(enabled)
+	// Also set Reasoning-Effort in openai request
+	// This is a hack to get the reasoning mode for openai/gpt-oss-20b to work
+	originalReasoningEffort, ok := requestMap["reasoning_effort"]
+	if !ok {
+		// This seems to be the default for openai/gpt-oss models
+		originalReasoningEffort = "low"
+	}
+	if enabled {
+		// TODO: make this configurable
+		requestMap["reasoning_effort"] = "high"
+	} else {
+		requestMap["reasoning_effort"] = originalReasoningEffort
+	}
 
 	// Get the model name for logging
 	model := "unknown"
@@ -68,7 +81,8 @@ func (r *OpenAIRouter) addReasoningModeToRequestBody(requestBody []byte) ([]byte
 		}
 	}
 
-	log.Printf("Added reasoning mode (thinking: true) to request for model: %s", model)
+	log.Printf("Original reasoning effort: %s", originalReasoningEffort)
+	log.Printf("Added reasoning mode (thinking: %v) and reasoning effort (%s) to request for model: %s", enabled, requestMap["reasoning_effort"], model)
 
 	// Serialize back to JSON
 	modifiedBody, err := json.Marshal(requestMap)

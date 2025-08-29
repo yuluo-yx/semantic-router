@@ -119,18 +119,18 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	headers := v.RequestHeaders.Headers
 	log.Printf("Processing %d request headers", len(headers.Headers))
 	for _, h := range headers.Headers {
-		// Use RawValue instead of Value for header values
-		headerValue := string(h.RawValue)
+		// Prefer Value when available; fall back to RawValue
+		headerValue := h.Value
+		if headerValue == "" && len(h.RawValue) > 0 {
+			headerValue = string(h.RawValue)
+		}
 
 		ctx.Headers[h.Key] = headerValue
-		// Store request ID if present
+		// Store request ID if present (case-insensitive)
 		if strings.ToLower(h.Key) == "x-request-id" {
 			ctx.RequestID = headerValue
 		}
 	}
-
-	// Headers will be set in body phase to avoid conflicts (body phase replaces header phase)
-	log.Printf("DEBUG: [Header Phase] Skipping header setting - will be handled in body phase to avoid conflicts")
 
 	// Allow the request to continue
 	response := &ext_proc.ProcessingResponse{
@@ -277,6 +277,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	actualModel := originalModel
 	var selectedEndpoint string
 	if originalModel == "auto" && (len(nonUserMessages) > 0 || userContent != "") {
+		log.Printf("Using Auto Model Selection")
 		// Determine text to use for classification/similarity
 		var classificationText string
 		if len(userContent) > 0 {
@@ -292,39 +293,42 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			if matchedModel != originalModel && matchedModel != "" {
 				// Get detected PII for policy checking
 				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
-				detectedPII := r.Classifier.DetectPIIInContent(allContent)
+				if r.PIIChecker.IsPIIEnabled(matchedModel) {
+					log.Printf("PII policy enabled for model %s", matchedModel)
+					detectedPII := r.Classifier.DetectPIIInContent(allContent)
 
-				// Check if the initially selected model passes PII policy
-				allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
-				if err != nil {
-					log.Printf("Error checking PII policy for model %s: %v", matchedModel, err)
-					// Continue with original selection on error
-				} else if !allowed {
-					log.Printf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
-					// Find alternative models from the same category that pass PII policy
-					categoryName := r.findCategoryForClassification(classificationText)
-					if categoryName != "" {
-						alternativeModels := r.Classifier.GetModelsForCategory(categoryName)
-						allowedModels := r.PIIChecker.FilterModelsForPII(alternativeModels, detectedPII)
-						if len(allowedModels) > 0 {
-							// Select the best allowed model from this category
-							matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
-							log.Printf("Selected alternative model %s that passes PII policy", matchedModel)
-						} else {
-							log.Printf("No models in category %s pass PII policy, using default", categoryName)
-							matchedModel = r.Config.DefaultModel
-							// Check if default model passes policy
-							defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
-							if !defaultAllowed {
-								log.Printf("Default model also violates PII policy, returning error")
-								piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII)
-								return piiResponse, nil
+					// Check if the initially selected model passes PII policy
+					allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
+					if err != nil {
+						log.Printf("Error checking PII policy for model %s: %v", matchedModel, err)
+						// Continue with original selection on error
+					} else if !allowed {
+						log.Printf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
+						// Find alternative models from the same category that pass PII policy
+						categoryName := r.findCategoryForClassification(classificationText)
+						if categoryName != "" {
+							alternativeModels := r.Classifier.GetModelsForCategory(categoryName)
+							allowedModels := r.PIIChecker.FilterModelsForPII(alternativeModels, detectedPII)
+							if len(allowedModels) > 0 {
+								// Select the best allowed model from this category
+								matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
+								log.Printf("Selected alternative model %s that passes PII policy", matchedModel)
+							} else {
+								log.Printf("No models in category %s pass PII policy, using default", categoryName)
+								matchedModel = r.Config.DefaultModel
+								// Check if default model passes policy
+								defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
+								if !defaultAllowed {
+									log.Printf("Default model also violates PII policy, returning error")
+									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII)
+									return piiResponse, nil
+								}
 							}
+						} else {
+							log.Printf("Could not determine category, returning PII violation for model %s", matchedModel)
+							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII)
+							return piiResponse, nil
 						}
-					} else {
-						log.Printf("Could not determine category, returning PII violation for model %s", matchedModel)
-						piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII)
-						return piiResponse, nil
 					}
 				}
 
@@ -332,7 +336,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Check reasoning mode for this category
 				useReasoning := r.shouldUseReasoningMode(userContent)
-				log.Printf("Reasoning mode decision for this query: %v", useReasoning)
+				log.Printf("Reasoning mode decision for this query: %v on [%s] model", useReasoning, matchedModel)
 
 				// Track the model load for the selected model
 				r.Classifier.IncrementModelLoad(matchedModel)
@@ -362,13 +366,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 				}
 
-				// Add reasoning mode to the request body if needed
-				if useReasoning {
-					modifiedBody, err = r.addReasoningModeToRequestBody(modifiedBody)
-					if err != nil {
-						log.Printf("Error adding reasoning mode to request: %v", err)
-						return nil, status.Errorf(codes.Internal, "error adding reasoning mode: %v", err)
-					}
+				modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning)
+				if err != nil {
+					log.Printf("Error setting reasoning mode %v to request: %v", useReasoning, err)
+					return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
 				}
 
 				// Create body mutation with the modified body
@@ -380,7 +381,6 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Create header mutation with content-length removal AND all necessary routing headers
 				// (body phase HeaderMutation replaces header phase completely)
-				log.Printf("DEBUG: Creating headers - selectedEndpoint='%s', actualModel='%s'", selectedEndpoint, actualModel)
 				setHeaders := []*core.HeaderValueOption{}
 				if selectedEndpoint != "" {
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
@@ -399,16 +399,13 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 						},
 					})
 				}
-				log.Printf("DEBUG: Created headers array with %d headers", len(setHeaders))
 
 				headerMutation := &ext_proc.HeaderMutation{
 					RemoveHeaders: []string{"content-length"},
 					SetHeaders:    setHeaders,
 				}
 
-				log.Printf("DEBUG: Body phase - removing content-length AND setting headers (Authorization left untouched):")
-				log.Printf("DEBUG: selectedEndpoint = '%s'", selectedEndpoint)
-				log.Printf("DEBUG: actualModel = '%s'", actualModel)
+				log.Printf("ActualModel = '%s'", actualModel)
 
 				// Set the response with body mutation and content-length removal
 				response = &ext_proc.ProcessingResponse{
@@ -427,6 +424,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			}
 		}
 	} else if originalModel != "auto" {
+		log.Printf("Using specified model: %s", originalModel)
 		// For non-auto models, check PII policy compliance
 		allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 		detectedPII := r.Classifier.DetectPIIInContent(allContent)
@@ -476,9 +474,6 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 	// Save the actual model that will be used for token tracking
 	ctx.RequestModel = actualModel
-
-	// Endpoint selection headers already handled in header phase - no additional logic needed
-	log.Printf("DEBUG: Endpoint selection complete - all headers handled in header phase")
 
 	// Handle tool selection based on tool_choice field
 	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
@@ -627,8 +622,6 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		RemoveHeaders: []string{"content-length"},
 		SetHeaders:    setHeaders,
 	}
-
-	log.Printf("DEBUG: Tool selection - removing content-length AND preserving routing headers (body phase replaces header phase)")
 
 	// Update the response with body mutation and content-length removal
 	*response = &ext_proc.ProcessingResponse{
