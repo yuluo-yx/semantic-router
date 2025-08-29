@@ -1,0 +1,24 @@
+{
+  "id": "overview/mixture-of-models",
+  "title": "Why Mixture of Models?",
+  "description": "The Mixture of Models (MoM) approach represents a fundamental shift from traditional single-model deployment to a more intelligent, cost-effective, and performance-optimized architecture. This section explores the compelling reasons why MoM has become the preferred approach for production LLM deployments.",
+  "source": "@site/docs/overview/mixture-of-models.md",
+  "sourceDirName": "overview",
+  "slug": "/overview/mixture-of-models",
+  "permalink": "/docs/overview/mixture-of-models",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/vllm-project/semantic-router/tree/main/docs/docs/overview/mixture-of-models.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Semantic Router Overview",
+    "permalink": "/docs/overview/semantic-router-overview"
+  },
+  "next": {
+    "title": "System Architecture",
+    "permalink": "/docs/architecture/system-architecture"
+  }
+}

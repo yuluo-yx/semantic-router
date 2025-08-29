@@ -347,7 +347,7 @@ curl http://localhost:8801/stats | grep cache_hit
 
 ## Getting Help
 
-- **Documentation**: Full documentation at [docs/](../index.md)
+- **Documentation**: Full documentation at [docs/](../intro)
 - **Examples**: More examples in `examples/` directory
 - **Issues**: Report bugs on [GitHub](https://github.com/semantic-router/semantic-router/issues)
 - **Community**: Join our [Discord/Slack community]

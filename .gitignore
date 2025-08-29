@@ -97,4 +97,5 @@ example_prd.txt
 scripts/prd.txt
 .env.taskmaster
 package-lock.json
-package.json
+
+website/build

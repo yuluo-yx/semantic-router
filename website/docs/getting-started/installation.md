@@ -366,7 +366,7 @@ go mod download
 
 ### Getting Help
 
-- **Documentation**: Check the full documentation at [docs/](../index.md)
+- **Documentation**: Check the full documentation at [docs/](../intro)
 - **Issues**: Report issues on [GitHub Issues](https://github.com/semantic-router/semantic-router/issues)
 - **Discussions**: Join discussions on [GitHub Discussions](https://github.com/semantic-router/semantic-router/discussions)
 - **Community**: Join our community [Discord/Slack]

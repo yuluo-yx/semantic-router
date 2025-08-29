@@ -1,0 +1,98 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/docs",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/docs",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "api/classification",
+              "path": "/docs/api/classification",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "api/router",
+              "path": "/docs/api/router",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "architecture/envoy-extproc",
+              "path": "/docs/architecture/envoy-extproc",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "architecture/router-implementation",
+              "path": "/docs/architecture/router-implementation",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "architecture/system-architecture",
+              "path": "/docs/architecture/system-architecture",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "getting-started/configuration",
+              "path": "/docs/getting-started/configuration",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "getting-started/installation",
+              "path": "/docs/getting-started/installation",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "getting-started/quick-start",
+              "path": "/docs/getting-started/quick-start",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "intro",
+              "path": "/docs/intro",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "overview/mixture-of-models",
+              "path": "/docs/overview/mixture-of-models",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "overview/semantic-router-overview",
+              "path": "/docs/overview/semantic-router-overview",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "training/classification-models",
+              "path": "/docs/training/classification-models",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "training/datasets",
+              "path": "/docs/training/datasets",
+              "sidebar": "tutorialSidebar"
+            },
+            {
+              "id": "training/training-overview",
+              "path": "/docs/training/training-overview",
+              "sidebar": "tutorialSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "tutorialSidebar": {
+              "link": {
+                "path": "/docs/intro",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

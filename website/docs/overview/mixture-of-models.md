@@ -347,7 +347,7 @@ def route_query(query):
 ### Challenge 2: Latency Overhead
 **Problem**: Classification adds latency to each request  
 **Solution**:
-- Optimized lightweight classifiers (<10ms inference)
+- Optimized lightweight classifiers (&lt;10ms inference)
 - Parallel processing of classification and request preparation
 - Caching of classification results for similar queries
 

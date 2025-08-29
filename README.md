@@ -1,8 +1,6 @@
-# LLM Semantic Router
-
 <div align="center">
 
-<img src="docs/logo.png" alt="LLM Semantic Router" width="200"/>
+<img src="website/static/img/repo.png" alt="LLM Semantic Router"/>
 
 [![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://llm-semantic-router.readthedocs.io/en/latest/)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
@@ -11,7 +9,7 @@
 
 **📚 [Complete Documentation](https://llm-semantic-router.readthedocs.io/en/latest/) | 🚀 [Quick Start](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/quick-start/) | 🏗️ [Architecture](https://llm-semantic-router.readthedocs.io/en/latest/architecture/system-architecture/) | 📖 [API Reference](https://llm-semantic-router.readthedocs.io/en/latest/api/router/)**
 
-![](./docs/code.png)
+![](./website/static/img/code.png)
 
 </div>
 
@@ -55,11 +53,11 @@ This is achieved using BERT classification. Conceptually similar to Mixture-of-E
 
 As such, the overall inference accuracy is improved by using a pool of models that are better suited for different types of tasks:
 
-![Model Accuracy](./docs/category_accuracies.png)
+![Model Accuracy](./website/static/img/category_accuracies.png)
 
 The screenshot below shows the LLM Router dashboard in Grafana.
 
-![LLM Router Dashboard](./docs/grafana_screenshot.png)
+![LLM Router Dashboard](./website/static/img/grafana_screenshot.png)
 
 The router is implemented in two ways: Golang (with Rust FFI based on Candle) and Python. Benchmarking will be conducted to determine the best implementation.
 

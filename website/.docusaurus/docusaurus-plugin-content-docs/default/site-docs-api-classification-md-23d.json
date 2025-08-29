@@ -1,0 +1,20 @@
+{
+  "id": "api/classification",
+  "title": "Classification API Reference",
+  "description": "The Classification API provides direct access to the Semantic Router's classification models for intent detection, PII identification, and security analysis. This API is useful for testing, debugging, and standalone classification tasks.",
+  "source": "@site/docs/api/classification.md",
+  "sourceDirName": "api",
+  "slug": "/api/classification",
+  "permalink": "/docs/api/classification",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/vllm-project/semantic-router/tree/main/docs/docs/api/classification.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Router API Reference",
+    "permalink": "/docs/api/router"
+  }
+}

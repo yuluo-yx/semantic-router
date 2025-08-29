@@ -155,3 +155,24 @@ download-models:
 	@if [ ! -d "models/pii_classifier_modernbert_base_presidio_token_model" ]; then \
 		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
 	fi
+
+# Documentation targets
+docs-install:
+	@echo "Installing documentation dependencies..."
+	cd website && npm install
+
+docs-dev: docs-install
+	@echo "Starting documentation development server..."
+	cd website && npm start
+
+docs-build: docs-install
+	@echo "Building documentation for production..."
+	cd website && npm run build
+
+docs-serve: docs-build
+	@echo "Serving production documentation..."
+	cd website && npm run serve
+
+docs-clean:
+	@echo "Cleaning documentation build artifacts..."
+	cd website && npm run clear

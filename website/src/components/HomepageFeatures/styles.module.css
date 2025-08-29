@@ -1,0 +1,41 @@
+.features {
+  display: flex;
+  align-items: center;
+  padding: 4rem 0;
+  width: 100%;
+  background: rgba(246, 248, 250, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.featureCard {
+  background: var(--tech-card-bg);
+  border: 1px solid var(--tech-border);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  margin: 1rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--tech-shadow);
+  height: 100%;
+}
+
+.featureCard:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 16px 48px rgba(9, 105, 218, 0.15);
+  border-color: var(--tech-border-accent);
+}
+
+.featureTitle {
+  color: var(--tech-primary-blue);
+  font-weight: 700;
+  margin: 0 0 1.5rem 0;
+  font-size: 1.4rem;
+  line-height: 1.3;
+}
+
+.featureDescription {
+  color: var(--tech-text-primary);
+  line-height: 1.7;
+  margin-bottom: 0;
+  font-size: 1rem;
+}

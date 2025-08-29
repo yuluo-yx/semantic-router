@@ -1,0 +1,24 @@
+{
+  "id": "architecture/system-architecture",
+  "title": "System Architecture",
+  "description": "The Semantic Router implements a sophisticated Mixture-of-Models (MoM) architecture using Envoy Proxy as the foundation, with an External Processor (ExtProc) service that provides intelligent routing capabilities. This design ensures high performance, scalability, and maintainability for production LLM deployments.",
+  "source": "@site/docs/architecture/system-architecture.md",
+  "sourceDirName": "architecture",
+  "slug": "/architecture/system-architecture",
+  "permalink": "/docs/architecture/system-architecture",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/vllm-project/semantic-router/tree/main/docs/docs/architecture/system-architecture.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Why Mixture of Models?",
+    "permalink": "/docs/overview/mixture-of-models"
+  },
+  "next": {
+    "title": "Envoy ExtProc Integration",
+    "permalink": "/docs/architecture/envoy-extproc"
+  }
+}

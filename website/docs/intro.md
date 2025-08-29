@@ -1,6 +1,10 @@
+---
+sidebar_position: 1
+---
+
 # LLM Semantic Router
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/vllm-project/semantic-router/blob/main/LICENSE)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vllm-project/semantic-router)](https://goreportcard.com/report/github.com/vllm-project/semantic-router)
 
@@ -33,7 +37,7 @@ Intelligently routes requests to specialized models based on semantic understand
 
 Our testing shows significant improvements in model accuracy through specialized routing:
 
-![Model Accuracy](category_accuracies.png)
+![Model Accuracy](/img/category_accuracies.png)
 
 
 ## 🛠️ Architecture Overview
@@ -83,7 +87,7 @@ The router provides comprehensive monitoring through:
 - **Prometheus Metrics**: Detailed routing statistics and performance data
 - **Request Tracing**: Full visibility into routing decisions and performance
 
-![LLM Router Dashboard](grafana_screenshot.png)
+![LLM Router Dashboard](/img/grafana_screenshot.png)
 
 ## 🔗 Quick Links
 
@@ -111,4 +115,4 @@ We welcome contributions! Please see our [Contributing Guide](https://github.com
 
 ## 📄 License
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](https://github.com/vllm-project/semantic-router/blob/main/LICENSE) file for details.

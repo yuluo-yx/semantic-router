@@ -1,0 +1,24 @@
+{
+  "id": "training/training-overview",
+  "title": "Model Training Overview",
+  "description": "The Semantic Router relies on multiple specialized classification models to make intelligent routing decisions. This section provides a comprehensive overview of the training process, datasets used, and the purpose of each model in the routing pipeline.",
+  "source": "@site/docs/training/training-overview.md",
+  "sourceDirName": "training",
+  "slug": "/training/training-overview",
+  "permalink": "/docs/training/training-overview",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/vllm-project/semantic-router/tree/main/docs/docs/training/training-overview.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "tutorialSidebar",
+  "previous": {
+    "title": "Router Implementation Details",
+    "permalink": "/docs/architecture/router-implementation"
+  },
+  "next": {
+    "title": "Classification Models",
+    "permalink": "/docs/training/classification-models"
+  }
+}

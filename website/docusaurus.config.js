@@ -1,0 +1,154 @@
+// @ts-check
+// Note: type annotations allow type checking and IDEs autocompletion
+
+const {themes} = require('prism-react-renderer');
+const lightCodeTheme = themes.github;
+const darkCodeTheme = themes.vsDark;
+
+/** @type {import('@docusaurus/types').Config} */
+const config = {
+  title: 'vLLM Semantic Router',
+  tagline: 'Intelligent Mixture-of-Models Router for Efficient LLM Inference',
+  favicon: 'img/vllm.png',
+
+  // Set the production url of your site here
+  url: 'https://your-docusaurus-test-site.com',
+  // Set the /<baseUrl>/ pathname under which your site is served
+  // For GitHub pages deployment, it is often '/<projectName>/'
+  baseUrl: '/',
+
+  // GitHub pages deployment config.
+  // If you aren't using GitHub pages, you don't need these.
+  organizationName: 'vllm-project', // Usually your GitHub org/user name.
+  projectName: 'semantic-router', // Usually your repo name.
+
+  onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'warn',
+
+  // Even if you don't use internalization, you can use this field to set useful
+  // metadata like html lang. For example, if your site is Chinese, you may want
+  // to replace "en" with "zh-Hans".
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en'],
+  },
+
+  markdown: {
+    mermaid: true,
+  },
+  themes: ['@docusaurus/theme-mermaid'],
+
+  presets: [
+    [
+      'classic',
+      /** @type {import('@docusaurus/preset-classic').Options} */
+      ({
+        docs: {
+          sidebarPath: require.resolve('./sidebars.js'),
+          // Please change this to your repo.
+          // Remove this to remove the "edit this page" links.
+          editUrl:
+            'https://github.com/vllm-project/semantic-router/tree/main/docs/',
+        },
+        blog: false, // Disable blog
+        theme: {
+          customCss: require.resolve('./src/css/custom.css'),
+        },
+      }),
+    ],
+  ],
+
+  themeConfig:
+    /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
+    ({
+      // Replace with your project's social card
+      image: 'img/docusaurus-social-card.jpg',
+      navbar: {
+        title: 'vLLM Semantic Router',
+        logo: {
+          alt: 'vLLM Semantic Router Logo',
+          src: 'img/vllm.png',
+          srcDark: 'img/vllm.png',
+        },
+        items: [
+          {
+            type: 'docSidebar',
+            sidebarId: 'tutorialSidebar',
+            position: 'left',
+            label: 'Documentation',
+          },
+          {
+            href: 'https://github.com/vllm-project/semantic-router',
+            label: 'GitHub',
+            position: 'right',
+          },
+          {
+            href: 'https://huggingface.co/LLM-Semantic-Router',
+            label: '🤗 Hugging Face',
+            position: 'right',
+          },
+        ],
+      },
+      footer: {
+        style: 'dark',
+        links: [
+          {
+            title: 'Documentation',
+            items: [
+              {
+                label: 'Getting Started',
+                to: '/docs/getting-started/installation',
+              },
+              {
+                label: 'Architecture',
+                to: '/docs/architecture/system-architecture',
+              },
+              {
+                label: 'API Reference',
+                to: '/docs/api/router',
+              },
+            ],
+          },
+          {
+            title: 'Community',
+            items: [
+              {
+                label: 'GitHub',
+                href: 'https://github.com/vllm-project/semantic-router',
+              },
+              {
+                label: 'Hugging Face',
+                href: 'https://huggingface.co/LLM-Semantic-Router',
+              },
+            ],
+          },
+          {
+            title: 'More',
+            items: [
+              {
+                label: 'License',
+                href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',
+              },
+              {
+                label: 'Contributing',
+                href: 'https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md',
+              },
+            ],
+          },
+        ],
+        copyright: `Copyright © ${new Date().getFullYear()} vLLM Semantic Router Team. Built with Docusaurus.`,
+      },
+      prism: {
+        theme: lightCodeTheme,
+        darkTheme: darkCodeTheme,
+        additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust'],
+      },
+      colorMode: {
+        defaultMode: 'light',
+        disableSwitch: true,
+        respectPrefersColorScheme: false,
+      },
+    }),
+};
+
+module.exports = config;
