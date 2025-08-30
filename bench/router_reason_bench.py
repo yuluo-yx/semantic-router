@@ -355,7 +355,9 @@ def build_extra_body_for_model(
     # reasoning: True -> ON, False -> OFF, None -> base
 
     lower = model_name.lower()
-    if (("ds" in lower) or ("deepseek" in lower)) and ("v31" in lower or "v3.1" in lower or "v3" in lower):
+    if (("ds" in lower) or ("deepseek" in lower)) and (
+        "v31" in lower or "v3.1" in lower or "v3" in lower
+    ):
         if reasoning is True:
             return {"chat_template_kwargs": {"thinking": True}}
         if reasoning is None or reasoning is False:
@@ -535,7 +537,9 @@ def evaluate_model_vllm_multimode(
 
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = [executor.submit(run_variants, q) for q in questions_data]
-        for future in tqdm(futures, total=len(futures), desc=f"Evaluating {model} (vLLM modes)"):
+        for future in tqdm(
+            futures, total=len(futures), desc=f"Evaluating {model} (vLLM modes)"
+        ):
             results.extend(future.result())
 
     return pd.DataFrame(results)
@@ -584,7 +588,9 @@ def evaluate_model_policies(
 
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = [executor.submit(run_all_modes, q) for q in questions]
-        for future in tqdm(futures, total=len(futures), desc=f"Evaluating {model} (policies)"):
+        for future in tqdm(
+            futures, total=len(futures), desc=f"Evaluating {model} (policies)"
+        ):
             per_call_records.extend(future.result())
 
     calls_df = pd.DataFrame(per_call_records)

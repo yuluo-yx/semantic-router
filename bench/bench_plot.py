@@ -178,11 +178,16 @@ def plot_metric(metric: str, out_path: Path):
     # Determine modes to plot, optionally limiting to top-N by mean of metric
     all_modes = sorted({m for c in cats for m in cat_by_mode.get(c, {}).keys()})
     if len(all_modes) > 0:
+
         def _mean(values):
             vals = [v for v in values if v is not None]
             return sum(vals) / len(vals) if vals else float("nan")
 
-        if args.max_modes is not None and args.max_modes > 0 and len(all_modes) > args.max_modes:
+        if (
+            args.max_modes is not None
+            and args.max_modes > 0
+            and len(all_modes) > args.max_modes
+        ):
             mode_means = []
             for mode in all_modes:
                 vals = [cat_by_mode.get(c, {}).get(mode, {}).get(metric) for c in cats]
@@ -279,7 +284,9 @@ def plot_metric(metric: str, out_path: Path):
             ax.set_xlim(left_xlim, right_xlim)
     ylabel = metric.replace("_", " ")
     ax.set_ylabel(ylabel, fontsize=int(18 * args.font_scale))
-    ax.set_title(f"Per-category {ylabel} per-mode values", fontsize=int(22 * args.font_scale))
+    ax.set_title(
+        f"Per-category {ylabel} per-mode values", fontsize=int(22 * args.font_scale)
+    )
     ax.tick_params(axis="both", which="major", labelsize=int(14 * args.font_scale))
 
     # Build a figure-level legend below the axes and reserve space to prevent overlap
@@ -290,7 +297,7 @@ def plot_metric(metric: str, out_path: Path):
         legend_rows = 2
         legend_ncol = max(1, (num_series + legend_rows - 1) // legend_rows)
         num_rows = legend_rows
-        scale = (args.font_scale / 1.6)
+        scale = args.font_scale / 1.6
         # Reserve generous space for long rotated tick labels and multi-row legend
         bottom_reserved = (0.28 * scale) + (0.12 * num_rows * scale)
         bottom_reserved = max(0.24, min(0.60, bottom_reserved))
