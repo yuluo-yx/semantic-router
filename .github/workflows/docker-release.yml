@@ -34,5 +34,5 @@ jobs:
         file: ./Dockerfile.extproc
         push: true
         tags: |
-          ghcr.io/${{ github.repository_owner }}/llm_semantic_router/extproc:${{ steps.extract_tag.outputs.tag }}
-          ghcr.io/${{ github.repository_owner }}/llm_semantic_router/extproc:latest
+          ghcr.io/${{ github.repository_owner }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
+          ghcr.io/${{ github.repository_owner }}/semantic-router/extproc:latest

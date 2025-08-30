@@ -21,6 +21,6 @@ configMapGenerator:
 namespace: semantic-router
 
 images:
- - name: ghcr.io/redhat-et/llm_semantic_router/extproc
+ - name: ghcr.io/vllm-project/semantic-router/extproc
    newTag: latest
 
