@@ -227,7 +227,7 @@ func (r *OpenAIRouter) handleRequestBody(
     headerMutations := []*core.HeaderValueOption{
         {
             Header: &core.HeaderValue{
-                Key:   "x-gateway-destination-endpoint", 
+                Key:   "x-semantic-destination-endpoint", 
                 Value: selectedEndpoint,
             },
             Append: &wrapperspb.BoolValue{Value: false},
@@ -361,7 +361,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-gateway-destination-endpoint"
+                  - name: "x-semantic-destination-endpoint"
                     string_match:
                       exact: "endpoint1"
                 route:
@@ -370,7 +370,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-gateway-destination-endpoint"  
+                  - name: "x-semantic-destination-endpoint"  
                     string_match:
                       exact: "endpoint2"
                 route:
@@ -379,7 +379,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-gateway-destination-endpoint"
+                  - name: "x-semantic-destination-endpoint"
                     string_match:
                       exact: "endpoint3"
                 route:

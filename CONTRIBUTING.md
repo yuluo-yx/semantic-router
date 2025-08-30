@@ -1,6 +1,6 @@
-# Contributing to LLM Semantic Router
+# Contributing to vLLM Semantic Router
 
-Thank you for your interest in contributing to the LLM Semantic Router project! This guide will help you get started with development and contributing to the project.
+Thank you for your interest in contributing to the vLLM Semantic Router project! This guide will help you get started with development and contributing to the project.
 
 ## Table of Contents
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="website/static/img/repo.png" alt="LLM Semantic Router"/>
+<img src="website/static/img/repo.png" alt="vLLM Semantic Router"/>
 
 [![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://llm-semantic-router.readthedocs.io/en/latest/)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
@@ -15,37 +15,9 @@
 
 ## Overview
 
-```mermaid
-graph TB
-    Client[Client Request] --> Router[vLLM Semantic Router]
-    
-    subgraph "Intent Understanding"
-        direction LR
-        PII[PII Detector] 
-        Jailbreak[Jailbreak Guard]
-        Category[Category Classifier]
-        Cache[Semantic Cache]
-    end
-    
-    Router --> PII
-    Router --> Jailbreak  
-    Router --> Category
-    Router --> Cache
-    
-    PII --> Decision{Security Check}
-    Jailbreak --> Decision
-    Decision -->|Block| Block[Block Request]
-    Decision -->|Pass| Category
-    Category --> Models[Route to Specialized Model]
-    Cache -->|Hit| FastResponse[Return Cached Response]
-    
-    Models --> Math[Math Model]
-    Models --> Creative[Creative Model] 
-    Models --> Code[Code Model]
-    Models --> General[General Model]
-```
+![](./website/static/img/architecture.png)
 
-### Auto-Selection of Models
+### Auto-Reasoning and Auto-Selection of Models
 
 An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
 

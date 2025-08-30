@@ -17,7 +17,7 @@ The deployment consists of:
 
 ## Ports
 
-- **50051**: gRPC API (LLM Semantic Router ExtProc)
+- **50051**: gRPC API (vLLM Semantic Router ExtProc)
 - **9190**: Prometheus metrics
 
 ## Deployment

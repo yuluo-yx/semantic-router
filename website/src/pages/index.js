@@ -44,6 +44,25 @@ function HomepageHeader() {
   );
 }
 
+function FlowDiagram() {
+  return (
+    <section className={styles.flowSection}>
+      <div className="container">
+        <div className={styles.architectureContainer}>
+          <h2 className={styles.architectureTitle}>Intent Aware Semantic Router Architecture</h2>
+          <div className={styles.architectureImageWrapper}>
+            <img
+              src="/img/architecture.png"
+              alt="Intent Aware Semantic Router Architecture"
+              className={styles.architectureImage}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const {siteConfig} = useDocusaurusContext();
   return (
@@ -52,6 +71,14 @@ export default function Home() {
       description="Intelligent Mixture-of-Models Router that Understands of the Request's Intention">
       <HomepageHeader />
       <main>
+        <FlowDiagram />
+        <div className={styles.connectionSection}>
+          <div className={styles.connectionLines}>
+            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
+            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
+            <div className={`${styles.connectionLine} ${styles.connectionLine3}`}></div>
+          </div>
+        </div>
         <HomepageFeatures />
       </main>
     </Layout>

@@ -14,7 +14,7 @@
   "frontMatter": {},
   "sidebar": "tutorialSidebar",
   "previous": {
-    "title": "LLM Semantic Router",
+    "title": "vLLM Semantic Router",
     "permalink": "/docs/intro"
   },
   "next": {

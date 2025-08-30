@@ -2,7 +2,7 @@
   "name": "semantic-router-docs",
   "version": "1.0.0",
   "private": true,
-  "description": "Documentation website for LLM Semantic Router",
+  "description": "Documentation website for vLLM Semantic Router",
   "author": "Semantic Router Team",
   "license": "Apache-2.0",
   "scripts": {

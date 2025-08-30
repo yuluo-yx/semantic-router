@@ -44,7 +44,7 @@ func main() {
 		log.Fatalf("Failed to create ExtProc server: %v", err)
 	}
 
-	log.Printf("Starting LLM Semantic Router ExtProc with config: %s", *configPath)
+	log.Printf("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
 	// Start Classification API server if enabled
 	if *enableAPI {
