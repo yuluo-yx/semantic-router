@@ -490,7 +490,7 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 192.168.12.90
+                address: 127.0.0.1
                 port_value: 11434
     # Health checks for model endpoints
     health_checks:

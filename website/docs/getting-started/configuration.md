@@ -1,606 +1,448 @@
 # Configuration Guide
 
-This guide covers all configuration options available in the Semantic Router, from basic setup to advanced customization for production deployments.
+This guide covers the configuration options for the Semantic Router. The system uses a single YAML configuration file that controls all aspects of routing, classification, and security.
 
-## Configuration File Structure
+## Configuration File
 
-The main configuration file is located at `config/config.yaml`. Here's the complete structure:
-
-```yaml
-# config/config.yaml
-router:
-  # Server configuration
-  host: "0.0.0.0"
-  port: 50051
-  log_level: "info"  # debug, info, warn, error
-  
-  # Model paths and configuration
-  models:
-    category_classifier: "./models/category_classifier_modernbert-base_model"
-    pii_detector: "./models/pii_classifier_modernbert-base_model"
-    jailbreak_guard: "./models/jailbreak_classifier_modernbert-base_model"
-    intent_classifier: "./models/intent_classifier_modernbert-base_model"
-    
-  # Backend model endpoints  
-  endpoints:
-    endpoint1:
-      url: "http://192.168.12.90:11434"
-      model_type: "math"
-      model_name: "llama2-math-7b"
-      cost_per_token: 0.002
-      max_tokens: 4096
-      timeout: 300
-      health_check_path: "/health"
-      
-    endpoint2:
-      url: "http://192.168.12.91:11434"
-      model_type: "creative"
-      model_name: "llama2-creative-13b"
-      cost_per_token: 0.005
-      max_tokens: 8192
-      timeout: 600
-      
-    endpoint3:
-      url: "http://192.168.12.92:11434"
-      model_type: "code"
-      model_name: "codellama-34b"
-      cost_per_token: 0.008
-      max_tokens: 4096
-      timeout: 300
-      
-    general_endpoint:
-      url: "http://192.168.12.93:11434"
-      model_type: "general"
-      model_name: "llama2-70b"
-      cost_per_token: 0.015
-      max_tokens: 4096
-      timeout: 300
-      
-  # Classification configuration
-  classification:
-    confidence_threshold: 0.75
-    fallback_model: "general"
-    enable_ensemble: false
-    ensemble_weights: [0.6, 0.4]  # If ensemble enabled
-    
-  # Security settings
-  security:
-    enable_pii_detection: true
-    enable_jailbreak_guard: true
-    pii_action: "block"  # block, mask, allow
-    jailbreak_action: "block"  # block, flag, allow
-    pii_confidence_threshold: 0.8
-    jailbreak_confidence_threshold: 0.3  # Low threshold for safety
-    
-  # Semantic cache configuration
-  cache:
-    enabled: true
-    cache_type: "memory"  # memory, redis
-    similarity_threshold: 0.85
-    ttl_seconds: 3600
-    max_entries: 10000
-    cleanup_interval: 300
-    
-  # Redis configuration (if cache_type: redis)
-  redis:
-    host: "localhost"
-    port: 6379
-    password: ""
-    database: 0
-    
-  # Tools configuration
-  tools:
-    auto_selection: true
-    max_tools: 5
-    relevance_threshold: 0.6
-    tools_database_path: "./config/tools_db.json"
-    
-  # Monitoring and metrics
-  monitoring:
-    enable_metrics: true
-    metrics_port: 9090
-    enable_tracing: false
-    jaeger_endpoint: "http://localhost:14268/api/traces"
-    
-  # Performance tuning
-  performance:
-    max_concurrent_requests: 100
-    request_timeout: 30
-    classification_timeout: 5
-    enable_batching: false
-    batch_size: 10
-    batch_timeout: 100  # milliseconds
-```
-
-## Detailed Configuration Options
-
-### Server Configuration
+The configuration file is located at `config/config.yaml`. Here's the structure based on the actual implementation:
 
 ```yaml
-router:
-  host: "0.0.0.0"        # Bind address (0.0.0.0 for all interfaces)
-  port: 50051            # gRPC server port
-  log_level: "info"      # Logging level: debug, info, warn, error
-  max_message_size: 4194304  # 4MB max message size
+# config/config.yaml - Actual configuration structure
+
+# BERT model for semantic similarity
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# Semantic caching
+semantic_cache:
+  enabled: false
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+
+# Tool auto-selection
+tools:
+  enabled: false
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+# Jailbreak protection
+prompt_guard:
+  enabled: false
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+
+# vLLM endpoints - your backend models
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "your-server.com"  # Replace with your server
+    port: 11434
+    models:
+      - "your-model"           # Replace with your model
+    weight: 1
+
+# Model configuration
+model_config:
+  "your-model":
+    param_count: 7000000000    # Model parameters
+    batch_size: 512.0
+    context_size: 4096.0
+    pii_policy:
+      allow_by_default: true
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
+    preferred_endpoints: ["endpoint1"]
+
+# Classification models
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+
+# Categories and routing rules
+categories:
+- name: math
+  use_reasoning: true  # Enable reasoning for math
+  model_scores:
+  - model: your-model
+    score: 1.0
+- name: computer science
+  use_reasoning: true  # Enable reasoning for code
+  model_scores:
+  - model: your-model
+    score: 1.0
+- name: other
+  use_reasoning: false # No reasoning for general queries
+  model_scores:
+  - model: your-model
+    score: 0.8
+
+default_model: your-model
 ```
 
-### Model Configuration
+## Key Configuration Sections
 
-#### Model Paths
+### Backend Endpoints
+
+Configure your LLM servers:
+
 ```yaml
-models:
-  category_classifier: "./models/category_classifier_modernbert-base_model"
-  pii_detector: "./models/pii_classifier_modernbert-base_model"
-  jailbreak_guard: "./models/jailbreak_classifier_modernbert-base_model"
-  intent_classifier: "./models/intent_classifier_modernbert-base_model"
-  
-  # Optional: Custom model configurations
-  custom_models:
-    legal_classifier: "./models/legal_classifier_model"
-    medical_classifier: "./models/medical_classifier_model"
+vllm_endpoints:
+  - name: "my_endpoint"
+    address: "127.0.0.1"  # Your server IP
+    port: 8000                # Your server port
+    models:
+      - "llama2-7b"          # Model name
+    weight: 1                 # Load balancing weight
 ```
 
-#### Endpoint Configuration
+### Model Settings
 
-Each endpoint represents a backend LLM that can handle requests:
+Configure model-specific settings:
 
 ```yaml
-endpoints:
-  my_endpoint:
-    url: "http://my-model-server:8080"     # Backend URL
-    model_type: "specialized_domain"        # Category this model handles
-    model_name: "my-custom-model-v1"       # Model identifier
-    cost_per_token: 0.001                  # Cost in dollars per token
-    max_tokens: 2048                       # Maximum tokens for this model
-    timeout: 300                           # Request timeout in seconds
-    health_check_path: "/health"           # Health check endpoint
-    headers:                               # Custom headers
-      Authorization: "Bearer token123"
-      X-Custom-Header: "value"
-    retry_count: 3                         # Number of retries on failure
-    circuit_breaker:                       # Circuit breaker configuration
-      failure_threshold: 5
-      reset_timeout: 60
+model_config:
+  "llama2-7b":
+    param_count: 7000000000     # Model size in parameters
+    batch_size: 512.0           # Batch size
+    context_size: 4096.0        # Context window
+    pii_policy:
+      allow_by_default: true    # Allow PII by default
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
+    preferred_endpoints: ["my_endpoint"]
 ```
 
-### Classification Settings
+### Classification Models
 
-Fine-tune how the router makes routing decisions:
+Configure the BERT classification models:
 
 ```yaml
-classification:
-  # Global confidence threshold for routing decisions
-  confidence_threshold: 0.75
-  
-  # Fallback model when confidence is low
-  fallback_model: "general"
-  
-  # Per-category confidence thresholds
-  category_thresholds:
-    mathematics: 0.85      # Require high confidence for math routing
-    creative: 0.70         # Allow lower confidence for creative
-    code: 0.80             # High confidence for code generation
-    
-  # Ensemble classification (multiple models voting)
-  enable_ensemble: false
-  ensemble_models: ["model1", "model2", "model3"]
-  ensemble_weights: [0.5, 0.3, 0.2]
-  
-  # Advanced options
-  enable_confidence_calibration: true
-  calibration_temperature: 1.5
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6            # Classification confidence threshold
+    use_cpu: true             # Use CPU (no GPU required)
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    threshold: 0.7            # PII detection threshold
+    use_cpu: true
 ```
 
-### Security Configuration
+### Categories and Routing
+
+Define how different query types are handled:
+
+```yaml
+categories:
+- name: math
+  use_reasoning: true              # Enable reasoning for math problems
+  reasoning_description: "Mathematical problems require step-by-step reasoning"
+  model_scores:
+  - model: your-model
+    score: 1.0                     # Preference score for this model
+
+- name: computer science
+  use_reasoning: true              # Enable reasoning for code
+  model_scores:
+  - model: your-model
+    score: 1.0
+
+- name: other
+  use_reasoning: false             # No reasoning for general queries
+  model_scores:
+  - model: your-model
+    score: 0.8
+
+default_model: your-model          # Fallback model
+```
+
+### Security Features
 
 Configure PII detection and jailbreak protection:
 
 ```yaml
-security:
-  # PII Detection
-  enable_pii_detection: true
-  pii_action: "block"                    # block, mask, allow
-  pii_confidence_threshold: 0.8
-  pii_entity_types: ["PERSON", "EMAIL", "PHONE", "SSN", "LOCATION"]
-  
-  # Custom PII patterns (regex)
-  custom_pii_patterns:
-    credit_card: '\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'
-    api_key: '\b[A-Za-z0-9]{32,}\b'
-    
-  # Jailbreak Protection  
-  enable_jailbreak_guard: true
-  jailbreak_action: "block"              # block, flag, allow
-  jailbreak_confidence_threshold: 0.3    # Low threshold for safety
-  
-  # Additional security measures
-  rate_limiting:
-    enabled: true
-    requests_per_minute: 60
-    burst_size: 10
-    
-  ip_whitelist:
-    enabled: false
-    allowed_ips: ["192.168.1.0/24", "10.0.0.0/8"]
+# PII Detection
+classifier:
+  pii_model:
+    threshold: 0.7                 # Higher = more strict PII detection
+
+# Jailbreak Protection
+prompt_guard:
+  enabled: true                    # Enable jailbreak detection
+  threshold: 0.7                   # Detection sensitivity
+  use_cpu: true                    # Runs on CPU
+
+# Model-level PII policies
+model_config:
+  "your-model":
+    pii_policy:
+      allow_by_default: true       # Allow most content
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]  # Specific allowed types
 ```
 
-### Cache Configuration
+### Optional Features
 
-Configure semantic caching for performance:
-
-```yaml
-cache:
-  enabled: true
-  cache_type: "memory"                   # memory, redis, hybrid
-  
-  # Similarity settings
-  similarity_threshold: 0.85             # Cosine similarity threshold
-  similarity_algorithm: "cosine"         # cosine, euclidean, dot_product
-  
-  # Memory cache settings
-  max_entries: 10000
-  ttl_seconds: 3600
-  cleanup_interval: 300
-  
-  # Redis cache settings (if cache_type: redis or hybrid)
-  redis:
-    host: "localhost"
-    port: 6379
-    password: "mypassword"
-    database: 0
-    pool_size: 10
-    connection_timeout: 5
-    
-  # Cache warming
-  enable_cache_warming: false
-  warm_up_queries: ["common query 1", "common query 2"]
-  
-  # Cache analytics
-  enable_cache_metrics: true
-  log_cache_performance: true
-```
-
-### Tools Configuration
-
-Configure automatic tool selection:
+Configure additional features:
 
 ```yaml
+# Semantic Caching
+semantic_cache:
+  enabled: true                    # Enable semantic caching
+  similarity_threshold: 0.8        # Cache hit threshold
+  max_entries: 1000               # Maximum cache entries
+  ttl_seconds: 3600               # Cache expiration time
+
+# Tool Auto-Selection
 tools:
-  auto_selection: true
-  max_tools: 5
-  relevance_threshold: 0.6
-  
-  # Tools database
-  tools_database_path: "./config/tools_db.json"
-  
-  # Tool categories and weights
-  tool_categories:
-    calculation: 
-      weight: 1.0
-      max_tools: 3
-    web_search:
-      weight: 0.8
-      max_tools: 2
-    file_operations:
-      weight: 0.9
-      max_tools: 2
-      
-  # Custom tool scoring
-  custom_scoring:
-    enable_semantic_scoring: true
-    enable_keyword_scoring: true
-    enable_category_scoring: true
-    weights: [0.4, 0.4, 0.2]  # semantic, keyword, category
+  enabled: true                    # Enable automatic tool selection
+  top_k: 3                        # Number of tools to select
+  similarity_threshold: 0.2        # Tool relevance threshold
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true         # Return empty on failure
+
+# BERT Model for Similarity
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6                  # Similarity threshold
+  use_cpu: true                   # CPU-only inference
 ```
 
-## Environment-Specific Configurations
+## Common Configuration Examples
 
-### Development Configuration
+### Enable All Security Features
 
 ```yaml
-# config/development.yaml
-router:
-  log_level: "debug"
-  
-  classification:
-    confidence_threshold: 0.5  # Lower for testing
-    
-  security:
-    enable_pii_detection: false  # Disable for testing
-    enable_jailbreak_guard: false
-    
-  cache:
-    ttl_seconds: 300  # Shorter cache for development
-    
-  monitoring:
-    enable_metrics: true
-    enable_tracing: true
+# Enable PII detection
+classifier:
+  pii_model:
+    threshold: 0.8              # Strict PII detection
+
+# Enable jailbreak protection
+prompt_guard:
+  enabled: true
+  threshold: 0.7
+
+# Configure model PII policies
+model_config:
+  "your-model":
+    pii_policy:
+      allow_by_default: false   # Block all PII by default
+      pii_types_allowed: []     # No PII allowed
 ```
 
-### Production Configuration
+### Performance Optimization
 
 ```yaml
-# config/production.yaml
-router:
-  log_level: "warn"
-  
-  classification:
-    confidence_threshold: 0.8  # Higher for production
-    enable_ensemble: true
-    
-  security:
-    enable_pii_detection: true
-    enable_jailbreak_guard: true
-    pii_action: "block"
-    jailbreak_action: "block"
-    
-    rate_limiting:
-      enabled: true
-      requests_per_minute: 1000
-      
-  cache:
-    cache_type: "redis"
-    ttl_seconds: 7200  # Longer cache
-    
-  performance:
-    max_concurrent_requests: 1000
-    enable_batching: true
-    
-  monitoring:
-    enable_metrics: true
-    enable_tracing: true
+# Enable caching
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.85    # Higher = more cache hits
+  max_entries: 5000
+  ttl_seconds: 7200            # 2 hour cache
+
+# Enable tool selection
+tools:
+  enabled: true
+  top_k: 5                     # Select more tools
+  similarity_threshold: 0.1    # Lower = more tools selected
 ```
 
-### Testing Configuration
+### Development Setup
 
 ```yaml
-# config/testing.yaml
-router:
-  log_level: "debug"
-  
-  endpoints:
-    mock_endpoint:
-      url: "http://localhost:8080/mock"
-      model_type: "general"
-      
-  classification:
-    confidence_threshold: 0.1  # Very low for testing all paths
-    
-  security:
-    enable_pii_detection: true
-    pii_action: "flag"  # Don't block in tests
-    enable_jailbreak_guard: true
-    jailbreak_action: "flag"
-    
-  cache:
-    enabled: false  # Disable cache for consistent test results
-```
+# Disable security for testing
+prompt_guard:
+  enabled: false
 
-## Dynamic Configuration Updates
+# Disable caching for consistent results
+semantic_cache:
+  enabled: false
 
-### Hot Reloading
-
-Enable configuration hot reloading for production environments:
-
-```yaml
-router:
-  config:
-    enable_hot_reload: true
-    reload_interval: 60  # Check for changes every 60 seconds
-    reload_signal: "SIGHUP"  # Signal to trigger reload
-```
-
-### Configuration Management
-
-Use environment variables for sensitive values:
-
-```bash
-# Environment variables
-export ROUTER_REDIS_PASSWORD="secure_password"
-export ROUTER_API_KEY="your_api_key"
-export ROUTER_LOG_LEVEL="info"
-```
-
-```yaml
-# In config file
-router:
-  redis:
-    password: "${ROUTER_REDIS_PASSWORD}"
-  api:
-    key: "${ROUTER_API_KEY}"
-  log_level: "${ROUTER_LOG_LEVEL:info}"  # Default to "info"
+# Lower classification thresholds
+classifier:
+  category_model:
+    threshold: 0.3             # Lower = more specialized routing
 ```
 
 ## Configuration Validation
 
-### Built-in Validation
+### Test Your Configuration
 
-The router validates configuration on startup:
-
-```bash
-# Test configuration
-./bin/router -config config/config.yaml -validate-only
-
-# Check specific section
-./bin/router -config config/config.yaml -validate-section=endpoints
-```
-
-### Configuration Schema
-
-Use JSON Schema validation:
+Validate your configuration before starting:
 
 ```bash
-# Install schema validator
-npm install -g ajv-cli
+# Test configuration syntax
+python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
 
-# Validate configuration
-ajv validate -s config/schema.json -d config/config.yaml
+# Test the router with your config
+make build
+make run-router
 ```
 
-## Advanced Configuration Patterns
+### Common Configuration Patterns
 
-### Multi-Tenant Configuration
-
+**Multiple Models:**
 ```yaml
-# config/multi-tenant.yaml
-router:
-  tenants:
-    tenant_a:
-      classification:
-        confidence_threshold: 0.8
-      endpoints: ["endpoint1", "endpoint2"]
-      security:
-        enable_pii_detection: true
-        
-    tenant_b:
-      classification:
-        confidence_threshold: 0.6
-      endpoints: ["endpoint3", "endpoint4"]
-      security:
-        enable_pii_detection: false
+vllm_endpoints:
+  - name: "math_endpoint"
+    address: "math-server.com"
+    port: 8000
+    models: ["math-model"]
+    weight: 1
+  - name: "general_endpoint"
+    address: "general-server.com"
+    port: 8000
+    models: ["general-model"]
+    weight: 1
+
+categories:
+- name: math
+  model_scores:
+  - model: math-model
+    score: 1.0
+- name: other
+  model_scores:
+  - model: general-model
+    score: 1.0
 ```
 
-### Load Balancing Configuration
-
+**Load Balancing:**
 ```yaml
-router:
-  endpoints:
-    math_cluster:
-      type: "cluster"
-      load_balancing: "round_robin"  # round_robin, weighted, least_connections
-      members:
-        - url: "http://math1:8080"
-          weight: 1
-        - url: "http://math2:8080"
-          weight: 2
-        - url: "http://math3:8080"  
-          weight: 1
-      health_check:
-        enabled: true
-        interval: 30
-        timeout: 5
-        healthy_threshold: 2
-        unhealthy_threshold: 3
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "server1.com"
+    port: 8000
+    models: ["my-model"]
+    weight: 2              # Higher weight = more traffic
+  - name: "endpoint2"
+    address: "server2.com"
+    port: 8000
+    models: ["my-model"]
+    weight: 1
 ```
 
-### A/B Testing Configuration
+## Best Practices
+
+### Security Configuration
+
+For production environments:
 
 ```yaml
-router:
-  experiments:
-    model_comparison:
-      enabled: true
-      traffic_split: 0.1  # 10% to experimental model
-      control_endpoint: "endpoint1"
-      experimental_endpoint: "endpoint2"
-      metrics_collection: true
-      
-  feature_flags:
-    enable_new_classifier: false
-    enable_advanced_caching: true
-    enable_multi_model_routing: false
+# Enable all security features
+classifier:
+  pii_model:
+    threshold: 0.8              # Strict PII detection
+
+prompt_guard:
+  enabled: true                 # Enable jailbreak protection
+  threshold: 0.7
+
+model_config:
+  "your-model":
+    pii_policy:
+      allow_by_default: false   # Block PII by default
 ```
 
-## Configuration Best Practices
+### Performance Tuning
 
-### 1. Security Best Practices
-
-```yaml
-# Use strong security settings in production
-security:
-  enable_pii_detection: true
-  pii_action: "block"
-  enable_jailbreak_guard: true
-  jailbreak_action: "block"
-  
-  # Enable rate limiting
-  rate_limiting:
-    enabled: true
-    requests_per_minute: 100
-    
-  # Use IP whitelisting if applicable
-  ip_whitelist:
-    enabled: true
-    allowed_ips: ["trusted_network/24"]
-```
-
-### 2. Performance Best Practices
+For high-traffic scenarios:
 
 ```yaml
-# Optimize for performance
-performance:
-  max_concurrent_requests: 500
-  enable_batching: true
-  batch_size: 20
-  
-cache:
+# Enable caching
+semantic_cache:
   enabled: true
-  cache_type: "redis"  # Use Redis for distributed caching
-  max_entries: 50000
+  similarity_threshold: 0.85    # Higher = more cache hits
+  max_entries: 10000
   ttl_seconds: 3600
-  
-classification:
-  confidence_threshold: 0.75  # Balance accuracy and speed
+
+# Optimize classification
+classifier:
+  category_model:
+    threshold: 0.7              # Balance accuracy vs speed
 ```
 
-### 3. Monitoring Best Practices
+### Development vs Production
 
+**Development:**
 ```yaml
-# Comprehensive monitoring
-monitoring:
-  enable_metrics: true
-  enable_tracing: true
-  enable_logging: true
-  
-  # Detailed metrics collection
-  detailed_metrics:
-    classification_latency: true
-    cache_performance: true
-    security_events: true
-    endpoint_health: true
+# Relaxed settings for testing
+classifier:
+  category_model:
+    threshold: 0.3              # Lower threshold for testing
+prompt_guard:
+  enabled: false                # Disable for development
+semantic_cache:
+  enabled: false                # Disable for consistent results
 ```
 
-## Troubleshooting Configuration
+**Production:**
+```yaml
+# Strict settings for production
+classifier:
+  category_model:
+    threshold: 0.7              # Higher threshold for accuracy
+prompt_guard:
+  enabled: true                 # Enable security
+semantic_cache:
+  enabled: true                 # Enable for performance
+```
 
-### Common Configuration Issues
+## Troubleshooting
 
-1. **Invalid YAML syntax**
-   ```bash
-   # Validate YAML syntax
-   python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
-   ```
+### Common Issues
 
-2. **Missing model files**
-   ```bash
-   # Check model paths
-   ls -la models/
-   ```
+**Invalid YAML syntax:**
+```bash
+# Validate YAML syntax
+python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
+```
 
-3. **Unreachable endpoints**
-   ```bash
-   # Test endpoint connectivity
-   curl -f http://your-endpoint:8080/health
-   ```
+**Missing model files:**
+```bash
+# Check if models are downloaded
+ls -la models/
+# If missing, run: make download-models
+```
 
-4. **Port conflicts**
-   ```bash
-   # Check port usage
-   lsof -i :50051
-   ```
+**Endpoint connectivity:**
+```bash
+# Test your backend server
+curl -f http://your-server:8000/health
+```
 
-### Configuration Debugging
+**Configuration not taking effect:**
+```bash
+# Restart the router after config changes
+make run-router
+```
 
-Enable debug logging for configuration issues:
+### Testing Configuration
 
 ```bash
-# Run with verbose configuration logging
-./bin/router -config config/config.yaml -log-level debug -config-debug
+# Test with different queries
+make test-auto-prompt-reasoning      # Math query
+make test-auto-prompt-no-reasoning   # General query
+make test-pii                        # PII detection
+make test-prompt-guard               # Jailbreak protection
 ```
 
 ## Next Steps
 
-- **[API Reference](../api/router.md)**: Detailed API documentation
-- **[Architecture Guide](../architecture/system-architecture.md)**: Understand the system design and monitoring
-- **[Installation Guide](installation.md)**: Deployment setup and requirements
+- **[Installation Guide](installation.md)** - Setup instructions
+- **[Quick Start Guide](installation.md)** - Basic usage examples
+- **[API Documentation](../api/router.md)** - Complete API reference
 
-For more advanced configuration options, refer to the specific component documentation or join our community discussions.
+The configuration system is designed to be simple yet powerful. Start with the basic configuration and gradually enable advanced features as needed.

@@ -397,19 +397,19 @@ router:
   # Model endpoints configuration
   endpoints:
     endpoint1:
-      url: "http://192.168.12.90:11434"
+      url: "http://127.0.0.1:11434"
       model_type: "math"
       cost_per_token: 0.002
       max_tokens: 4096
       
     endpoint2:
-      url: "http://192.168.12.91:11434" 
+      url: "http://127.0.0.1:11434" 
       model_type: "creative"
       cost_per_token: 0.003
       max_tokens: 8192
       
     endpoint3:
-      url: "http://192.168.12.92:11434"
+      url: "http://127.0.0.1:11434"
       model_type: "general"
       cost_per_token: 0.01
       max_tokens: 4096

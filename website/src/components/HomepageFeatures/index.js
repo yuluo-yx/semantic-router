@@ -7,7 +7,7 @@ const FeatureList = [
     title: '🎯 Intelligent Model Routing',
     description: (
       <>
-        Built in ModernBERT Fine-Tuned Model, to Achieve Auto-Reasoning and Auto-Selection of Models
+        Built in ModernBERT Fine-Tuned Model, to achieve Auto-Reasoning and Auto-Selection of Models
       </>
     ),
   },

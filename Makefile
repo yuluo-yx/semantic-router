@@ -4,7 +4,7 @@
 all: build
 
 # vLLM env var
-VLLM_ENDPOINT ?= http://192.168.12.90:11434
+VLLM_ENDPOINT ?=
 
 # Build the Rust library and Golang binding
 build: rust build-router
@@ -80,19 +80,19 @@ clean:
 	rm -f bin/router
 
 # Test the Envoy extproc
-test-prompt:
+test-auto-prompt-reasoning:
 	@echo "Testing Envoy extproc with curl (Math)..."
 	curl -X POST http://localhost:8801/v1/chat/completions \
 		-H "Content-Type: application/json" \
-		-d '{"model": "auto", "messages": [{"role": "assistant", "content": "You are a professional math teacher. Explain math concepts clearly and show step-by-step solutions to problems."}, {"role": "user", "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}], "temperature": 0.7}'
-	@echo "Testing Envoy extproc with curl (Creative Writing)..."
+		-d '{"model": "auto", "messages": [{"role": "system", "content": "You are a professional math teacher. Explain math concepts clearly and show step-by-step solutions to problems."}, {"role": "user", "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}]}'
+
+# Test the Envoy extproc
+test-auto-prompt-no-reasoning:
+	@echo "Testing Envoy extproc with curl (Math)..."
 	curl -X POST http://localhost:8801/v1/chat/completions \
 		-H "Content-Type: application/json" \
-		-d '{"model": "auto", "messages": [{"role": "assistant", "content": "You are a story writer. Create interesting stories with good characters and settings."}, {"role": "user", "content": "Write a short story about a space cat."}], "temperature": 0.7}'
-	@echo "Testing Envoy extproc with curl (Default/General)..."
-	curl -X POST http://localhost:8801/v1/chat/completions \
-		-H "Content-Type: application/json" \
-		-d '{"model": "auto", "messages": [{"role": "assistant", "content": "You are a helpful assistant."}, {"role": "user", "content": "What is the capital of France?"}], "temperature": 0.7}'
+		-d '{"model": "auto", "messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who are you?"}]}'
+
 # Test prompts that contain PII
 test-pii:
 	@echo "Testing Envoy extproc with curl (Credit card number)..."

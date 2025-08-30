@@ -99,3 +99,6 @@ scripts/prd.txt
 package-lock.json
 
 website/build
+.docusaurus
+spec/
+results/

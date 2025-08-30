@@ -200,6 +200,51 @@
   }
 }
 
+/* Mobile Banner Optimization */
+@media screen and (max-width: 768px) {
+  .heroBanner {
+    padding: 3rem 0;
+  }
+
+  .heroContent {
+    flex-direction: column;
+    gap: 2rem;
+    text-align: center;
+  }
+
+  .heroLeft {
+    flex: none;
+    width: 100%;
+    text-align: center;
+  }
+
+  .heroRight {
+    flex: none;
+    width: 100%;
+    justify-content: center;
+    order: 2;
+  }
+
+  .heroTitle {
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  .vllmLogo {
+    height: 60px;
+  }
+
+  .codeImage {
+    max-width: 90%;
+    max-height: 300px;
+    margin: 0 auto;
+  }
+
+  .buttons {
+    margin-top: 1.5rem;
+  }
+}
+
 
 
 

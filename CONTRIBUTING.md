@@ -21,10 +21,9 @@ Before you begin, ensure you have the following installed:
 
 - **Rust** (latest stable version)
 - **Go** 1.24.1 or later
-- **Python** 3.8+ (for training and testing)
-- **Envoy Proxy**
 - **Hugging Face CLI** (`pip install huggingface_hub`)
 - **Make** (for build automation)
+- **Python** 3.8+ (Optiona: for training and testing)
 
 ### Initial Setup
 
@@ -40,7 +39,7 @@ Before you begin, ensure you have the following installed:
    ```
    This downloads the pre-trained classification models from Hugging Face.
 
-3. **Install Python dependencies:**
+3. **Install Python dependencies(Optional):**
    ```bash
    # For training and development
    pip install -r requirements.txt
@@ -245,7 +244,7 @@ The test suite includes:
 
 ## Getting Help
 
-- Check the [documentation](https://llm-semantic-router.readthedocs.io/en/latest/)
+- Check the [documentation](https://vllm-semantic-router.com/)
 - Review existing issues and pull requests
 - Ask questions in discussions or create a new issue
 

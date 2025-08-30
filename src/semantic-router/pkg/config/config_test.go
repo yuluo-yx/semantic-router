@@ -87,7 +87,7 @@ prompt_guard:
 
 vllm_endpoints:
   - name: "endpoint1"
-    address: "192.168.1.10"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "model-a"
@@ -95,7 +95,7 @@ vllm_endpoints:
     weight: 1
     health_check_path: "/health"
   - name: "endpoint2"
-    address: "192.168.1.11"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "model-b"
@@ -186,14 +186,14 @@ tools:
 				// Verify vLLM endpoints config
 				Expect(cfg.VLLMEndpoints).To(HaveLen(2))
 				Expect(cfg.VLLMEndpoints[0].Name).To(Equal("endpoint1"))
-				Expect(cfg.VLLMEndpoints[0].Address).To(Equal("192.168.1.10"))
+				Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
 				Expect(cfg.VLLMEndpoints[0].Port).To(Equal(8000))
 				Expect(cfg.VLLMEndpoints[0].Models).To(ContainElements("model-a", "model-b"))
 				Expect(cfg.VLLMEndpoints[0].Weight).To(Equal(1))
 				Expect(cfg.VLLMEndpoints[0].HealthCheckPath).To(Equal("/health"))
 
 				Expect(cfg.VLLMEndpoints[1].Name).To(Equal("endpoint2"))
-				Expect(cfg.VLLMEndpoints[1].Address).To(Equal("192.168.1.11"))
+				Expect(cfg.VLLMEndpoints[1].Address).To(Equal("127.0.0.1"))
 				Expect(cfg.VLLMEndpoints[1].Weight).To(Equal(2))
 
 				// Verify model preferred endpoints
@@ -842,7 +842,7 @@ categories:
 			configContent := `
 vllm_endpoints:
   - name: "endpoint1"
-    address: "192.168.1.10"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "model-a"
@@ -850,14 +850,14 @@ vllm_endpoints:
     weight: 1
     health_check_path: "/health"
   - name: "endpoint2"
-    address: "192.168.1.11"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "model-b"
       - "model-c"
     weight: 2
   - name: "endpoint3"
-    address: "192.168.1.12"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "model-a"
@@ -932,7 +932,7 @@ default_model: "model-b"
 				endpoint, found := cfg.GetEndpointByName("endpoint1")
 				Expect(found).To(BeTrue())
 				Expect(endpoint.Name).To(Equal("endpoint1"))
-				Expect(endpoint.Address).To(Equal("192.168.1.10"))
+				Expect(endpoint.Address).To(Equal("127.0.0.1"))
 				Expect(endpoint.Port).To(Equal(8000))
 				Expect(endpoint.Models).To(ContainElements("model-a", "model-b"))
 			})
@@ -1003,7 +1003,7 @@ default_model: "model-b"
 				configContent := `
 vllm_endpoints:
   - name: "endpoint1"
-    address: "192.168.1.10"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "existing-model"
@@ -1033,7 +1033,7 @@ default_model: "existing-model"
 				configContent := `
 vllm_endpoints:
   - name: "endpoint1"
-    address: "192.168.1.10"
+    address: "127.0.0.1"
     port: 8000
     models:
       - "existing-model"

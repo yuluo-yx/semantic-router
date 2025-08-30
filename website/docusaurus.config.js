@@ -8,7 +8,7 @@ const darkCodeTheme = themes.vsDark;
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Intelligent Mixture-of-Models Router for Efficient LLM Inference',
+  tagline: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here

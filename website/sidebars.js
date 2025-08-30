@@ -38,8 +38,6 @@ const sidebars = {
       label: 'Model Training',
       items: [
         'training/training-overview',
-        'training/classification-models',
-        'training/datasets',
       ],
     },
     {
@@ -47,7 +45,6 @@ const sidebars = {
       label: 'Getting Started',
       items: [
         'getting-started/installation',
-        'getting-started/quick-start',
         'getting-started/configuration',
       ],
     },

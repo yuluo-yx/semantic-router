@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Semantic Router External Processor Service
+  semantic-router:
+    build:
+      context: .
+      dockerfile: Dockerfile.extproc
+    container_name: semantic-router
+    ports:
+      - "50051:50051"
+    volumes:
+      - ./config:/app/config:ro
+      - ./models:/app/models:ro
+    environment:
+      - LD_LIBRARY_PATH=/app/lib
+    networks:
+      - semantic-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Envoy Proxy Service
+  envoy:
+    image: envoyproxy/envoy:v1.31.7
+    container_name: envoy-proxy
+    ports:
+      - "8801:8801"  # Main proxy port
+      - "19000:19000"  # Admin interface
+    volumes:
+      - ./config/envoy-docker.yaml:/etc/envoy/envoy.yaml:ro
+    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
+    depends_on:
+      semantic-router:
+        condition: service_healthy
+    networks:
+      - semantic-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:19000/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  semantic-network:
+    driver: bridge
+
+volumes:
+  models-cache:
+    driver: local

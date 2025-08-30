@@ -28,7 +28,7 @@ gpu_config:
 # vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
 vllm_endpoints:
   - name: "endpoint1"
-    address: "192.168.12.90"
+    address: "127.0.0.1"
     port: 11434
     models:
       - "phi4"
@@ -36,14 +36,14 @@ vllm_endpoints:
     weight: 1  # Load balancing weight
     health_check_path: "/health"  # Optional health check endpoint
   - name: "endpoint2"
-    address: "192.168.12.91"
+    address: "127.0.0.1"
     port: 11434
     models:
       - "mistral-small3.1"
     weight: 1
     health_check_path: "/health"
   - name: "endpoint3"
-    address: "192.168.12.92"
+    address: "127.0.0.1"
     port: 11434
     models:
       - "phi4"  # Same model can be served by multiple endpoints for redundancy

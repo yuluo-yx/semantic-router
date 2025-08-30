@@ -554,5 +554,3 @@ class TrainingPipeline:
             
         return results
 ```
-
-This comprehensive training approach ensures that each model in the Semantic Router is optimized for its specific purpose while maintaining consistency in methodology and performance. The next sections detail the [Classification Models](classification-models.md) and [Datasets](datasets.md) in greater depth.

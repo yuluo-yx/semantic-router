@@ -22,7 +22,9 @@ function HomepageHeader() {
               />
               <h1 className="hero__title">vLLM Semantic Router</h1>
             </div>
-            <p className="hero__subtitle">{siteConfig.tagline}</p>
+            <p className="hero__subtitle">
+              Intelligent <strong>Auto Reasoning</strong> Router for Efficient LLM Inference on <strong>Mixture-of-Models</strong>
+            </p>
           </div>
           <div className={styles.heroRight}>
             <img
