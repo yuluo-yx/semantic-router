@@ -2,22 +2,24 @@
 
 <img src="website/static/img/repo.png" alt="vLLM Semantic Router"/>
 
-[![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://llm-semantic-router.readthedocs.io/en/latest/)
+[![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://vllm-semantic-router.com)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/candle-semantic-router.svg)](https://crates.io/crates/candle-semantic-router)
 
-**📚 [Complete Documentation](https://llm-semantic-router.readthedocs.io/en/latest/) | 🚀 [Quick Start](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/quick-start/) | 🏗️ [Architecture](https://llm-semantic-router.readthedocs.io/en/latest/architecture/system-architecture/) | 📖 [API Reference](https://llm-semantic-router.readthedocs.io/en/latest/api/router/)**
+**📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/getting-started/installation) | 🏗️ [Architecture](https://vllm-semantic-router.com/docs/architecture/system-architecture/) | 📖 [API Reference](https://vllm-semantic-router.com/docs/api/router/)**
 
 ![](./website/static/img/code.png)
 
 </div>
 
-## Overview
+## Innovations ✨
 
 ![](./website/static/img/architecture.png)
 
-### Auto-Reasoning and Auto-Selection of Models
+### Intelligent Routing 🧠
+
+#### Auto-Reasoning and Auto-Selection of Models
 
 An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
 
@@ -33,31 +35,49 @@ The screenshot below shows the LLM Router dashboard in Grafana.
 
 The router is implemented in two ways: Golang (with Rust FFI based on Candle) and Python. Benchmarking will be conducted to determine the best implementation.
 
-### Auto-Selection of Tools
+#### Auto-Selection of Tools
 
 Select the tools to use based on the prompt, avoiding the use of tools that are not relevant to the prompt so as to reduce the number of prompt tokens and improve tool selection accuracy by the LLM.
 
-### PII detection
+### Enterprise Security 🔒
+
+#### PII detection
 
 Detect PII in the prompt, avoiding sending PII to the LLM so as to protect the privacy of the user.
 
-### Prompt guard
+#### Prompt guard
 
 Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving.
 
-### Semantic Caching
+### Similarity Caching ⚡️
 
 Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
 
-## 📖 Documentation
+## Documentation 📖
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
 
-**👉 [Complete Documentation at Read the Docs](https://llm-semantic-router.readthedocs.io/en/latest/)**
+**👉 [Complete Documentation at Read the Docs](https://vllm-semantic-router.com/)**
 
 The documentation includes:
-- **[Installation Guide](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/installation/)** - Complete setup instructions
-- **[Quick Start](https://llm-semantic-router.readthedocs.io/en/latest/getting-started/quick-start/)** - Get running in 5 minutes
-- **[System Architecture](https://llm-semantic-router.readthedocs.io/en/latest/architecture/system-architecture/)** - Technical deep dive
-- **[Model Training](https://llm-semantic-router.readthedocs.io/en/latest/training/training-overview/)** - How classification models work
-- **[API Reference](https://llm-semantic-router.readthedocs.io/en/latest/api/router/)** - Complete API documentation
+- **[Installation Guide](https://vllm-semantic-router.com/docs/getting-started/installation/)** - Complete setup instructions
+- **[System Architecture](https://vllm-semantic-router.com/docs/architecture/system-architecture/)** - Technical deep dive
+- **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
+- **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
+
+## Community 👋
+
+For questions, feedback, or to contribute, please join `#semantic-router` channel in vLLM Slack.
+
+## Citation
+
+If you find Semantic Router helpful in your research or projects, please consider citing it:
+
+```
+@misc{semanticrouter2025,
+  title={vLLM Semantic Router},
+  author={vLLM Semantic Router Team},
+  year={2025},
+  howpublished={\url{https://github.com/vllm-project/semantic-router}},
+}
+```
