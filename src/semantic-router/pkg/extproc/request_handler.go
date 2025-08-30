@@ -445,7 +445,6 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			selectedEndpoint = endpointAddress
 			log.Printf("Selected endpoint address: %s for model: %s", selectedEndpoint, originalModel)
 		} else {
-			// TOOD(Xunzhuo): pick a random endpoint from the list of all available endpoints
 			log.Printf("Warning: No endpoint found for model %s, using fallback", originalModel)
 		}
 		setHeaders := []*core.HeaderValueOption{}
