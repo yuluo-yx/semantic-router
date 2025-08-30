@@ -78,12 +78,22 @@ var _ = Describe("Endpoint Selection", func() {
 						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
 							// Should be one of the configured endpoint addresses
-							Expect(header.Header.Value).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
+							// Check both Value and RawValue since implementation uses RawValue
+							headerValue := header.Header.Value
+							if headerValue == "" && len(header.Header.RawValue) > 0 {
+								headerValue = string(header.Header.RawValue)
+							}
+							Expect(headerValue).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
 						}
 						if header.Header.Key == "x-selected-model" {
 							modelHeaderFound = true
 							// Should be one of the configured models
-							Expect(header.Header.Value).To(BeElementOf("model-a", "model-b"))
+							// Check both Value and RawValue since implementation may use either
+							headerValue := header.Header.Value
+							if headerValue == "" && len(header.Header.RawValue) > 0 {
+								headerValue = string(header.Header.RawValue)
+							}
+							Expect(headerValue).To(BeElementOf("model-a", "model-b"))
 						}
 					}
 
@@ -141,7 +151,11 @@ var _ = Describe("Endpoint Selection", func() {
 					for _, header := range headerMutation.SetHeaders {
 						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
+							// Check both Value and RawValue since implementation uses RawValue
 							selectedEndpoint = header.Header.Value
+							if selectedEndpoint == "" && len(header.Header.RawValue) > 0 {
+								selectedEndpoint = string(header.Header.RawValue)
+							}
 							break
 						}
 					}
@@ -200,7 +214,11 @@ var _ = Describe("Endpoint Selection", func() {
 					for _, header := range headerMutation.SetHeaders {
 						if header.Header.Key == "x-semantic-destination-endpoint" {
 							endpointHeaderFound = true
+							// Check both Value and RawValue since implementation uses RawValue
 							selectedEndpoint = header.Header.Value
+							if selectedEndpoint == "" && len(header.Header.RawValue) > 0 {
+								selectedEndpoint = string(header.Header.RawValue)
+							}
 							break
 						}
 					}

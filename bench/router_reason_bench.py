@@ -363,6 +363,14 @@ def build_extra_body_for_model(
         # Base: do not set thinking for DeepSeek
         return None
 
+    # Qwen3 family
+    if "qwen3" in lower:
+        if reasoning is True:
+            return {"chat_template_kwargs": {"enable_thinking": True}}
+        if reasoning is False:
+            return {"chat_template_kwargs": {"enable_thinking": False}}
+        return None
+
     # GPT OSS family
     if "gpt-oss" in lower or "openai/gpt-oss" in lower or "gpt_oss" in lower:
         # Base -> low effort, On -> provided effort (e.g., high)
@@ -527,9 +535,7 @@ def evaluate_model_vllm_multimode(
 
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = [executor.submit(run_variants, q) for q in questions_data]
-        for future in tqdm(
-            futures, total=len(futures), desc=f"Evaluating {model} (vLLM modes)"
-        ):
+        for future in tqdm(futures, total=len(futures), desc=f"Evaluating {model} (vLLM modes)"):
             results.extend(future.result())
 
     return pd.DataFrame(results)
@@ -578,9 +584,7 @@ def evaluate_model_policies(
 
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = [executor.submit(run_all_modes, q) for q in questions]
-        for future in tqdm(
-            futures, total=len(futures), desc=f"Evaluating {model} (policies)"
-        ):
+        for future in tqdm(futures, total=len(futures), desc=f"Evaluating {model} (policies)"):
             per_call_records.extend(future.result())
 
     calls_df = pd.DataFrame(per_call_records)

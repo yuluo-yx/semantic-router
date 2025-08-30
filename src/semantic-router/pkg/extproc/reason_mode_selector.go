@@ -39,13 +39,25 @@ func (r *OpenAIRouter) shouldUseReasoningMode(query string) bool {
 	return false
 }
 
-// getChatTemplateKwargs returns the appropriate chat template kwargs based on reasoning mode and streaming
-func getChatTemplateKwargs(useReasoning bool) map[string]interface{} {
-	if useReasoning {
+// getChatTemplateKwargs returns the appropriate chat template kwargs based on model and reasoning mode
+func getChatTemplateKwargs(model string, useReasoning bool) map[string]interface{} {
+	lower := strings.ToLower(strings.TrimSpace(model))
+
+	// Qwen3: use enable_thinking true/false
+	if strings.Contains(lower, "qwen3") {
+		return map[string]interface{}{
+			"enable_thinking": useReasoning,
+		}
+	}
+
+	// DeepSeek v3 family: use thinking true/false
+	if strings.Contains(lower, "deepseek") || strings.Contains(lower, "ds") {
 		return map[string]interface{}{
 			"thinking": useReasoning,
 		}
 	}
+
+	// Default: no chat template kwargs
 	return nil
 }
 
@@ -57,8 +69,20 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		return nil, fmt.Errorf("failed to parse request body: %w", err)
 	}
 
+	// Determine model for kwargs and logging
+	model := "unknown"
+	if modelValue, ok := requestMap["model"]; ok {
+		if modelStr, ok := modelValue.(string); ok {
+			model = modelStr
+		}
+	}
+
 	// Add chat_template_kwargs for reasoning mode
-	requestMap["chat_template_kwargs"] = getChatTemplateKwargs(enabled)
+	if kwargs := getChatTemplateKwargs(model, enabled); kwargs != nil {
+		requestMap["chat_template_kwargs"] = kwargs
+	} else {
+		delete(requestMap, "chat_template_kwargs")
+	}
 	// Also set Reasoning-Effort in openai request
 	// This is a hack to get the reasoning mode for openai/gpt-oss-20b to work
 	originalReasoningEffort, ok := requestMap["reasoning_effort"]
@@ -73,16 +97,8 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		requestMap["reasoning_effort"] = originalReasoningEffort
 	}
 
-	// Get the model name for logging
-	model := "unknown"
-	if modelValue, ok := requestMap["model"]; ok {
-		if modelStr, ok := modelValue.(string); ok {
-			model = modelStr
-		}
-	}
-
 	log.Printf("Original reasoning effort: %s", originalReasoningEffort)
-	log.Printf("Added reasoning mode (thinking: %v) and reasoning effort (%s) to request for model: %s", enabled, requestMap["reasoning_effort"], model)
+	log.Printf("Added reasoning mode (enabled: %v) and reasoning effort (%s) to request for model: %s", enabled, requestMap["reasoning_effort"], model)
 
 	// Serialize back to JSON
 	modifiedBody, err := json.Marshal(requestMap)

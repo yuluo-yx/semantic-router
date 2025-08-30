@@ -65,8 +65,9 @@ func TestReasoningModeIntegration(t *testing.T) {
 
 	// Test case 3: Test addReasoningModeToRequestBody function
 	t.Run("addReasoningModeToRequestBody adds correct fields", func(t *testing.T) {
+		// Test with DeepSeek model (which supports chat_template_kwargs)
 		originalRequest := map[string]interface{}{
-			"model": "phi4",
+			"model": "deepseek-v31",
 			"messages": []map[string]interface{}{
 				{"role": "user", "content": "What is 2 + 2?"},
 			},
@@ -88,23 +89,23 @@ func TestReasoningModeIntegration(t *testing.T) {
 			t.Fatalf("Failed to unmarshal modified request: %v", err)
 		}
 
-		// Check if chat_template_kwargs was added
+		// Check if chat_template_kwargs was added for DeepSeek model
 		chatTemplateKwargs, exists := modifiedRequest["chat_template_kwargs"]
 		if !exists {
-			t.Error("chat_template_kwargs not found in modified request")
+			t.Error("chat_template_kwargs not found in modified request for DeepSeek model")
 		}
 
-		// Check if thinking: true was set
+		// Check if thinking: true was set for DeepSeek model
 		if kwargs, ok := chatTemplateKwargs.(map[string]interface{}); ok {
 			if thinking, hasThinking := kwargs["thinking"]; hasThinking {
 				if thinkingBool, isBool := thinking.(bool); !isBool || !thinkingBool {
-					t.Errorf("Expected thinking: true, got %v", thinking)
+					t.Errorf("Expected thinking: true for DeepSeek model, got %v", thinking)
 				}
 			} else {
-				t.Error("thinking field not found in chat_template_kwargs")
+				t.Error("thinking field not found in chat_template_kwargs for DeepSeek model")
 			}
 		} else {
-			t.Errorf("chat_template_kwargs is not a map, got %T", chatTemplateKwargs)
+			t.Errorf("chat_template_kwargs is not a map for DeepSeek model, got %T", chatTemplateKwargs)
 		}
 
 		// Verify original fields are preserved
@@ -114,24 +115,80 @@ func TestReasoningModeIntegration(t *testing.T) {
 				t.Errorf("Original field '%s' was lost", field)
 			}
 		}
+
+		// Test with unsupported model (phi4) - should not add chat_template_kwargs
+		originalRequestPhi4 := map[string]interface{}{
+			"model": "phi4",
+			"messages": []map[string]interface{}{
+				{"role": "user", "content": "What is 2 + 2?"},
+			},
+			"stream": false,
+		}
+
+		originalBodyPhi4, err := json.Marshal(originalRequestPhi4)
+		if err != nil {
+			t.Fatalf("Failed to marshal phi4 request: %v", err)
+		}
+
+		modifiedBodyPhi4, err := router.setReasoningModeToRequestBody(originalBodyPhi4, true)
+		if err != nil {
+			t.Fatalf("Failed to process phi4 request: %v", err)
+		}
+
+		var modifiedRequestPhi4 map[string]interface{}
+		if err := json.Unmarshal(modifiedBodyPhi4, &modifiedRequestPhi4); err != nil {
+			t.Fatalf("Failed to unmarshal phi4 request: %v", err)
+		}
+
+		// For phi4, chat_template_kwargs should not be added (since it's not supported)
+		if _, exists := modifiedRequestPhi4["chat_template_kwargs"]; exists {
+			t.Error("chat_template_kwargs should not be added for unsupported model phi4")
+		}
+
+		// But reasoning_effort should still be set
+		if reasoningEffort, exists := modifiedRequestPhi4["reasoning_effort"]; !exists {
+			t.Error("reasoning_effort should be set for phi4 model")
+		} else if reasoningEffort != "high" {
+			t.Errorf("Expected reasoning_effort: high for phi4 model, got %v", reasoningEffort)
+		}
 	})
 
 	// Test case 4: Test getChatTemplateKwargs function
 	t.Run("getChatTemplateKwargs returns correct values", func(t *testing.T) {
-		// Test with reasoning enabled
-		kwargs := getChatTemplateKwargs(true)
+		// Test with DeepSeek model and reasoning enabled
+		kwargs := getChatTemplateKwargs("deepseek-v31", true)
 		if kwargs == nil {
-			t.Error("Expected non-nil kwargs for reasoning enabled")
+			t.Error("Expected non-nil kwargs for DeepSeek model with reasoning enabled")
 		}
 
 		if thinking, ok := kwargs["thinking"]; !ok || thinking != true {
-			t.Errorf("Expected thinking: true, got %v", thinking)
+			t.Errorf("Expected thinking: true for DeepSeek model, got %v", thinking)
 		}
 
-		// Test with reasoning disabled
-		kwargs = getChatTemplateKwargs(false)
+		// Test with DeepSeek model and reasoning disabled
+		kwargs = getChatTemplateKwargs("deepseek-v31", false)
+		if kwargs == nil {
+			t.Error("Expected non-nil kwargs for DeepSeek model with reasoning disabled")
+		}
+
+		if thinking, ok := kwargs["thinking"]; !ok || thinking != false {
+			t.Errorf("Expected thinking: false for DeepSeek model, got %v", thinking)
+		}
+
+		// Test with Qwen3 model and reasoning enabled
+		kwargs = getChatTemplateKwargs("qwen3-7b", true)
+		if kwargs == nil {
+			t.Error("Expected non-nil kwargs for Qwen3 model with reasoning enabled")
+		}
+
+		if enableThinking, ok := kwargs["enable_thinking"]; !ok || enableThinking != true {
+			t.Errorf("Expected enable_thinking: true for Qwen3 model, got %v", enableThinking)
+		}
+
+		// Test with unknown model (should return nil)
+		kwargs = getChatTemplateKwargs("unknown-model", true)
 		if kwargs != nil {
-			t.Errorf("Expected nil kwargs for reasoning disabled, got %v", kwargs)
+			t.Errorf("Expected nil kwargs for unknown model, got %v", kwargs)
 		}
 	})
 
