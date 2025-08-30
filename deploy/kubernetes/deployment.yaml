@@ -69,7 +69,7 @@ spec:
           mountPath: /app/models
       containers:
       - name: semantic-router
-        image: ghcr.io/redhat-et/llm_semantic_router/extproc:latest
+        image: ghcr.io/vllm-project/semantic-router/extproc:latest
         ports:
         - containerPort: 50051
           name: grpc
