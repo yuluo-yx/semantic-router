@@ -33,6 +33,49 @@ parser.add_argument(
     default=Path("."),
     help="Directory to save plots (default: current directory)",
 )
+parser.add_argument(
+    "--font-scale",
+    type=float,
+    default=1.6,
+    help="Scale factor for fonts and markers (default: 1.6)",
+)
+parser.add_argument(
+    "--dpi",
+    type=int,
+    default=320,
+    help="PNG export DPI (default: 320)",
+)
+parser.add_argument(
+    "--style",
+    type=str,
+    choices=["points", "lines", "both"],
+    default="points",
+    help="Plot style for modes: points, lines, or both (default: points)",
+)
+parser.add_argument(
+    "--max-modes",
+    type=int,
+    default=None,
+    help="If set, plot only the top N modes by mean of the current metric",
+)
+parser.add_argument(
+    "--xtick-rotation",
+    type=float,
+    default=75.0,
+    help="Rotation angle for x tick labels (default: 75)",
+)
+parser.add_argument(
+    "--side-margin",
+    type=float,
+    default=0.0,
+    help="Shrink x-limits inward by this many x units per side (default: 0)",
+)
+parser.add_argument(
+    "--side-expand",
+    type=float,
+    default=0.25,
+    help="Expand x-limits outward by this many x units per side (default: 0.25)",
+)
 args = parser.parse_args()
 summary_path = args.summary
 
@@ -128,19 +171,57 @@ cats = sorted(cat_ranges.keys())
 
 
 def plot_metric(metric: str, out_path: Path):
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(18, 8))
 
     x = range(len(cats))
 
-    # Overlay each mode as points
+    # Determine modes to plot, optionally limiting to top-N by mean of metric
     all_modes = sorted({m for c in cats for m in cat_by_mode.get(c, {}).keys()})
     if len(all_modes) > 0:
+        def _mean(values):
+            vals = [v for v in values if v is not None]
+            return sum(vals) / len(vals) if vals else float("nan")
+
+        if args.max_modes is not None and args.max_modes > 0 and len(all_modes) > args.max_modes:
+            mode_means = []
+            for mode in all_modes:
+                vals = [cat_by_mode.get(c, {}).get(mode, {}).get(metric) for c in cats]
+                mode_means.append((mode, _mean(vals)))
+            # Accuracy: higher is better; latency/tokens: lower is better
+            ascending = metric != "accuracy"
+            mode_means = sorted(
+                mode_means,
+                key=lambda kv: (float("inf") if (kv[1] != kv[1]) else kv[1]),
+                reverse=not ascending,
+            )
+            all_modes = [m for m, _ in mode_means[: args.max_modes]]
+
         palette = colormaps.get_cmap("tab10").resampled(len(all_modes))
+        linestyles = ["-", "--", "-.", ":"]
         for i, mode in enumerate(all_modes):
-            ys = []
-            for c in cats:
-                ys.append(cat_by_mode.get(c, {}).get(mode, {}).get(metric))
-            ax.scatter(x, ys, s=20, color=palette.colors[i], label=mode, alpha=0.8)
+            ys = [cat_by_mode.get(c, {}).get(mode, {}).get(metric) for c in cats]
+            if args.style in ("lines", "both"):
+                ax.plot(
+                    x,
+                    ys,
+                    color=palette.colors[i],
+                    linestyle=linestyles[i % len(linestyles)],
+                    linewidth=1.4 * args.font_scale,
+                    alpha=0.6,
+                    zorder=2,
+                )
+            if args.style in ("points", "both"):
+                ax.scatter(
+                    x,
+                    ys,
+                    s=60 * args.font_scale,
+                    color=palette.colors[i],
+                    label=mode,
+                    alpha=0.85,
+                    edgecolors="white",
+                    linewidths=0.5 * args.font_scale,
+                    zorder=3,
+                )
 
     # Overlay router per-category metric as diamonds, if provided
     if s_router is not None:
@@ -153,24 +234,95 @@ def plot_metric(metric: str, out_path: Path):
                 router_x.append(idx)
                 router_vals.append(v)
         if router_vals:
+            # Connect router points with a line and draw larger diamond markers
+            ax.plot(
+                router_x,
+                router_vals,
+                color="tab:red",
+                linestyle="-",
+                linewidth=2.0 * args.font_scale,
+                alpha=0.85,
+                zorder=4,
+            )
             ax.scatter(
                 router_x,
                 router_vals,
-                s=50,
+                s=90 * args.font_scale,
                 color="tab:red",
                 marker="D",
                 label="router",
-                zorder=4,
+                zorder=5,
+                edgecolors="white",
+                linewidths=0.6 * args.font_scale,
             )
 
     ax.set_xticks(list(x))
-    ax.set_xticklabels(cats, rotation=60, ha="right")
+    ax.set_xticklabels(
+        cats,
+        rotation=args.xtick_rotation,
+        ha="right",
+        fontsize=int(14 * args.font_scale),
+    )
+    # Control horizontal fit by expanding/shrinking x-limits around the first/last category
+    if len(cats) > 0:
+        n = len(cats)
+        # Base categorical extents
+        base_left = -0.5
+        base_right = n - 0.5
+        # Apply outward expansion first, then inward margin
+        expand = max(0.0, float(args.side_expand))
+        max_margin = 0.49
+        margin = max(0.0, min(float(args.side_margin), max_margin))
+        left_xlim = base_left - expand + margin
+        right_xlim = base_right + expand - margin
+        if right_xlim > left_xlim:
+            ax.set_xlim(left_xlim, right_xlim)
     ylabel = metric.replace("_", " ")
-    ax.set_ylabel(ylabel)
-    ax.set_title(f"Per-category {ylabel} per-mode values")
-    ax.legend(ncol=3, fontsize=8)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200, bbox_inches="tight")
+    ax.set_ylabel(ylabel, fontsize=int(18 * args.font_scale))
+    ax.set_title(f"Per-category {ylabel} per-mode values", fontsize=int(22 * args.font_scale))
+    ax.tick_params(axis="both", which="major", labelsize=int(14 * args.font_scale))
+
+    # Build a figure-level legend below the axes and reserve space to prevent overlap
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        num_series = len(handles)
+        # Force exactly 2 legend rows; compute columns accordingly
+        legend_rows = 2
+        legend_ncol = max(1, (num_series + legend_rows - 1) // legend_rows)
+        num_rows = legend_rows
+        scale = (args.font_scale / 1.6)
+        # Reserve generous space for long rotated tick labels and multi-row legend
+        bottom_reserved = (0.28 * scale) + (0.12 * num_rows * scale)
+        bottom_reserved = max(0.24, min(0.60, bottom_reserved))
+        fig.subplots_adjust(left=0.01, right=0.999, top=0.92, bottom=bottom_reserved)
+        # Align the legend box width with the axes width
+        pos = ax.get_position()
+        fig.legend(
+            handles,
+            labels,
+            loc="lower left",
+            bbox_to_anchor=(pos.x0, 0.02, pos.width, 0.001),
+            bbox_transform=fig.transFigure,
+            ncol=legend_ncol,
+            mode="expand",
+            fontsize=int(14 * args.font_scale),
+            markerscale=1.6 * args.font_scale,
+            frameon=False,
+            borderaxespad=0.0,
+            columnspacing=0.8 * args.font_scale,
+            handlelength=2.2,
+        )
+    else:
+        fig.subplots_adjust(left=0.01, right=0.999, top=0.92, bottom=0.14)
+    ax.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.3)
+    # Eliminate additional automatic horizontal padding
+    ax.margins(x=0.0)
+    # Layout handled via subplots_adjust above to avoid legend overlap
+    # Save both PNG and PDF variants
+    png_path = out_path.with_suffix(".png")
+    pdf_path = out_path.with_suffix(".pdf")
+    plt.savefig(png_path, dpi=int(args.dpi), bbox_inches="tight")
+    plt.savefig(pdf_path, bbox_inches="tight")
     plt.close(fig)
 
 
