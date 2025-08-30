@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
@@ -115,6 +116,7 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 	var result candle_binding.ClassResult
 	var err error
 
+	start := time.Now()
 	if c.Config.PromptGuard.UseModernBERT {
 		// Use ModernBERT jailbreak classifier
 		result, err = candle_binding.ClassifyModernBertJailbreakText(text)
@@ -122,6 +124,7 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 		// Use linear jailbreak classifier
 		result, err = candle_binding.ClassifyJailbreakText(text)
 	}
+	metrics.RecordClassifierLatency("jailbreak", time.Since(start).Seconds())
 
 	if err != nil {
 		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
@@ -196,6 +199,7 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 	var result candle_binding.ClassResult
 	var err error
 
+	start := time.Now()
 	if c.Config.Classifier.CategoryModel.UseModernBERT {
 		// Use ModernBERT classifier
 		result, err = candle_binding.ClassifyModernBertText(text)
@@ -203,6 +207,7 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 		// Use linear classifier
 		result, err = candle_binding.ClassifyText(text)
 	}
+	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
 
 	if err != nil {
 		return "", 0.0, fmt.Errorf("classification error: %w", err)
@@ -243,7 +248,9 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 
 	// Use ModernBERT PII token classifier for entity detection
 	configPath := fmt.Sprintf("%s/config.json", c.Config.Classifier.PIIModel.ModelID)
+	start := time.Now()
 	tokenResult, err := candle_binding.ClassifyModernBertPIITokens(text, configPath)
+	metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -323,7 +330,9 @@ func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnal
 
 		// Use ModernBERT PII token classifier for detailed analysis
 		configPath := fmt.Sprintf("%s/config.json", c.Config.Classifier.PIIModel.ModelID)
+		start := time.Now()
 		tokenResult, err := candle_binding.ClassifyModernBertPIITokens(content, configPath)
+		metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 		if err != nil {
 			log.Printf("Error analyzing content %d: %v", i, err)
 			continue

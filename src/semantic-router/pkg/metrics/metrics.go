@@ -70,6 +70,16 @@ var (
 		},
 	)
 
+	// ClassifierLatency tracks the latency of classifier invocations by type
+	ClassifierLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_classifier_latency_seconds",
+			Help:    "The latency of classifier invocations by type",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"classifier"},
+	)
+
 	// CacheHits tracks cache hits and misses
 	CacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -153,4 +163,9 @@ func RecordPIIViolations(model string, piiTypes []string) {
 	for _, piiType := range piiTypes {
 		PIIViolations.WithLabelValues(model, piiType).Inc()
 	}
+}
+
+// RecordClassifierLatency records the latency for a classifier invocation by type
+func RecordClassifierLatency(classifier string, seconds float64) {
+	ClassifierLatency.WithLabelValues(classifier).Observe(seconds)
 }
