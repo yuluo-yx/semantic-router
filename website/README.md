@@ -114,7 +114,3 @@ Modify `docusaurus.config.js` for:
 - **Live Preview**: http://localhost:3000 (when running)
 - **Docusaurus Docs**: https://docusaurus.io/docs
 - **Main Project**: ../README.md
-
----
-
-Built with ❤️ using [Docusaurus](https://docusaurus.io/)
