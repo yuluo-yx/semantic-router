@@ -46,7 +46,7 @@ func main() {
 
 	log.Printf("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
-	// Start Classification API server if enabled
+	// Start API server if enabled
 	if *enableAPI {
 		go func() {
 			log.Printf("Starting Classification API server on port %d", *apiPort)
