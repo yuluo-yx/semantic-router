@@ -78,6 +78,37 @@ const config = {
             label: 'Documentation',
           },
           {
+            type: 'dropdown',
+            label: 'Community',
+            position: 'left',
+            items: [
+              {
+                label: 'Work Groups',
+                to: '/community/work-groups',
+              },
+              {
+                label: 'Contributing Guide',
+                to: '/community/contributing',
+              },
+              {
+                label: 'Code of Conduct',
+                to: '/community/code-of-conduct',
+              },
+              {
+                type: 'html',
+                value: '<hr style="margin: 0.3rem 0;">',
+              },
+              {
+                label: 'GitHub Discussions',
+                href: 'https://github.com/vllm-project/semantic-router/discussions',
+              },
+              {
+                label: 'GitHub Issues',
+                href: 'https://github.com/vllm-project/semantic-router/issues',
+              },
+            ],
+          },
+          {
             href: 'https://github.com/vllm-project/semantic-router',
             label: 'GitHub',
             position: 'right',
