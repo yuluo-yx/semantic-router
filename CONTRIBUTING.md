@@ -176,9 +176,11 @@ The test suite includes:
    ```
 
 5. **Commit your changes:**
+
+   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**.
    ```bash
    git add .
-   git commit -m "feat: add your feature description"
+   git commit -s -m "feat: add your feature description"
    ```
 
 ### Debugging
