@@ -11,8 +11,8 @@ This Docker Compose configuration allows you to quickly run Semantic Router + En
 
 1. **Clone the repository and navigate to the project directory**
    ```bash
-   git clone https://github.com/vllm-project/semantic-router.git
-   cd semantic-router
+   git clone <repository-url>
+   cd semantic_router
    ```
 
 2. **Download required models** (if not already present):
