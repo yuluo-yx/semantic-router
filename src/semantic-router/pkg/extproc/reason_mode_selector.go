@@ -63,7 +63,14 @@ func getChatTemplateKwargs(model string, useReasoning bool) map[string]interface
 		}
 	}
 
-	// Default: no chat template kwargs
+	// Default: use thinking for all other models when reasoning is enabled
+	if useReasoning {
+		return map[string]interface{}{
+			"thinking": useReasoning,
+		}
+	}
+
+	// No chat template kwargs when reasoning is disabled
 	return nil
 }
 
