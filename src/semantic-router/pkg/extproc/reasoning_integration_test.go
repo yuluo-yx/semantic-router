@@ -79,7 +79,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 			t.Fatalf("Failed to marshal original request: %v", err)
 		}
 
-		modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true)
+		modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, "math")
 		if err != nil {
 			t.Fatalf("Failed to add reasoning mode: %v", err)
 		}
@@ -130,7 +130,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 			t.Fatalf("Failed to marshal phi4 request: %v", err)
 		}
 
-		modifiedBodyPhi4, err := router.setReasoningModeToRequestBody(originalBodyPhi4, true)
+		modifiedBodyPhi4, err := router.setReasoningModeToRequestBody(originalBodyPhi4, true, "math")
 		if err != nil {
 			t.Fatalf("Failed to process phi4 request: %v", err)
 		}

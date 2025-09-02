@@ -96,6 +96,7 @@ categories:
 - name: business
   use_reasoning: false
   reasoning_description: "Business content is typically conversational"
+  reasoning_effort: low  # Business conversations need low reasoning effort
   model_scores:
   - model: phi4
     score: 0.8
@@ -136,6 +137,7 @@ categories:
 - name: chemistry
   use_reasoning: true
   reasoning_description: "Chemical reactions and formulas require systematic thinking"
+  reasoning_effort: high  # Chemistry requires high reasoning effort
   model_scores:
   - model: mistral-small3.1
     score: 0.8
@@ -186,6 +188,7 @@ categories:
 - name: math
   use_reasoning: true
   reasoning_description: "Mathematical problems require step-by-step reasoning"
+  reasoning_effort: high  # Math problems need high reasoning effort
   model_scores:
   - model: phi4
     score: 1.0
@@ -234,3 +237,4 @@ categories:
   - model: phi4
     score: 0.2
 default_model: mistral-small3.1
+default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high)
