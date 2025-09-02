@@ -4,26 +4,57 @@ import styles from './styles.module.css';
 
 const FeatureList = [
   {
-    title: '🎯 Intelligent Model Routing',
+    title: '🧠 Intelligent Routing',
     description: (
       <>
-        Built in ModernBERT Fine-Tuned Model, to achieve Auto-Reasoning and Auto-Selection of Models
+        Powered by <strong>ModernBERT Fine-Tuned Models</strong> for
+        intelligent intent understanding, it understands context, intent,
+        and complexity to route requests to the best LLM.
       </>
     ),
   },
   {
-    title: '🛡️ Enterprise Security',
+    title: '🛡️ AI-Powered Security',
     description: (
       <>
-        Built in PII detection and Prompt guard, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving.
+        Advanced <strong>PII Detection</strong> and <strong>Prompt Guard</strong> to identify and block jailbreak attempts, ensuring secure and responsible AI interactions
+        across your infrastructure.
       </>
     ),
   },
   {
-    title: '⚡ Similarity Cache',
+    title: '⚡ Semantic Caching',
     description: (
       <>
-        Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
+        Intelligent <strong>Similarity Cache</strong> that stores semantic representations
+        of prompts, dramatically reducing token usage and latency through smart content matching.
+      </>
+    ),
+  },
+  {
+    title: '🤖 Auto-Reasoning Engine',
+    description: (
+      <>
+        Auto reasoning engine that analyzes request <strong>complexity</strong>, domain expertise
+        requirements, and performance constraints to automatically select the best model for each task.
+      </>
+    ),
+  },
+  {
+    title: '🔬 Real-time Analytics',
+    description: (
+      <>
+        Comprehensive monitoring and analytics dashboard with <strong>neural network insights</strong>,
+        model performance metrics, and intelligent routing decisions visualization.
+      </>
+    ),
+  },
+  {
+    title: '🚀 Scalable Architecture',
+    description: (
+      <>
+        Cloud-native design with <strong>distributed neural processing</strong>, auto-scaling capabilities,
+        and seamless integration with existing LLM infrastructure and model serving platforms.
       </>
     ),
   },
@@ -46,6 +77,14 @@ export default function HomepageFeatures() {
   return (
     <section className={styles.features}>
       <div className="container">
+        <div className={styles.featuresHeader}>
+          <h2 className={styles.featuresTitle}>
+            🚀 Advanced AI Capabilities
+          </h2>
+          <p className={styles.featuresSubtitle}>
+            Powered by cutting-edge neural networks and machine learning technologies
+          </p>
+        </div>
         <div className="row">
           {FeatureList.map((props, idx) => (
             <Feature key={idx} {...props} />

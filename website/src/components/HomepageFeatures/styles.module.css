@@ -1,41 +1,195 @@
 .features {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 4rem 0;
+  padding: 5rem 0;
   width: 100%;
-  background: rgba(246, 248, 250, 0.8);
+  background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 50%, #F0F3F6 100%);
   backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+}
+
+.features::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  animation: featuresBackgroundFlow 10s ease-in-out infinite;
+}
+
+.featuresHeader {
+  text-align: center;
+  margin-bottom: 3rem;
+  position: relative;
+  z-index: 1;
+}
+
+.featuresTitle {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  background: linear-gradient(45deg, #58A6FF, #FDB516, #A855F7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: featuresTitleGlow 4s ease-in-out infinite;
+}
+
+.featuresSubtitle {
+  font-size: 1.2rem;
+  color: #656D76;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
 }
 
 .featureCard {
-  background: var(--tech-card-bg);
-  border: 1px solid var(--tech-border);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 20px;
   padding: 2.5rem 2rem;
   margin: 1rem;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: var(--tech-shadow);
+  transition: all 0.4s ease;
+  backdrop-filter: blur(15px);
+  box-shadow:
+    0 8px 32px rgba(9, 105, 218, 0.1),
+    0 0 0 1px rgba(88, 166, 255, 0.1);
   height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.featureCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(88, 166, 255, 0.05) 0%, transparent 50%, rgba(253, 181, 22, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.featureCard:hover::before {
+  opacity: 1;
 }
 
 .featureCard:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 48px rgba(9, 105, 218, 0.15);
-  border-color: var(--tech-border-accent);
+  transform: translateY(-12px) scale(1.02);
+  box-shadow:
+    0 20px 60px rgba(9, 105, 218, 0.2),
+    0 0 0 1px rgba(88, 166, 255, 0.3),
+    0 0 40px rgba(88, 166, 255, 0.2);
+  border-color: rgba(88, 166, 255, 0.4);
 }
 
 .featureTitle {
-  color: var(--tech-primary-blue);
-  font-weight: 700;
+  color: #1F2328;
+  font-weight: 800;
   margin: 0 0 1.5rem 0;
   font-size: 1.4rem;
   line-height: 1.3;
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(45deg, #0969DA, #FDB516);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .featureDescription {
-  color: var(--tech-text-primary);
+  color: #656D76;
   line-height: 1.7;
   margin-bottom: 0;
   font-size: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.featureDescription strong {
+  color: #0969DA;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(9, 105, 218, 0.2);
+}
+
+/* Animations */
+@keyframes featuresBackgroundFlow {
+  0%, 100% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+  }
+  33% {
+    transform: translateX(20px) translateY(-10px) rotate(1deg);
+  }
+  66% {
+    transform: translateX(-10px) translateY(20px) rotate(-1deg);
+  }
+}
+
+@keyframes featuresTitleGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px rgba(88, 166, 255, 0.4));
+  }
+  33% {
+    filter: drop-shadow(0 0 16px rgba(253, 181, 22, 0.6));
+  }
+  66% {
+    filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.5));
+  }
+}
+
+/* Responsive Design */
+@media screen and (max-width: 996px) {
+  .featuresTitle {
+    font-size: 2rem;
+  }
+
+  .featuresSubtitle {
+    font-size: 1.1rem;
+  }
+
+  .featureCard {
+    margin: 0.5rem;
+    padding: 2rem 1.5rem;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .features {
+    padding: 3rem 0;
+  }
+
+  .featuresHeader {
+    margin-bottom: 2rem;
+  }
+
+  .featuresTitle {
+    font-size: 1.8rem;
+  }
+
+  .featuresSubtitle {
+    font-size: 1rem;
+    padding: 0 1rem;
+  }
+
+  .featureCard {
+    margin: 0.5rem 0;
+    padding: 1.5rem;
+  }
+
+  .featureTitle {
+    font-size: 1.2rem;
+  }
+
+  .featureDescription {
+    font-size: 0.9rem;
+  }
 }
