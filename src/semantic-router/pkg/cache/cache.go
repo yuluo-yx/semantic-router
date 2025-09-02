@@ -108,6 +108,9 @@ func (c *SemanticCache) UpdateWithResponse(query string, responseBody []byte) er
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Cleanup expired entries while we have the write lock
+	c.cleanupExpiredEntries()
+
 	// Find the pending request by query
 	for i, entry := range c.entries {
 		if entry.Query == query && entry.ResponseBody == nil {
