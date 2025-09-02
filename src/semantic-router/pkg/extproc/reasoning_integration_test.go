@@ -148,8 +148,8 @@ func TestReasoningModeIntegration(t *testing.T) {
 		// But reasoning_effort should still be set
 		if reasoningEffort, exists := modifiedRequestPhi4["reasoning_effort"]; !exists {
 			t.Error("reasoning_effort should be set for phi4 model")
-		} else if reasoningEffort != "high" {
-			t.Errorf("Expected reasoning_effort: high for phi4 model, got %v", reasoningEffort)
+		} else if reasoningEffort != "medium" {
+			t.Errorf("Expected reasoning_effort: medium for phi4 model (default), got %v", reasoningEffort)
 		}
 	})
 
