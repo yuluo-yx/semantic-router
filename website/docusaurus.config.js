@@ -83,6 +83,10 @@ const config = {
             position: 'left',
             items: [
               {
+                label: 'Team',
+                to: '/community/team',
+              },
+              {
                 label: 'Work Groups',
                 to: '/community/work-groups',
               },

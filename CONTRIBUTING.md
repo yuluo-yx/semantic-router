@@ -23,7 +23,7 @@ Before you begin, ensure you have the following installed:
 - **Go** 1.24.1 or later
 - **Hugging Face CLI** (`pip install huggingface_hub`)
 - **Make** (for build automation)
-- **Python** 3.8+ (Optiona: for training and testing)
+- **Python** 3.8+ (Optional: for training and testing)
 
 ### Initial Setup
 
@@ -176,9 +176,11 @@ The test suite includes:
    ```
 
 5. **Commit your changes:**
+
+   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**.
    ```bash
    git add .
-   git commit -m "feat: add your feature description"
+   git commit -s -m "feat: add your feature description"
    ```
 
 ### Debugging
