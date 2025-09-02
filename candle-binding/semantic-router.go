@@ -5,6 +5,7 @@ package candle_binding
 
 import (
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -158,7 +159,7 @@ func InitModel(modelID string, useCPU bool) error {
 			modelID = "sentence-transformers/all-MiniLM-L6-v2"
 		}
 
-		fmt.Println("Initializing BERT similarity model:", modelID)
+		log.Printf("Initializing BERT similarity model: %s", modelID)
 
 		// Initialize BERT directly using CGO
 		cModelID := C.CString(modelID)
@@ -284,7 +285,7 @@ func GetEmbeddingDefault(text string) ([]float32, error) {
 // CalculateSimilarity calculates the similarity between two texts with maxLength parameter
 func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
 	if !modelInitialized {
-		fmt.Println("BERT model not initialized")
+		log.Printf("BERT model not initialized")
 		return -1.0
 	}
 
@@ -306,7 +307,7 @@ func CalculateSimilarityDefault(text1, text2 string) float32 {
 // FindMostSimilar finds the most similar text from a list of candidates with maxLength parameter
 func FindMostSimilar(query string, candidates []string, maxLength int) SimResult {
 	if !modelInitialized {
-		fmt.Println("BERT model not initialized")
+		log.Printf("BERT model not initialized")
 		return SimResult{Index: -1, Score: -1.0}
 	}
 
@@ -364,7 +365,7 @@ func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 			return
 		}
 
-		fmt.Println("Initializing classifier model:", modelPath)
+		log.Printf("Initializing classifier model: %s", modelPath)
 
 		// Initialize classifier directly using CGO
 		cModelID := C.CString(modelPath)
@@ -392,7 +393,7 @@ func InitPIIClassifier(modelPath string, numClasses int, useCPU bool) error {
 			return
 		}
 
-		fmt.Println("Initializing PII classifier model:", modelPath)
+		log.Printf("Initializing PII classifier model: %s", modelPath)
 
 		// Initialize PII classifier directly using CGO
 		cModelID := C.CString(modelPath)
@@ -420,7 +421,7 @@ func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) erro
 			return
 		}
 
-		fmt.Println("Initializing jailbreak classifier model:", modelPath)
+		log.Printf("Initializing jailbreak classifier model: %s", modelPath)
 
 		// Initialize jailbreak classifier directly using CGO
 		cModelID := C.CString(modelPath)
@@ -495,7 +496,7 @@ func InitModernBertClassifier(modelPath string, useCPU bool) error {
 			modelPath = "answerdotai/ModernBERT-base"
 		}
 
-		fmt.Println("Initializing ModernBERT classifier model:", modelPath)
+		log.Printf("Initializing ModernBERT classifier model: %s", modelPath)
 
 		// Initialize ModernBERT classifier directly using CGO
 		cModelID := C.CString(modelPath)
@@ -519,7 +520,7 @@ func InitModernBertPIIClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./pii_classifier_modernbert_model"
 		}
 
-		fmt.Println("Initializing ModernBERT PII classifier model:", modelPath)
+		log.Printf("Initializing ModernBERT PII classifier model: %s", modelPath)
 
 		// Initialize ModernBERT PII classifier directly using CGO
 		cModelID := C.CString(modelPath)
@@ -543,7 +544,7 @@ func InitModernBertJailbreakClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./jailbreak_classifier_modernbert_model"
 		}
 
-		fmt.Println("Initializing ModernBERT jailbreak classifier model:", modelPath)
+		log.Printf("Initializing ModernBERT jailbreak classifier model: %s", modelPath)
 
 		// Initialize ModernBERT jailbreak classifier directly using CGO
 		cModelID := C.CString(modelPath)
@@ -567,7 +568,7 @@ func InitModernBertPIITokenClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./pii_classifier_modernbert_ai4privacy_token_model"
 		}
 
-		fmt.Println("Initializing ModernBERT PII token classifier model:", modelPath)
+		log.Printf("Initializing ModernBERT PII token classifier model: %s", modelPath)
 
 		// Initialize ModernBERT PII token classifier directly using CGO
 		cModelID := C.CString(modelPath)
