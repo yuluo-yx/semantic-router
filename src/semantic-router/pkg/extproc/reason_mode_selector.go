@@ -9,13 +9,19 @@ import (
 
 // shouldUseReasoningMode determines if reasoning mode should be enabled based on the query category
 func (r *OpenAIRouter) shouldUseReasoningMode(query string) bool {
+	enabled, _ := r.getReasoningModeAndCategory(query)
+	return enabled
+}
+
+// getReasoningModeAndCategory determines if reasoning mode should be enabled and returns the category name
+func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) {
 	// Get the category for this query using the existing classification system
 	categoryName := r.findCategoryForClassification(query)
 
 	// If no category was determined (empty string), default to no reasoning
 	if categoryName == "" {
 		log.Printf("No category determined for query, defaulting to no reasoning mode")
-		return false
+		return false, ""
 	}
 
 	// Normalize category name for consistent lookup
@@ -30,13 +36,13 @@ func (r *OpenAIRouter) shouldUseReasoningMode(query string) bool {
 			}
 			log.Printf("Reasoning mode decision: Category '%s' → %s",
 				categoryName, reasoningStatus)
-			return category.UseReasoning
+			return category.UseReasoning, categoryName
 		}
 	}
 
 	// If category not found in config, default to no reasoning
 	log.Printf("Category '%s' not found in configuration, defaulting to no reasoning mode", categoryName)
-	return false
+	return false, categoryName
 }
 
 // getChatTemplateKwargs returns the appropriate chat template kwargs based on model and reasoning mode
@@ -57,12 +63,12 @@ func getChatTemplateKwargs(model string, useReasoning bool) map[string]interface
 		}
 	}
 
-	// Default: no chat template kwargs
+	// Default: no chat template kwargs for unknown models
 	return nil
 }
 
 // setReasoningModeToRequestBody adds chat_template_kwargs to the JSON request body
-func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool) ([]byte, error) {
+func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool, categoryName string) ([]byte, error) {
 	// Parse the JSON request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
@@ -91,8 +97,9 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		originalReasoningEffort = "low"
 	}
 	if enabled {
-		// TODO: make this configurable
-		requestMap["reasoning_effort"] = "high"
+		// Use configurable reasoning effort based on category
+		effort := r.getReasoningEffort(categoryName)
+		requestMap["reasoning_effort"] = effort
 	} else {
 		requestMap["reasoning_effort"] = originalReasoningEffort
 	}
@@ -169,4 +176,31 @@ func (r *OpenAIRouter) LogReasoningConfigurationSummary() {
 	}
 
 	log.Printf("Reasoning mode summary: %d/%d categories have reasoning enabled", enabledCount, len(r.Config.Categories))
+}
+
+// getReasoningEffort returns the reasoning effort level for a given category
+func (r *OpenAIRouter) getReasoningEffort(categoryName string) string {
+	// Handle case where Config is nil (e.g., in tests)
+	if r.Config == nil {
+		return "medium"
+	}
+
+	// Find the category configuration
+	for _, category := range r.Config.Categories {
+		if category.Name == categoryName {
+			// Use category-specific effort if configured
+			if category.ReasoningEffort != "" {
+				return category.ReasoningEffort
+			}
+			break
+		}
+	}
+
+	// Fall back to global default if configured
+	if r.Config.DefaultReasoningEffort != "" {
+		return r.Config.DefaultReasoningEffort
+	}
+
+	// Final fallback to "medium" as a reasonable default
+	return "medium"
 }

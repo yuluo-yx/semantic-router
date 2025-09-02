@@ -79,7 +79,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 			t.Fatalf("Failed to marshal original request: %v", err)
 		}
 
-		modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true)
+		modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, "math")
 		if err != nil {
 			t.Fatalf("Failed to add reasoning mode: %v", err)
 		}
@@ -130,7 +130,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 			t.Fatalf("Failed to marshal phi4 request: %v", err)
 		}
 
-		modifiedBodyPhi4, err := router.setReasoningModeToRequestBody(originalBodyPhi4, true)
+		modifiedBodyPhi4, err := router.setReasoningModeToRequestBody(originalBodyPhi4, true, "math")
 		if err != nil {
 			t.Fatalf("Failed to process phi4 request: %v", err)
 		}
@@ -148,8 +148,8 @@ func TestReasoningModeIntegration(t *testing.T) {
 		// But reasoning_effort should still be set
 		if reasoningEffort, exists := modifiedRequestPhi4["reasoning_effort"]; !exists {
 			t.Error("reasoning_effort should be set for phi4 model")
-		} else if reasoningEffort != "high" {
-			t.Errorf("Expected reasoning_effort: high for phi4 model, got %v", reasoningEffort)
+		} else if reasoningEffort != "medium" {
+			t.Errorf("Expected reasoning_effort: medium for phi4 model (default), got %v", reasoningEffort)
 		}
 	})
 

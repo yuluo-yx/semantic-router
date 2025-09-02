@@ -335,7 +335,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				log.Printf("Routing to model: %s", matchedModel)
 
 				// Check reasoning mode for this category
-				useReasoning := r.shouldUseReasoningMode(userContent)
+				useReasoning, categoryName := r.getReasoningModeAndCategory(userContent)
 				log.Printf("Reasoning mode decision for this query: %v on [%s] model", useReasoning, matchedModel)
 
 				// Track the model load for the selected model
@@ -366,7 +366,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 				}
 
-				modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning)
+				modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
 				if err != nil {
 					log.Printf("Error setting reasoning mode %v to request: %v", useReasoning, err)
 					return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)

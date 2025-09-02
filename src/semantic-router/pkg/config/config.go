@@ -41,6 +41,9 @@ type RouterConfig struct {
 	// Default LLM model to use if no match is found
 	DefaultModel string `yaml:"default_model"`
 
+	// Default reasoning effort level (low, medium, high) when not specified per category
+	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
+
 	// Semantic cache configuration
 	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
 
@@ -217,6 +220,7 @@ type Category struct {
 	Description          string       `yaml:"description,omitempty"`
 	UseReasoning         bool         `yaml:"use_reasoning"`
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
+	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
 }
 

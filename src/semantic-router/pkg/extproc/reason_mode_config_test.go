@@ -220,7 +220,7 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 	fmt.Printf("Original request body:\n%s\n\n", string(originalBody))
 
 	// Add reasoning mode
-	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true)
+	modifiedBody, err := router.setReasoningModeToRequestBody(originalBody, true, "math")
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode: %v\n", err)
 		return
@@ -273,7 +273,7 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 		return
 	}
 
-	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true)
+	modifiedComplexBody, err := router.setReasoningModeToRequestBody(complexBody, true, "chemistry")
 	if err != nil {
 		fmt.Printf("Error adding reasoning mode to complex request: %v\n", err)
 		return
