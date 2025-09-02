@@ -52,8 +52,15 @@
   margin-top: 2rem;
 }
 
-.featuredWorkGroup {
+.featuredGroupsRow {
   grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.featuredWorkGroup {
   background: linear-gradient(135deg, #f6f8fa 0%, #e1e7f0 50%, #d0d7de 100%);
   color: #24292f !important;
   border: 2px solid #0969da !important;
@@ -271,8 +278,9 @@
     gap: 1.5rem;
   }
 
-  .featuredWorkGroup {
-    grid-column: 1;
+  .featuredGroupsRow {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
   }
 
   .featuredWorkGroup .skillsAndNeeds {

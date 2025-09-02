@@ -21,11 +21,19 @@ const workingGroups = [
   },
   {
     name: 'RouterCore',
-    description: 'Modern-BERT, Classify Algorithm, Auto Reasoning Algorithm',
+    description: 'Using embedded SLM, implement advanced routing algorithm like classify, security detection, auto reasoning etc.',
     label: 'area/core',
     icon: '🧠',
     skills: ['Machine learning', 'BERT models', 'Classification algorithms'],
     needs: ['Model optimization', 'Algorithm improvements', 'Reasoning logic']
+  },
+  {
+    name: 'Research',
+    description: 'Explore the frontier of SLM (Small Language Model) in vLLM Semantic Router, improving latency and context of SLM.',
+    label: 'area/research',
+    icon: '🔬',
+    skills: ['Model Training', 'Model Fine-Tuning', 'Deep Learning'],
+    needs: ['SLM research', 'Latency optimization', 'Context improvement']
   },
   {
     name: 'Networking',
@@ -157,16 +165,23 @@ export default function WorkGroups() {
             <p>This section is about setting WG around this project, to gather focus on specify areas.</p>
 
             <div className={styles.workGroupsGrid}>
-              {/* Featured RouterCore group */}
-              {workingGroups
-                .filter(group => group.name === 'RouterCore')
-                .map((group, index) => (
-                  <WorkGroupCard key={`featured-${index}`} group={group} featured={true} />
-                ))}
+              {/* Featured RouterCore and Research groups */}
+              <div className={styles.featuredGroupsRow}>
+                {workingGroups
+                  .filter(group => group.name === 'RouterCore')
+                  .map((group, index) => (
+                    <WorkGroupCard key={`featured-routercore-${index}`} group={group} featured={true} />
+                  ))}
+                {workingGroups
+                  .filter(group => group.name === 'Research')
+                  .map((group, index) => (
+                    <WorkGroupCard key={`featured-research-${index}`} group={group} featured={true} />
+                  ))}
+              </div>
 
               {/* Other working groups */}
               {workingGroups
-                .filter(group => group.name !== 'RouterCore')
+                .filter(group => group.name !== 'RouterCore' && group.name !== 'Research')
                 .map((group, index) => (
                   <WorkGroupCard key={index} group={group} />
                 ))}
