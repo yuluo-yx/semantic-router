@@ -87,13 +87,45 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
             "max_entries": 1000,
             "ttl_seconds": 3600,
         },
-        "classifier": {
-            "model_id": "models/category_classifier_modernbert-base_model",
-            "threshold": 0.1,
+        "tools": {
+            "enabled": True,
+            "top_k": 3,
+            "similarity_threshold": 0.2,
+            "tools_db_path": "config/tools_db.json",
+            "fallback_to_empty": True,
+        },
+        "prompt_guard": {
+            "enabled": True,
+            "use_modernbert": True,
+            "model_id": "models/jailbreak_classifier_modernbert-base_model",
+            "threshold": 0.7,
             "use_cpu": True,
-            "category_mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json",
+            "jailbreak_mapping_path": "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json",
+        },
+        "gpu_config": {
+            "flops": 312000000000000,  # 312e12 fp16
+            "hbm": 2000000000000,  # 2e12 (2 TB/s)
+            "description": "A100-80G",
+        },
+        "classifier": {
+            "category_model": {
+                "model_id": "models/category_classifier_modernbert-base_model",
+                "use_modernbert": True,
+                "threshold": 0.6,
+                "use_cpu": True,
+                "category_mapping_path": "models/category_classifier_modernbert-base_model/category_mapping.json",
+            },
+            "pii_model": {
+                "model_id": "models/pii_classifier_modernbert-base_presidio_token_model",
+                "use_modernbert": True,
+                "threshold": 0.7,
+                "use_cpu": True,
+                "pii_mapping_path": "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+            },
+            "load_aware": False,
         },
         "categories": [],
+        "default_reasoning_effort": "medium",  # Default reasoning effort level (low, medium, high)
     }
 
     # Get the best model overall to use as default (excluding 'auto')
@@ -114,6 +146,80 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
     default_model = max(model_avg_accuracies, key=model_avg_accuracies.get)
     config["default_model"] = default_model.split(":")[0]  # Remove the approach suffix
 
+    # Define category-specific reasoning settings
+    category_reasoning = {
+        "math": {
+            "use_reasoning": True,
+            "reasoning_description": "Mathematical problems require step-by-step reasoning",
+            "reasoning_effort": "high",
+        },
+        "physics": {
+            "use_reasoning": True,
+            "reasoning_description": "Physics concepts need logical analysis",
+            "reasoning_effort": "high",
+        },
+        "chemistry": {
+            "use_reasoning": True,
+            "reasoning_description": "Chemical reactions and formulas require systematic thinking",
+            "reasoning_effort": "high",
+        },
+        "computer science": {
+            "use_reasoning": True,
+            "reasoning_description": "Programming and algorithms need logical reasoning",
+            "reasoning_effort": "high",
+        },
+        "engineering": {
+            "use_reasoning": True,
+            "reasoning_description": "Engineering problems require systematic problem-solving",
+            "reasoning_effort": "high",
+        },
+        "biology": {
+            "use_reasoning": True,
+            "reasoning_description": "Biological processes benefit from structured analysis",
+            "reasoning_effort": "medium",
+        },
+        "business": {
+            "use_reasoning": False,
+            "reasoning_description": "Business content is typically conversational",
+            "reasoning_effort": "low",
+        },
+        "law": {
+            "use_reasoning": False,
+            "reasoning_description": "Legal content is typically explanatory",
+            "reasoning_effort": "medium",
+        },
+        "psychology": {
+            "use_reasoning": False,
+            "reasoning_description": "Psychology content is usually explanatory",
+            "reasoning_effort": "medium",
+        },
+        "history": {
+            "use_reasoning": False,
+            "reasoning_description": "Historical content is narrative-based",
+            "reasoning_effort": "low",
+        },
+        "economics": {
+            "use_reasoning": False,
+            "reasoning_description": "Economic discussions are usually explanatory",
+            "reasoning_effort": "medium",
+        },
+        "philosophy": {
+            "use_reasoning": False,
+            "reasoning_description": "Philosophical discussions are conversational",
+            "reasoning_effort": "medium",
+        },
+        "health": {
+            "use_reasoning": False,
+            "reasoning_description": "Health information is typically informational",
+            "reasoning_effort": "medium",
+        },
+        "other": {
+            "use_reasoning": False,
+            "reasoning_description": "General content doesn't require reasoning",
+            "reasoning_effort": "low",
+        },
+    }
+
     # Create category entries with ranked model-score pairs (excluding 'auto')
     for category, models in category_accuracies.items():
         # Sort models by accuracy (descending), exclude 'auto'
@@ -126,8 +232,25 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
         model_scores = [
             {"model": model, "score": float(acc)} for model, acc in ranked_models
         ]
-        # Add category to config
-        config["categories"].append({"name": category, "model_scores": model_scores})
+        # Get reasoning settings for the category
+        reasoning_settings = category_reasoning.get(
+            category.lower(),
+            {
+                "use_reasoning": False,
+                "reasoning_description": "General content doesn't require reasoning",
+                "reasoning_effort": "low",
+            },
+        )
+        # Add category to config with reasoning settings
+        config["categories"].append(
+            {
+                "name": category,
+                "use_reasoning": reasoning_settings["use_reasoning"],
+                "reasoning_description": reasoning_settings["reasoning_description"],
+                "reasoning_effort": reasoning_settings["reasoning_effort"],
+                "model_scores": model_scores,
+            }
+        )
 
     return config
 
