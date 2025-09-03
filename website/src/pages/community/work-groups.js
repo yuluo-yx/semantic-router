@@ -3,22 +3,7 @@ import Layout from '@theme/Layout';
 import styles from './work-groups.module.css';
 
 const workingGroups = [
-  {
-    name: 'Docs',
-    description: 'User docs, information architecture, infrastructure',
-    label: 'area/document',
-    icon: '📚',
-    skills: ['Technical writing', 'Documentation tools', 'User experience design'],
-    needs: ['API documentation', 'Tutorials', 'Deployment guides']
-  },
-  {
-    name: 'Environment',
-    description: 'Docker Compose, Kubernetes, Local support, Cloud Foundry Integration',
-    label: 'area/environment',
-    icon: '🐳',
-    skills: ['Docker', 'Kubernetes', 'Cloud platforms', 'DevOps'],
-    needs: ['Helm charts', 'Deployment automation', 'Cloud integrations']
-  },
+  // First column - Core areas
   {
     name: 'RouterCore',
     description: 'Using embedded SLM, implement advanced routing algorithm like classify, security detection, auto reasoning etc.',
@@ -43,14 +28,32 @@ const workingGroups = [
     skills: ['Envoy proxy', 'Network protocols', 'Performance optimization'],
     needs: ['Load balancing', 'Traffic routing', 'Network security']
   },
+  // Second column - Operations and monitoring
+  {
+    name: 'Observability',
+    description: 'Metrics collection, distributed tracing, monitoring dashboards, and structured logging for production visibility',
+    label: 'area/observability',
+    icon: '📈',
+    skills: ['Prometheus/Grafana', 'OpenTelemetry', 'Log aggregation', 'Monitoring systems'],
+    needs: ['Metrics implementation', 'Tracing integration', 'Dashboard creation', 'Log standardization']
+  },
   {
     name: 'Bench',
-    description: 'Reasoning Benchmark Framework, Performance',
+    description: 'Reasoning Benchmark Framework, Performance Optimization',
     label: 'area/benchmark',
     icon: '📊',
     skills: ['Performance testing', 'Benchmarking tools', 'Data analysis'],
     needs: ['Benchmark frameworks', 'Performance metrics', 'Testing automation']
   },
+  {
+    name: 'Environment',
+    description: 'Docker Compose, Kubernetes, Local support, Cloud Foundry Integration',
+    label: 'area/environment',
+    icon: '🐳',
+    skills: ['Docker', 'Kubernetes', 'Cloud platforms', 'DevOps'],
+    needs: ['Helm charts', 'Deployment automation', 'Cloud integrations']
+  },
+  // Third column - Development and user experience
   {
     name: 'Test and Release',
     description: 'CI/CD, Build, test, release',
@@ -66,16 +69,20 @@ const workingGroups = [
     icon: '👥',
     skills: ['API design', 'UX/UI', 'Developer experience'],
     needs: ['API improvements', 'CLI enhancements', 'User feedback integration']
+  },
+  {
+    name: 'Docs',
+    description: 'User docs, information architecture, infrastructure',
+    label: 'area/document',
+    icon: '📚',
+    skills: ['Technical writing', 'Documentation tools', 'User experience design'],
+    needs: ['API documentation', 'Tutorials', 'Deployment guides']
   }
 ];
 
-function WorkGroupCard({ group, featured = false }) {
-  const cardClass = featured
-    ? `${styles.workGroupCard} ${styles.featuredWorkGroup}`
-    : styles.workGroupCard;
-
+function WorkGroupCard({ group }) {
   return (
-    <div className={cardClass}>
+    <div className={styles.workGroupCard}>
       <div className={styles.cardHeader}>
         <span className={styles.icon}>{group.icon}</span>
         <h3 className={styles.groupName}>{group.name}</h3>
@@ -83,49 +90,23 @@ function WorkGroupCard({ group, featured = false }) {
       </div>
       <p className={styles.description}>{group.description}</p>
 
-      {featured ? (
-        // Featured layout with side-by-side skills and needs
-        <div className={styles.skillsAndNeeds}>
-          <div className={styles.skillsSection}>
-            <h4>Skills Needed:</h4>
-            <ul className={styles.skillsList}>
-              {group.skills && group.skills.map((skill, index) => (
-                <li key={index}>{skill}</li>
-              ))}
-            </ul>
-          </div>
+      <div className={styles.skillsSection}>
+        <h4>Skills Needed:</h4>
+        <ul className={styles.skillsList}>
+          {group.skills && group.skills.map((skill, index) => (
+            <li key={index}>{skill}</li>
+          ))}
+        </ul>
+      </div>
 
-          <div className={styles.needsSection}>
-            <h4>Current Needs:</h4>
-            <ul className={styles.needsList}>
-              {group.needs && group.needs.map((need, index) => (
-                <li key={index}>{need}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : (
-        // Regular layout with stacked skills and needs
-        <>
-          <div className={styles.skillsSection}>
-            <h4>Skills Needed:</h4>
-            <ul className={styles.skillsList}>
-              {group.skills && group.skills.map((skill, index) => (
-                <li key={index}>{skill}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className={styles.needsSection}>
-            <h4>Current Needs:</h4>
-            <ul className={styles.needsList}>
-              {group.needs && group.needs.map((need, index) => (
-                <li key={index}>{need}</li>
-              ))}
-            </ul>
-          </div>
-        </>
-      )}
+      <div className={styles.needsSection}>
+        <h4>Current Needs:</h4>
+        <ul className={styles.needsList}>
+          {group.needs && group.needs.map((need, index) => (
+            <li key={index}>{need}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -165,26 +146,9 @@ export default function WorkGroups() {
             <p>This section is about setting WG around this project, to gather focus on specify areas.</p>
 
             <div className={styles.workGroupsGrid}>
-              {/* Featured RouterCore and Research groups */}
-              <div className={styles.featuredGroupsRow}>
-                {workingGroups
-                  .filter(group => group.name === 'RouterCore')
-                  .map((group, index) => (
-                    <WorkGroupCard key={`featured-routercore-${index}`} group={group} featured={true} />
-                  ))}
-                {workingGroups
-                  .filter(group => group.name === 'Research')
-                  .map((group, index) => (
-                    <WorkGroupCard key={`featured-research-${index}`} group={group} featured={true} />
-                  ))}
-              </div>
-
-              {/* Other working groups */}
-              {workingGroups
-                .filter(group => group.name !== 'RouterCore' && group.name !== 'Research')
-                .map((group, index) => (
-                  <WorkGroupCard key={index} group={group} />
-                ))}
+              {workingGroups.map((group, index) => (
+                <WorkGroupCard key={index} group={group} />
+              ))}
             </div>
           </section>
 
