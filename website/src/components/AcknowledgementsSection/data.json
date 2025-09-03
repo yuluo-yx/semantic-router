@@ -1,0 +1,19 @@
+{
+  "title": "Acknowledgements",
+  "subtitle": "vLLM Semantic Router is born in open source and built on open source ❤️",
+  "projects": [
+    {
+      "id": "huggingFace-candle",
+      "name": "HuggingFace Candle",
+      "logo": "/img/acknowledgements/huggingface-logo.svg",
+      "url": "https://github.com/huggingface/candle",
+      "description": "Minimalist ML framework for Rust"
+    },{
+      "id": "envoyproxy",
+      "name": "EnvoyProxy",
+      "logo": "/img/acknowledgements/envoy-logo.png",
+      "url": "https://github.com/envoyproxy/envoy",
+      "description": "Cloud-native high-performance edge/middle/service proxy"
+    }
+  ]
+}
