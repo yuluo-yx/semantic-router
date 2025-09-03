@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="website/static/img/repo.png" alt="vLLM Semantic Router"/>
+<img src="website/static/img/repo.png" alt="vLLM Semantic Router" width="80%"/>
 
 [![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://vllm-semantic-router.com)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
@@ -81,3 +81,9 @@ If you find Semantic Router helpful in your research or projects, please conside
   howpublished={\url{https://github.com/vllm-project/semantic-router}},
 }
 ```
+
+## Star History 🔥
+
+We opened the project at Aug 31, 2025. We love open source  and collaboration ❤️
+
+[![Star History Chart](https://api.star-history.com/svg?repos=vllm-project/semantic-router&type=Date)](https://www.star-history.com/#vllm-project/semantic-router&Date)
