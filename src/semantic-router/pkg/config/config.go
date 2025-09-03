@@ -61,6 +61,9 @@ type RouterConfig struct {
 
 	// vLLM endpoints configuration for multiple backend support
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+
+	// API configuration for classification endpoints
+	API APIConfig `yaml:"api"`
 }
 
 // SemanticCacheConfig represents configuration for the semantic cache
@@ -77,6 +80,21 @@ type SemanticCacheConfig struct {
 
 	// Time-to-live for cache entries in seconds (0 means no expiration)
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+}
+
+// APIConfig represents configuration for API endpoints
+type APIConfig struct {
+	// Batch classification configuration
+	BatchClassification struct {
+		// Maximum number of texts allowed in a single batch request
+		MaxBatchSize int `yaml:"max_batch_size,omitempty"`
+
+		// Threshold for switching from sequential to concurrent processing
+		ConcurrencyThreshold int `yaml:"concurrency_threshold,omitempty"`
+
+		// Maximum number of concurrent goroutines for batch processing
+		MaxConcurrency int `yaml:"max_concurrency,omitempty"`
+	} `yaml:"batch_classification"`
 }
 
 // PromptGuardConfig represents configuration for the prompt guard jailbreak detection

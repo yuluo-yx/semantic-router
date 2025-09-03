@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
@@ -44,6 +45,34 @@ type SystemInfo struct {
 	OS           string `json:"os"`
 	MemoryUsage  string `json:"memory_usage"`
 	GPUAvailable bool   `json:"gpu_available"`
+}
+
+// BatchClassificationRequest represents a batch classification request
+type BatchClassificationRequest struct {
+	Texts   []string               `json:"texts"`
+	Options *ClassificationOptions `json:"options,omitempty"`
+}
+
+// BatchClassificationResponse represents the response from batch classification
+type BatchClassificationResponse struct {
+	Results          []services.Classification `json:"results"`
+	TotalCount       int                       `json:"total_count"`
+	ProcessingTimeMs int64                     `json:"processing_time_ms"`
+	Statistics       Statistics                `json:"statistics"`
+}
+
+// Statistics provides batch processing statistics
+type Statistics struct {
+	CategoryDistribution map[string]int `json:"category_distribution"`
+	AvgConfidence        float64        `json:"avg_confidence"`
+	LowConfidenceCount   int            `json:"low_confidence_count"`
+}
+
+// ClassificationOptions mirrors services.IntentOptions for API layer
+type ClassificationOptions struct {
+	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
+	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
+	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
 }
 
 // StartClassificationAPI starts the Classification API server
@@ -192,7 +221,64 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 }
 
 func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWriter, r *http.Request) {
-	s.writeErrorResponse(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Batch classification not implemented yet")
+	start := time.Now()
+
+	var req BatchClassificationRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Input validation
+	if len(req.Texts) == 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+		return
+	}
+
+	// Get max batch size from config, default to 100
+	maxBatchSize := 100
+	if s.config != nil && s.config.API.BatchClassification.MaxBatchSize > 0 {
+		maxBatchSize = s.config.API.BatchClassification.MaxBatchSize
+	}
+
+	if len(req.Texts) > maxBatchSize {
+		s.writeErrorResponse(w, http.StatusBadRequest, "BATCH_TOO_LARGE",
+			fmt.Sprintf("batch size cannot exceed %d texts", maxBatchSize))
+		return
+	}
+
+	// Get concurrency threshold from config, default to 5
+	concurrencyThreshold := 5
+	if s.config != nil && s.config.API.BatchClassification.ConcurrencyThreshold > 0 {
+		concurrencyThreshold = s.config.API.BatchClassification.ConcurrencyThreshold
+	}
+
+	// Process texts based on batch size
+	var results []services.Classification
+	var err error
+
+	if len(req.Texts) <= concurrencyThreshold {
+		results, err = s.processSequentially(req.Texts, req.Options)
+	} else {
+		results, err = s.processConcurrently(req.Texts, req.Options)
+	}
+
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		return
+	}
+
+	// Calculate statistics
+	statistics := s.calculateStatistics(results)
+
+	response := BatchClassificationResponse{
+		Results:          results,
+		TotalCount:       len(req.Texts),
+		ProcessingTimeMs: time.Since(start).Milliseconds(),
+		Statistics:       statistics,
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
 func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, r *http.Request) {
@@ -403,5 +489,113 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 		OS:           runtime.GOOS,
 		MemoryUsage:  fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024),
 		GPUAvailable: false, // TODO: Implement GPU detection
+	}
+}
+
+// processSequentially handles small batches with sequential processing
+func (s *ClassificationAPIServer) processSequentially(texts []string, options *ClassificationOptions) ([]services.Classification, error) {
+	results := make([]services.Classification, len(texts))
+	for i, text := range texts {
+		result, err := s.classifySingleText(text, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to classify text at index %d: %w", i, err)
+		}
+		results[i] = result
+	}
+	return results, nil
+}
+
+// processConcurrently handles large batches with concurrent processing
+func (s *ClassificationAPIServer) processConcurrently(texts []string, options *ClassificationOptions) ([]services.Classification, error) {
+	// Get max concurrency from config, default to 8
+	maxConcurrency := 8
+	if s.config != nil && s.config.API.BatchClassification.MaxConcurrency > 0 {
+		maxConcurrency = s.config.API.BatchClassification.MaxConcurrency
+	}
+
+	results := make([]services.Classification, len(texts))
+	errors := make([]error, len(texts))
+
+	semaphore := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+
+	for i, text := range texts {
+		wg.Add(1)
+		go func(index int, txt string) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			result, err := s.classifySingleText(txt, options)
+			if err != nil {
+				errors[index] = err
+				return
+			}
+			results[index] = result
+		}(i, text)
+	}
+
+	wg.Wait()
+
+	// Check for errors
+	for i, err := range errors {
+		if err != nil {
+			return nil, fmt.Errorf("failed to classify text at index %d: %w", i, err)
+		}
+	}
+
+	return results, nil
+}
+
+// classifySingleText processes a single text using existing service
+func (s *ClassificationAPIServer) classifySingleText(text string, options *ClassificationOptions) (services.Classification, error) {
+	// Convert API options to service options
+	var serviceOptions *services.IntentOptions
+	if options != nil {
+		serviceOptions = &services.IntentOptions{
+			ReturnProbabilities: options.ReturnProbabilities,
+			ConfidenceThreshold: options.ConfidenceThreshold,
+			IncludeExplanation:  options.IncludeExplanation,
+		}
+	}
+
+	individualReq := services.IntentRequest{
+		Text:    text,
+		Options: serviceOptions,
+	}
+
+	response, err := s.classificationSvc.ClassifyIntent(individualReq)
+	if err != nil {
+		return services.Classification{}, err
+	}
+
+	return response.Classification, nil
+}
+
+// calculateStatistics computes batch processing statistics
+func (s *ClassificationAPIServer) calculateStatistics(results []services.Classification) Statistics {
+	categoryDistribution := make(map[string]int)
+	var totalConfidence float64
+	lowConfidenceCount := 0
+
+	for _, result := range results {
+		if result.Category != "" {
+			categoryDistribution[result.Category]++
+		}
+		totalConfidence += result.Confidence
+		if result.Confidence < 0.7 {
+			lowConfidenceCount++
+		}
+	}
+
+	avgConfidence := 0.0
+	if len(results) > 0 {
+		avgConfidence = totalConfidence / float64(len(results))
+	}
+
+	return Statistics{
+		CategoryDistribution: categoryDistribution,
+		AvgConfidence:        avgConfidence,
+		LowConfidenceCount:   lowConfidenceCount,
 	}
 }
