@@ -32,11 +32,14 @@ build-router: rust
 	@mkdir -p bin
 	@cd src/semantic-router && go build -o ../../bin/router cmd/main.go
 
+# Config file path with default
+CONFIG_FILE ?= config/config.yaml
+
 # Run the router
-run-router: build-router
-	@echo "Running router..."
+run-router: build-router download-models
+	@echo "Running router with config: ${CONFIG_FILE}"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		./bin/router -config=config/config.yaml
+		./bin/router -config=${CONFIG_FILE}
 
 # Prepare Envoy
 prepare-envoy:
