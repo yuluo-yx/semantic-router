@@ -55,14 +55,14 @@ type BatchClassificationRequest struct {
 
 // BatchClassificationResponse represents the response from batch classification
 type BatchClassificationResponse struct {
-	Results          []services.Classification `json:"results"`
-	TotalCount       int                       `json:"total_count"`
-	ProcessingTimeMs int64                     `json:"processing_time_ms"`
-	Statistics       Statistics                `json:"statistics"`
+	Results          []services.Classification        `json:"results"`
+	TotalCount       int                              `json:"total_count"`
+	ProcessingTimeMs int64                            `json:"processing_time_ms"`
+	Statistics       CategoryClassificationStatistics `json:"statistics"`
 }
 
-// Statistics provides batch processing statistics
-type Statistics struct {
+// CategoryClassificationStatistics provides batch processing statistics
+type CategoryClassificationStatistics struct {
 	CategoryDistribution map[string]int `json:"category_distribution"`
 	AvgConfidence        float64        `json:"avg_confidence"`
 	LowConfidenceCount   int            `json:"low_confidence_count"`
@@ -526,6 +526,9 @@ func (s *ClassificationAPIServer) processConcurrently(texts []string, options *C
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
+			// TODO: Refactor candle-binding to support batch mode for better performance
+			// This would allow processing multiple texts in a single model inference call
+			// instead of individual calls, significantly improving throughput
 			result, err := s.classifySingleText(txt, options)
 			if err != nil {
 				errors[index] = err
@@ -573,7 +576,7 @@ func (s *ClassificationAPIServer) classifySingleText(text string, options *Class
 }
 
 // calculateStatistics computes batch processing statistics
-func (s *ClassificationAPIServer) calculateStatistics(results []services.Classification) Statistics {
+func (s *ClassificationAPIServer) calculateStatistics(results []services.Classification) CategoryClassificationStatistics {
 	categoryDistribution := make(map[string]int)
 	var totalConfidence float64
 	lowConfidenceCount := 0
@@ -593,7 +596,7 @@ func (s *ClassificationAPIServer) calculateStatistics(results []services.Classif
 		avgConfidence = totalConfidence / float64(len(results))
 	}
 
-	return Statistics{
+	return CategoryClassificationStatistics{
 		CategoryDistribution: categoryDistribution,
 		AvgConfidence:        avgConfidence,
 		LowConfidenceCount:   lowConfidenceCount,

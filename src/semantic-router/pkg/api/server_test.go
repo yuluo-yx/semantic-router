@@ -38,7 +38,7 @@ func TestHandleBatchClassification(t *testing.T) {
 			requestBody: `{
 				"texts": [
 					"solve differential equation",
-					"business strategy analysis", 
+					"business strategy analysis",
 					"chemistry reaction",
 					"physics calculation",
 					"market research",
@@ -152,7 +152,7 @@ func TestCalculateStatistics(t *testing.T) {
 	tests := []struct {
 		name     string
 		results  []services.Classification
-		expected Statistics
+		expected CategoryClassificationStatistics
 	}{
 		{
 			name: "Mixed categories",
@@ -162,7 +162,7 @@ func TestCalculateStatistics(t *testing.T) {
 				{Category: "business", Confidence: 0.6},
 				{Category: "science", Confidence: 0.5},
 			},
-			expected: Statistics{
+			expected: CategoryClassificationStatistics{
 				CategoryDistribution: map[string]int{
 					"math":     2,
 					"business": 1,
@@ -175,7 +175,7 @@ func TestCalculateStatistics(t *testing.T) {
 		{
 			name:    "Empty results",
 			results: []services.Classification{},
-			expected: Statistics{
+			expected: CategoryClassificationStatistics{
 				CategoryDistribution: map[string]int{},
 				AvgConfidence:        0.0,
 				LowConfidenceCount:   0,
