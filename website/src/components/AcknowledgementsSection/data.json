@@ -3,6 +3,12 @@
   "subtitle": "vLLM Semantic Router is born in open source and built on open source ❤️",
   "projects": [
     {
+      "id": "vLLM",
+      "name": "vLLM",
+      "logo": "/img/acknowledgements/vllm-logo.png",
+      "url": "https://github.com/vllm-project/vllm",
+      "description": "A high-throughput and memory-efficient inference and serving engine for LLMs"
+    },{
       "id": "huggingFace-candle",
       "name": "HuggingFace Candle",
       "logo": "/img/acknowledgements/huggingface-logo.svg",
