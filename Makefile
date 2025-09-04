@@ -16,8 +16,13 @@ rust:
 		echo "rustc not found, installing..."; \
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
 	fi && \
-	echo "Loading Rust environment..." && \
-	. $$HOME/.cargo/env && \
+	if [ -f "$$HOME/.cargo/env" ]; then \
+		echo "Loading Rust environment from $$HOME/.cargo/env..." && \
+		. $$HOME/.cargo/env; \
+	fi && \
+	if ! command -v cargo >/dev/null 2>&1; then \
+		echo "Error: cargo not found in PATH" && exit 1; \
+	fi && \
 	echo "Building Rust library..." && \
 	cd candle-binding && cargo build --release'
 
