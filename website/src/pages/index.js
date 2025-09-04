@@ -7,6 +7,7 @@ import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import TypewriterCode from '@site/src/components/TypewriterCode';
 import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground';
 import AIChipAnimation from '@site/src/components/AIChipAnimation';
+import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection';
 
 import styles from './index.module.css';
 
@@ -141,6 +142,13 @@ export default function Home() {
           </div>
         </div>
         <HomepageFeatures />
+        <div className={styles.connectionSection}>
+          <div className={styles.connectionLines}>
+            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
+            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
+          </div>
+        </div>
+        <AcknowledgementsSection />
       </main>
     </Layout>
   );
