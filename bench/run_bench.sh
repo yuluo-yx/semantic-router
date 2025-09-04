@@ -5,6 +5,8 @@
 # SAMPLES_PER_CATEGORY=5 CONCURRENT_REQUESTS=4 VLLM_MODELS="openai/gpt-oss-20b" ROUTER_MODELS="auto" ./run_bench.sh
 # Long run:
 # SAMPLES_PER_CATEGORY=100 CONCURRENT_REQUESTS=4 VLLM_MODELS="openai/gpt-oss-20b" ROUTER_MODELS="auto" ./run_bench.sh
+# To test only router:
+# BENCHMARK_ROUTER_ONLY=true ./run_bench.sh
 
 set -x -e
 
@@ -16,24 +18,38 @@ export ROUTER_MODELS="${ROUTER_MODELS:-auto}"
 export VLLM_MODELS="${VLLM_MODELS:-openai/gpt-oss-20b}"
 export SAMPLES_PER_CATEGORY="${SAMPLES_PER_CATEGORY:-5}"
 export CONCURRENT_REQUESTS="${CONCURRENT_REQUESTS:-4}"
+export BENCHMARK_ROUTER_ONLY="${BENCHMARK_ROUTER_ONLY:-false}"
 
 # Run the benchmark
-python router_reason_bench.py \
-  --run-router \
-  --router-endpoint "$ROUTER_ENDPOINT" \
-  --router-api-key "$ROUTER_API_KEY" \
-  --router-models "$ROUTER_MODELS" \
-  --run-vllm \
-  --vllm-endpoint "$VLLM_ENDPOINT" \
-  --vllm-api-key "$VLLM_API_KEY" \
-  --vllm-models "$VLLM_MODELS" \
-  --samples-per-category "$SAMPLES_PER_CATEGORY" \
-  --vllm-exec-modes NR XC \
-  --concurrent-requests "$CONCURRENT_REQUESTS" \
-  --output-dir results/reasonbench
+if [ "${BENCHMARK_ROUTER_ONLY}" = "true" ]; then
+  echo "Running router-only benchmark"
+  python bench/router_reason_bench.py \
+    --run-router \
+    --router-endpoint "$ROUTER_ENDPOINT" \
+    --router-api-key "$ROUTER_API_KEY" \
+    --router-models "$ROUTER_MODELS" \
+    --samples-per-category "$SAMPLES_PER_CATEGORY" \
+    --concurrent-requests "$CONCURRENT_REQUESTS" \
+    --output-dir results/reasonbench
+else
+  echo "Running full benchmark (router + vLLM)..."
+  python bench/router_reason_bench.py \
+    --run-router \
+    --router-endpoint "$ROUTER_ENDPOINT" \
+    --router-api-key "$ROUTER_API_KEY" \
+    --router-models "$ROUTER_MODELS" \
+    --run-vllm \
+    --vllm-endpoint "$VLLM_ENDPOINT" \
+    --vllm-api-key "$VLLM_API_KEY" \
+    --vllm-models "$VLLM_MODELS" \
+    --samples-per-category "$SAMPLES_PER_CATEGORY" \
+    --vllm-exec-modes NR XC \
+    --concurrent-requests "$CONCURRENT_REQUESTS" \
+    --output-dir results/reasonbench
+fi
 
-# Generate plots
-echo "Processing model paths..."
+# Generate plots if summary files exist
+echo "Checking for plot generation..."
 echo "VLLM_MODELS: $VLLM_MODELS"
 echo "ROUTER_MODELS: $ROUTER_MODELS"
 
@@ -54,6 +70,19 @@ echo "Looking for summaries at:"
 echo "VLLM: $VLLM_SUMMARY"
 echo "Router: $ROUTER_SUMMARY"
 
-python bench_plot.py \
-  --summary "$VLLM_SUMMARY" \
-  --router-summary "$ROUTER_SUMMARY"
+# Check if at least one summary file exists and generate plots
+if [ -f "$ROUTER_SUMMARY" ]; then
+  echo "Found router summary, generating plots..."
+  if [ -f "$VLLM_SUMMARY" ]; then
+    echo "Found both summaries, generating comparison plots..."
+    python bench/bench_plot.py \
+      --summary "$VLLM_SUMMARY" \
+      --router-summary "$ROUTER_SUMMARY"
+  else
+    echo "vLLM summary not found, generating router-only plots..."
+    python bench/bench_plot.py \
+      --router-summary "$ROUTER_SUMMARY"
+  fi
+else
+  echo "No router summary found, skipping plot generation"
+fi
