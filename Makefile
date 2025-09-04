@@ -11,8 +11,15 @@ build: rust build-router
 
 # Build the Rust library
 rust:
-	@echo "Building Rust library..."
-	cd candle-binding && cargo build --release
+	@echo "Ensuring rust is installed..."
+	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
+		echo "rustc not found, installing..."; \
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
+	fi && \
+	echo "Loading Rust environment..." && \
+	. $$HOME/.cargo/env && \
+	echo "Building Rust library..." && \
+	cd candle-binding && cargo build --release'
 
 # Build router
 build-router: rust
