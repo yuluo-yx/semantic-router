@@ -366,13 +366,6 @@ api:
 - **Concurrent Processing**: Used for larger batches to improve throughput
 - **Automatic Selection**: The API automatically chooses the optimal strategy based on batch size
 
-### Performance Characteristics
-
-| Batch Size | Strategy | Expected Performance |
-|------------|----------|---------------------|
-| 1-5 texts | Sequential | ~Single request latency |
-| 6+ texts | Concurrent | ~1/3 to 1/5 of sequential time |
-
 ### Error Handling
 
 **Batch Too Large (400 Bad Request):**
