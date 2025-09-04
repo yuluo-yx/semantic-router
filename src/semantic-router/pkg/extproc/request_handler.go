@@ -337,6 +337,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Check reasoning mode for this category
 				useReasoning, categoryName := r.getReasoningModeAndCategory(userContent)
 				log.Printf("Reasoning mode decision for this query: %v on [%s] model", useReasoning, matchedModel)
+				// Record reasoning decision metric with the effort that will be applied if enabled
+				effortForMetrics := r.getReasoningEffort(categoryName)
+				metrics.RecordReasoningDecision(categoryName, useReasoning, effortForMetrics)
 
 				// Track the model load for the selected model
 				r.Classifier.IncrementModelLoad(matchedModel)
