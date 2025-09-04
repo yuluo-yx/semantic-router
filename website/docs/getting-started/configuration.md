@@ -439,6 +439,101 @@ make test-pii                        # PII detection
 make test-prompt-guard               # Jailbreak protection
 ```
 
+## Configuration Generation
+
+The Semantic Router supports automated configuration generation based on model performance benchmarks. This workflow uses MMLU-Pro evaluation results to determine optimal model routing for different categories.
+
+### Benchmarking Workflow
+
+1. **Run MMLU-Pro Evaluation:**
+   ```bash
+   # Evaluate models using MMLU-Pro benchmark
+   python src/training/model_eval/mmlu_pro_vllm_eval.py \
+     --endpoint http://localhost:8000/v1 \
+     --models phi4,gemma3:27b,mistral-small3.1 \
+     --samples-per-category 5 \
+     --use-cot \
+     --concurrent-requests 4 \
+     --output-dir results
+   ```
+
+2. **Generate Configuration:**
+   ```bash
+   # Generate config.yaml from benchmark results
+   python src/training/model_eval/result_to_config.py \
+     --results-dir results \
+     --output-file config/config.yaml \
+     --similarity-threshold 0.80
+   ```
+
+### Generated Configuration Features
+
+The generated configuration includes:
+
+- **Model Performance Rankings:** Models are ranked by performance for each category
+- **Reasoning Settings:** Automatically configures reasoning requirements per category:
+  - `use_reasoning`: Whether to use step-by-step reasoning
+  - `reasoning_description`: Description of reasoning approach
+  - `reasoning_effort`: Required effort level (low/medium/high)
+- **Default Model Selection:** Best overall performing model is set as default
+- **Security and Performance Settings:** Pre-configured optimal values for:
+  - PII detection thresholds
+  - Semantic cache settings
+  - Tool selection parameters
+
+### Customizing Generated Config
+
+The generated config.yaml can be customized by:
+
+1. Editing category-specific settings in `result_to_config.py`
+2. Adjusting thresholds and parameters via command line arguments
+3. Manually modifying the generated config.yaml
+
+### Example Workflow
+
+Here's a complete example workflow for generating and testing a configuration:
+
+```bash
+# Run MMLU-Pro evaluation
+# Option 1: Specify models manually
+python src/training/model_eval/mmlu_pro_vllm_eval.py \
+  --endpoint http://localhost:8000/v1 \
+  --models phi4,gemma3:27b,mistral-small3.1 \
+  --samples-per-category 5 \
+  --use-cot \
+  --concurrent-requests 4 \
+  --output-dir results \
+  --max-tokens 2048 \
+  --temperature 0.0 \
+  --seed 42
+
+# Option 2: Auto-discover models from endpoint
+python src/training/model_eval/mmlu_pro_vllm_eval.py \
+  --endpoint http://localhost:8000/v1 \
+  --samples-per-category 5 \
+  --use-cot \
+  --concurrent-requests 4 \
+  --output-dir results \
+  --max-tokens 2048 \
+  --temperature 0.0 \
+  --seed 42
+
+# Generate initial config
+python src/training/model_eval/result_to_config.py \
+  --results-dir results \
+  --output-file config/config.yaml \
+  --similarity-threshold 0.80
+
+# Test the generated config
+make test
+```
+
+This workflow ensures your configuration is:
+- Based on actual model performance
+- Properly tested before deployment
+- Version controlled for tracking changes
+- Optimized for your specific use case
+
 ## Next Steps
 
 - **[Installation Guide](installation.md)** - Setup instructions
