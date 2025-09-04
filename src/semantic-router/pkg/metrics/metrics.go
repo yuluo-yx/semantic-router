@@ -489,6 +489,8 @@ func InitializeBatchMetrics(config BatchMetricsConfig) {
 			[]string{"processing_type"},
 		)
 	})
+}
+
 // RecordReasoningDecision records a reasoning-mode decision for a category, model and effort
 func RecordReasoningDecision(category, model string, enabled bool, effort string) {
 	status := "false"
