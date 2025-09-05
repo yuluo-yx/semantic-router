@@ -233,14 +233,16 @@ api:
       high_resolution_timing: false      # Use nanosecond precision timing
       sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%)
       
-      # Batch size range labels for metrics
-      batch_size_ranges:
-        - {min: 1, max: 1, label: "1"}
-        - {min: 2, max: 5, label: "2-5"}
-        - {min: 6, max: 10, label: "6-10"}
-        - {min: 11, max: 20, label: "11-20"}
-        - {min: 21, max: 50, label: "21-50"}
-        - {min: 51, max: -1, label: "50+"}  # -1 means no upper limit
+      # Batch size range labels for metrics (OPTIONAL - uses sensible defaults)
+      # Default ranges: "1", "2-5", "6-10", "11-20", "21-50", "50+"
+      # Only specify if you need custom ranges:
+      # batch_size_ranges:
+      #   - {min: 1, max: 1, label: "1"}
+      #   - {min: 2, max: 5, label: "2-5"}
+      #   - {min: 6, max: 10, label: "6-10"}
+      #   - {min: 11, max: 20, label: "11-20"}
+      #   - {min: 21, max: 50, label: "21-50"}
+      #   - {min: 51, max: -1, label: "50+"}  # -1 means no upper limit
       
       # Histogram buckets - choose from presets below or customize
       duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
@@ -282,6 +284,19 @@ pkill -f "router"
 make run-router
 ```
 
+### Default Batch Size Ranges
+
+The system provides sensible default batch size ranges that work well for most use cases:
+
+- **"1"** - Single text requests
+- **"2-5"** - Small batch requests  
+- **"6-10"** - Medium batch requests
+- **"11-20"** - Large batch requests
+- **"21-50"** - Very large batch requests
+- **"50+"** - Maximum batch requests
+
+**You don't need to configure `batch_size_ranges` unless you have specific requirements.** The defaults are automatically used when the configuration is omitted.
+
 ### Configuration Examples by Use Case
 
 **Real-time Chat API (fast preset)**
@@ -289,10 +304,7 @@ make run-router
 # Copy these values to your config for sub-millisecond monitoring
 duration_buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
 size_buckets: [1, 2, 3, 5, 8, 10]
-batch_size_ranges:
-  - {min: 1, max: 1, label: "1"}
-  - {min: 2, max: 5, label: "2-5"}
-  - {min: 6, max: -1, label: "6+"}
+# batch_size_ranges: uses defaults (no configuration needed)
 ```
 
 **E-commerce API (standard preset)**
@@ -300,12 +312,7 @@ batch_size_ranges:
 # Copy these values for typical web API response times
 duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
 size_buckets: [1, 2, 5, 10, 20, 50, 100]
-batch_size_ranges:
-  - {min: 1, max: 1, label: "1"}
-  - {min: 2, max: 5, label: "2-5"}
-  - {min: 6, max: 10, label: "6-10"}
-  - {min: 11, max: 20, label: "11-20"}
-  - {min: 21, max: -1, label: "21+"}
+# batch_size_ranges: uses defaults (no configuration needed)
 ```
 
 **Data Processing Pipeline (slow preset)**
@@ -313,6 +320,7 @@ batch_size_ranges:
 # Copy these values for heavy computation workloads
 duration_buckets: [0.1, 0.5, 1, 5, 10, 30, 60, 120]
 size_buckets: [10, 50, 100, 500, 1000, 5000]
+# Custom batch size ranges for large-scale processing (overrides defaults)
 batch_size_ranges:
   - {min: 1, max: 50, label: "1-50"}
   - {min: 51, max: 200, label: "51-200"}

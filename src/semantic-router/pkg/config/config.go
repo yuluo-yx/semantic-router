@@ -105,7 +105,8 @@ type BatchClassificationMetricsConfig struct {
 	// Sample rate for metrics collection (0.0-1.0, 1.0 means collect all metrics)
 	SampleRate float64 `yaml:"sample_rate,omitempty"`
 
-	// Batch size range labels for metrics
+	// Batch size range labels for metrics (optional - uses sensible defaults if not specified)
+	// Default ranges: "1", "2-5", "6-10", "11-20", "21-50", "50+"
 	BatchSizeRanges []BatchSizeRangeConfig `yaml:"batch_size_ranges,omitempty"`
 
 	// Histogram buckets for metrics (directly configured)

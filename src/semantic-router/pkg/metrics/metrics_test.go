@@ -166,3 +166,92 @@ func TestMetricsIntegration(t *testing.T) {
 		ConcurrentGoroutines.WithLabelValues(batchID).Dec()
 	}
 }
+
+// TestDefaultBatchSizeRanges tests that default batch size ranges work when configuration is empty
+func TestDefaultBatchSizeRanges(t *testing.T) {
+	// Save current config
+	originalConfig := GetBatchMetricsConfig()
+
+	// Set config with empty BatchSizeRanges to test defaults
+	emptyConfig := BatchMetricsConfig{
+		Enabled:                   true,
+		DetailedGoroutineTracking: true,
+		HighResolutionTiming:      false,
+		SampleRate:                1.0,
+		DurationBuckets:           FallbackDurationBuckets,
+		SizeBuckets:               FallbackSizeBuckets,
+		BatchSizeRanges:           []config.BatchSizeRangeConfig{}, // Empty - should use defaults
+	}
+	SetBatchMetricsConfig(emptyConfig)
+
+	// Test that default ranges are used
+	tests := []struct {
+		name     string
+		size     int
+		expected string
+	}{
+		{"Single text (default)", 1, "1"},
+		{"Small batch (default)", 3, "2-5"},
+		{"Medium batch (default)", 8, "6-10"},
+		{"Large batch (default)", 15, "11-20"},
+		{"Very large batch (default)", 35, "21-50"},
+		{"Maximum batch (default)", 100, "50+"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetBatchSizeRange(tt.size)
+			if result != tt.expected {
+				t.Errorf("GetBatchSizeRange(%d) with empty config = %s, want %s", tt.size, result, tt.expected)
+			}
+		})
+	}
+
+	// Restore original config
+	SetBatchMetricsConfig(originalConfig)
+}
+
+// TestCustomBatchSizeRanges tests that custom batch size ranges override defaults
+func TestCustomBatchSizeRanges(t *testing.T) {
+	// Save current config
+	originalConfig := GetBatchMetricsConfig()
+
+	// Set config with custom BatchSizeRanges
+	customConfig := BatchMetricsConfig{
+		Enabled:                   true,
+		DetailedGoroutineTracking: true,
+		HighResolutionTiming:      false,
+		SampleRate:                1.0,
+		DurationBuckets:           FallbackDurationBuckets,
+		SizeBuckets:               FallbackSizeBuckets,
+		BatchSizeRanges: []config.BatchSizeRangeConfig{
+			{Min: 1, Max: 10, Label: "small"},
+			{Min: 11, Max: 100, Label: "medium"},
+			{Min: 101, Max: -1, Label: "large"},
+		},
+	}
+	SetBatchMetricsConfig(customConfig)
+
+	// Test that custom ranges are used
+	tests := []struct {
+		name     string
+		size     int
+		expected string
+	}{
+		{"Custom small range", 5, "small"},
+		{"Custom medium range", 50, "medium"},
+		{"Custom large range", 200, "large"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetBatchSizeRange(tt.size)
+			if result != tt.expected {
+				t.Errorf("GetBatchSizeRange(%d) with custom config = %s, want %s", tt.size, result, tt.expected)
+			}
+		})
+	}
+
+	// Restore original config
+	SetBatchMetricsConfig(originalConfig)
+}
