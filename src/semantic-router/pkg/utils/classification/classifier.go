@@ -28,6 +28,14 @@ func (c *ModernBertCategoryInference) Classify(text string) (candle_binding.Clas
 	return candle_binding.ClassifyModernBertText(text)
 }
 
+// createCategoryInference creates the appropriate category inference based on configuration
+func createCategoryInference(useModernBERT bool) CategoryInference {
+	if useModernBERT {
+		return &ModernBertCategoryInference{}
+	}
+	return &LinearCategoryInference{}
+}
+
 type JailbreakInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
@@ -44,6 +52,14 @@ func (c *ModernBertJailbreakInference) Classify(text string) (candle_binding.Cla
 	return candle_binding.ClassifyModernBertJailbreakText(text)
 }
 
+// createJailbreakInference creates the appropriate jailbreak inference based on configuration
+func createJailbreakInference(useModernBERT bool) JailbreakInference {
+	if useModernBERT {
+		return &ModernBertJailbreakInference{}
+	}
+	return &LinearJailbreakInference{}
+}
+
 type PIIInference interface {
 	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
 }
@@ -52,6 +68,11 @@ type ModernBertPIIInference struct{}
 
 func (c *ModernBertPIIInference) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
 	return candle_binding.ClassifyModernBertPIITokens(text, configPath)
+}
+
+// createPIIInference creates the appropriate PII inference (currently only ModernBERT)
+func createPIIInference() PIIInference {
+	return &ModernBertPIIInference{}
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
@@ -101,26 +122,10 @@ type Classifier struct {
 
 // NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
-	var categoryInference CategoryInference
-	if cfg.Classifier.CategoryModel.UseModernBERT {
-		categoryInference = &ModernBertCategoryInference{}
-	} else {
-		categoryInference = &LinearCategoryInference{}
-	}
-
-	var jailbreakInference JailbreakInference
-	if cfg.PromptGuard.UseModernBERT {
-		jailbreakInference = &ModernBertJailbreakInference{}
-	} else {
-		jailbreakInference = &LinearJailbreakInference{}
-	}
-
-	piiInference := &ModernBertPIIInference{}
-
 	return &Classifier{
-		categoryInference:  categoryInference,
-		jailbreakInference: jailbreakInference,
-		piiInference:       piiInference,
+		categoryInference:  createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
+		jailbreakInference: createJailbreakInference(cfg.PromptGuard.UseModernBERT),
+		piiInference:       createPIIInference(),
 
 		Config:               cfg,
 		CategoryMapping:      categoryMapping,
