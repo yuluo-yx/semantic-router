@@ -12,20 +12,36 @@ import (
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
 )
 
-type ModelInference interface {
-	// Category classification
-	ClassifyText(text string) (candle_binding.ClassResult, error)
-	ClassifyModernBertText(text string) (candle_binding.ClassResult, error)
+type CategoryInference interface {
+	Classify(text string) (candle_binding.ClassResult, error)
 }
 
-type CandleModelInference struct{}
+type LinearCategoryInference struct{}
 
-func (c *CandleModelInference) ClassifyText(text string) (candle_binding.ClassResult, error) {
+func (c *LinearCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyText(text)
 }
 
-func (c *CandleModelInference) ClassifyModernBertText(text string) (candle_binding.ClassResult, error) {
+type ModernBERTCategoryInference struct{}
+
+func (c *ModernBERTCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyModernBertText(text)
+}
+
+type JailbreakInference interface {
+	Classify(text string) (candle_binding.ClassResult, error)
+}
+
+type LinearJailbreakInference struct{}
+
+func (c *LinearJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyJailbreakText(text)
+}
+
+type ModernBERTJailbreakInference struct{}
+
+func (c *ModernBERTJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyModernBertJailbreakText(text)
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
@@ -57,7 +73,8 @@ type PIIAnalysisResult struct {
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	// Dependencies
-	modelInference ModelInference
+	categoryInference  CategoryInference
+	jailbreakInference JailbreakInference
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -73,8 +90,23 @@ type Classifier struct {
 
 // NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
+	var categoryInference CategoryInference
+	if cfg.Classifier.CategoryModel.UseModernBERT {
+		categoryInference = &ModernBERTCategoryInference{}
+	} else {
+		categoryInference = &LinearCategoryInference{}
+	}
+
+	var jailbreakInference JailbreakInference
+	if cfg.PromptGuard.UseModernBERT {
+		jailbreakInference = &ModernBERTJailbreakInference{}
+	} else {
+		jailbreakInference = &LinearJailbreakInference{}
+	}
+
 	return &Classifier{
-		modelInference: &CandleModelInference{},
+		categoryInference:    categoryInference,
+		jailbreakInference:   jailbreakInference,
 		Config:               cfg,
 		CategoryMapping:      categoryMapping,
 		PIIMapping:           piiMapping,
@@ -137,13 +169,7 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 	var err error
 
 	start := time.Now()
-	if c.Config.PromptGuard.UseModernBERT {
-		// Use ModernBERT jailbreak classifier
-		result, err = candle_binding.ClassifyModernBertJailbreakText(text)
-	} else {
-		// Use linear jailbreak classifier
-		result, err = candle_binding.ClassifyJailbreakText(text)
-	}
+	result, err = c.jailbreakInference.Classify(text)
 	metrics.RecordClassifierLatency("jailbreak", time.Since(start).Seconds())
 
 	if err != nil {
@@ -220,13 +246,7 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 	var err error
 
 	start := time.Now()
-	if c.Config.Classifier.CategoryModel.UseModernBERT {
-		// Use ModernBERT classifier
-		result, err = c.modelInference.ClassifyModernBertText(text)
-	} else {
-		// Use linear classifier
-		result, err = c.modelInference.ClassifyText(text)
-	}
+	result, err = c.categoryInference.Classify(text)
 	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
 
 	if err != nil {
