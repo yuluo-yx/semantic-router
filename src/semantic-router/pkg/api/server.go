@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/services"
 )
 
@@ -89,6 +90,20 @@ func StartClassificationAPI(configPath string, port int) error {
 		// If no global service exists after retries, create a placeholder service
 		log.Printf("No global classification service found after retries, using placeholder service")
 		classificationSvc = services.NewPlaceholderClassificationService()
+	}
+
+	// Initialize batch metrics configuration
+	if cfg != nil && cfg.API.BatchClassification.Metrics.Enabled {
+		metricsConfig := metrics.BatchMetricsConfig{
+			Enabled:                   cfg.API.BatchClassification.Metrics.Enabled,
+			DetailedGoroutineTracking: cfg.API.BatchClassification.Metrics.DetailedGoroutineTracking,
+			DurationBuckets:           cfg.API.BatchClassification.Metrics.DurationBuckets,
+			SizeBuckets:               cfg.API.BatchClassification.Metrics.SizeBuckets,
+			BatchSizeRanges:           cfg.API.BatchClassification.Metrics.BatchSizeRanges,
+			HighResolutionTiming:      cfg.API.BatchClassification.Metrics.HighResolutionTiming,
+			SampleRate:                cfg.API.BatchClassification.Metrics.SampleRate,
+		}
+		metrics.SetBatchMetricsConfig(metricsConfig)
 	}
 
 	// Create server instance
@@ -231,6 +246,8 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 
 	// Input validation
 	if len(req.Texts) == 0 {
+		// Record validation error in metrics
+		metrics.RecordBatchClassificationError("validation", "empty_texts")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
 		return
 	}
@@ -242,6 +259,8 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	}
 
 	if len(req.Texts) > maxBatchSize {
+		// Record validation error in metrics
+		metrics.RecordBatchClassificationError("validation", "batch_too_large")
 		s.writeErrorResponse(w, http.StatusBadRequest, "BATCH_TOO_LARGE",
 			fmt.Sprintf("batch size cannot exceed %d texts", maxBatchSize))
 		return
@@ -494,10 +513,26 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 
 // processSequentially handles small batches with sequential processing
 func (s *ClassificationAPIServer) processSequentially(texts []string, options *ClassificationOptions) ([]services.Classification, error) {
+	start := time.Now()
+	processingType := "sequential"
+	batchSize := len(texts)
+
+	// Record request and batch size metrics
+	metrics.RecordBatchClassificationRequest(processingType)
+	metrics.RecordBatchSizeDistribution(processingType, batchSize)
+
+	// Defer recording processing time and text count
+	defer func() {
+		duration := time.Since(start).Seconds()
+		metrics.RecordBatchClassificationDuration(processingType, batchSize, duration)
+		metrics.RecordBatchClassificationTexts(processingType, batchSize)
+	}()
+
 	results := make([]services.Classification, len(texts))
 	for i, text := range texts {
 		result, err := s.classifySingleText(text, options)
 		if err != nil {
+			metrics.RecordBatchClassificationError(processingType, "classification_failed")
 			return nil, fmt.Errorf("failed to classify text at index %d: %w", i, err)
 		}
 		results[i] = result
@@ -507,6 +542,22 @@ func (s *ClassificationAPIServer) processSequentially(texts []string, options *C
 
 // processConcurrently handles large batches with concurrent processing
 func (s *ClassificationAPIServer) processConcurrently(texts []string, options *ClassificationOptions) ([]services.Classification, error) {
+	start := time.Now()
+	processingType := "concurrent"
+	batchSize := len(texts)
+	batchID := fmt.Sprintf("batch_%d", time.Now().UnixNano())
+
+	// Record request and batch size metrics
+	metrics.RecordBatchClassificationRequest(processingType)
+	metrics.RecordBatchSizeDistribution(processingType, batchSize)
+
+	// Defer recording processing time and text count
+	defer func() {
+		duration := time.Since(start).Seconds()
+		metrics.RecordBatchClassificationDuration(processingType, batchSize, duration)
+		metrics.RecordBatchClassificationTexts(processingType, batchSize)
+	}()
+
 	// Get max concurrency from config, default to 8
 	maxConcurrency := 8
 	if s.config != nil && s.config.API.BatchClassification.MaxConcurrency > 0 {
@@ -523,6 +574,18 @@ func (s *ClassificationAPIServer) processConcurrently(texts []string, options *C
 		wg.Add(1)
 		go func(index int, txt string) {
 			defer wg.Done()
+
+			// Record goroutine start (if detailed tracking is enabled)
+			metricsConfig := metrics.GetBatchMetricsConfig()
+			if metricsConfig.DetailedGoroutineTracking {
+				metrics.ConcurrentGoroutines.WithLabelValues(batchID).Inc()
+
+				defer func() {
+					// Record goroutine end
+					metrics.ConcurrentGoroutines.WithLabelValues(batchID).Dec()
+				}()
+			}
+
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
@@ -532,6 +595,7 @@ func (s *ClassificationAPIServer) processConcurrently(texts []string, options *C
 			result, err := s.classifySingleText(txt, options)
 			if err != nil {
 				errors[index] = err
+				metrics.RecordBatchClassificationError(processingType, "classification_failed")
 				return
 			}
 			results[index] = result

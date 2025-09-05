@@ -1,9 +1,96 @@
 package metrics
 
 import (
+	"fmt"
+	"math/rand"
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
 )
+
+// Minimal fallback bucket configurations - used only when configuration is completely missing
+var (
+	// Basic fallback buckets for emergency use when config.yaml is unavailable
+	FallbackDurationBuckets = []float64{0.001, 0.01, 0.1, 1, 10}
+	FallbackSizeBuckets     = []float64{1, 10, 100}
+)
+
+// Configuration constants
+const (
+	DefaultSampleRate = 1.0
+	MinSampleRate     = 0.0
+	MaxSampleRate     = 1.0
+)
+
+// BatchMetricsConfig represents configuration for batch classification metrics
+type BatchMetricsConfig struct {
+	SampleRate      float64                       `yaml:"sample_rate"`
+	DurationBuckets []float64                     `yaml:"duration_buckets"`
+	SizeBuckets     []float64                     `yaml:"size_buckets"`
+	BatchSizeRanges []config.BatchSizeRangeConfig `yaml:"batch_size_ranges"`
+
+	// Boolean fields grouped together to minimize padding
+	Enabled                   bool `yaml:"enabled"`
+	DetailedGoroutineTracking bool `yaml:"detailed_goroutine_tracking"`
+	HighResolutionTiming      bool `yaml:"high_resolution_timing"`
+}
+
+// Global configuration for batch metrics
+var (
+	batchMetricsConfig BatchMetricsConfig
+	configMutex        sync.RWMutex
+	metricsInitOnce    sync.Once
+)
+
+// SetBatchMetricsConfig sets the configuration for batch classification metrics
+func SetBatchMetricsConfig(config BatchMetricsConfig) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	batchMetricsConfig = config
+
+	// Set default values if not provided
+	if batchMetricsConfig.SampleRate <= MinSampleRate {
+		batchMetricsConfig.SampleRate = DefaultSampleRate
+	}
+	if len(batchMetricsConfig.DurationBuckets) == 0 {
+		batchMetricsConfig.DurationBuckets = FallbackDurationBuckets
+	}
+	if len(batchMetricsConfig.SizeBuckets) == 0 {
+		batchMetricsConfig.SizeBuckets = FallbackSizeBuckets
+	}
+
+	// Initialize metrics with the configuration
+	InitializeBatchMetrics(batchMetricsConfig)
+}
+
+// GetBatchMetricsConfig returns the current batch metrics configuration
+func GetBatchMetricsConfig() BatchMetricsConfig {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return batchMetricsConfig
+}
+
+// shouldCollectMetric determines if a metric should be collected based on sample rate
+func shouldCollectMetric() bool {
+	configMutex.RLock()
+	sampleRate := batchMetricsConfig.SampleRate
+	enabled := batchMetricsConfig.Enabled
+	configMutex.RUnlock()
+
+	if !enabled {
+		return false
+	}
+
+	if sampleRate >= 1.0 {
+		return true
+	}
+
+	return rand.Float64() < sampleRate
+}
 
 var (
 	// ModelRequests tracks the number of requests made to each model
@@ -168,4 +255,211 @@ func RecordPIIViolations(model string, piiTypes []string) {
 // RecordClassifierLatency records the latency for a classifier invocation by type
 func RecordClassifierLatency(classifier string, seconds float64) {
 	ClassifierLatency.WithLabelValues(classifier).Observe(seconds)
+}
+
+// Batch Classification Metrics - Dynamically initialized based on configuration
+var (
+	BatchClassificationRequests *prometheus.CounterVec
+	BatchClassificationDuration *prometheus.HistogramVec
+	BatchClassificationTexts    *prometheus.CounterVec
+	BatchClassificationErrors   *prometheus.CounterVec
+	ConcurrentGoroutines        *prometheus.GaugeVec
+	BatchSizeDistribution       *prometheus.HistogramVec
+)
+
+// Default batch size ranges - used only when configuration is missing
+var DefaultBatchSizeRanges = []config.BatchSizeRangeConfig{
+	{Min: 1, Max: 1, Label: "1"},
+	{Min: 2, Max: 5, Label: "2-5"},
+	{Min: 6, Max: 10, Label: "6-10"},
+	{Min: 11, Max: 20, Label: "11-20"},
+	{Min: 21, Max: 50, Label: "21-50"},
+	{Min: 51, Max: -1, Label: "50+"}, // -1 means no upper limit
+}
+
+// Uses ranges from configuration file
+func GetBatchSizeRange(size int) string {
+	config := GetBatchMetricsConfig()
+	ranges := config.BatchSizeRanges
+
+	// Use default ranges if not configured
+	if len(ranges) == 0 {
+		ranges = DefaultBatchSizeRanges
+	}
+
+	// Find the appropriate range for the given size
+	for _, r := range ranges {
+		if size >= r.Min && (r.Max == -1 || size <= r.Max) {
+			return r.Label
+		}
+	}
+
+	// Fallback for unexpected cases
+	return "unknown"
+}
+
+// GetBatchSizeRangeFromBuckets generates range labels based on size buckets
+func GetBatchSizeRangeFromBuckets(size int, buckets []float64) string {
+	if len(buckets) == 0 {
+		return GetBatchSizeRange(size) // fallback to default ranges
+	}
+
+	sizeFloat := float64(size)
+
+	// Find which bucket this size falls into
+	for i, bucket := range buckets {
+		if sizeFloat <= bucket {
+			if i == 0 {
+				return fmt.Sprintf("≤%.0f", bucket)
+			}
+			prevBucket := buckets[i-1]
+			if prevBucket == bucket-1 {
+				return fmt.Sprintf("%.0f", bucket)
+			}
+			return fmt.Sprintf("%.0f-%.0f", prevBucket+1, bucket)
+		}
+	}
+
+	// Size is larger than the largest bucket
+	lastBucket := buckets[len(buckets)-1]
+	return fmt.Sprintf("%.0f+", lastBucket)
+}
+
+// RecordBatchClassificationRequest increments the counter for batch classification requests
+func RecordBatchClassificationRequest(processingType string) {
+	if !shouldCollectMetric() {
+		return
+	}
+	BatchClassificationRequests.WithLabelValues(processingType).Inc()
+}
+
+// RecordBatchClassificationDuration records the duration of batch classification processing
+func RecordBatchClassificationDuration(processingType string, batchSize int, duration float64) {
+	if !shouldCollectMetric() {
+		return
+	}
+
+	// Use configured range labels from config.yaml
+	batchSizeRange := GetBatchSizeRange(batchSize)
+	BatchClassificationDuration.WithLabelValues(processingType, batchSizeRange).Observe(duration)
+}
+
+// RecordBatchClassificationTexts adds the number of texts processed in batch classification
+func RecordBatchClassificationTexts(processingType string, count int) {
+	if !shouldCollectMetric() {
+		return
+	}
+	BatchClassificationTexts.WithLabelValues(processingType).Add(float64(count))
+}
+
+// RecordBatchClassificationError increments the counter for batch classification errors
+func RecordBatchClassificationError(processingType, errorType string) {
+	if !shouldCollectMetric() {
+		return
+	}
+	BatchClassificationErrors.WithLabelValues(processingType, errorType).Inc()
+}
+
+// RecordBatchSizeDistribution records the distribution of batch sizes
+func RecordBatchSizeDistribution(processingType string, batchSize int) {
+	if !shouldCollectMetric() {
+		return
+	}
+	BatchSizeDistribution.WithLabelValues(processingType).Observe(float64(batchSize))
+}
+
+// GenerateExponentialBuckets creates exponential histogram buckets
+func GenerateExponentialBuckets(start, factor float64, count int) []float64 {
+	buckets := make([]float64, count)
+	buckets[0] = start
+	for i := 1; i < count; i++ {
+		buckets[i] = buckets[i-1] * factor
+	}
+	return buckets
+}
+
+// GenerateLinearBuckets creates linear histogram buckets
+func GenerateLinearBuckets(start, width float64, count int) []float64 {
+	buckets := make([]float64, count)
+	for i := 0; i < count; i++ {
+		buckets[i] = start + float64(i)*width
+	}
+	return buckets
+}
+
+// GetBucketsFromConfig returns buckets from configuration
+func GetBucketsFromConfig(config BatchMetricsConfig) (durationBuckets, sizeBuckets []float64) {
+	// Use configured buckets or fallback to defaults
+	if len(config.DurationBuckets) > 0 {
+		durationBuckets = config.DurationBuckets
+	} else {
+		durationBuckets = FallbackDurationBuckets
+	}
+
+	if len(config.SizeBuckets) > 0 {
+		sizeBuckets = config.SizeBuckets
+	} else {
+		sizeBuckets = FallbackSizeBuckets
+	}
+
+	return durationBuckets, sizeBuckets
+}
+
+// InitializeBatchMetrics initializes batch classification metrics with custom bucket configurations
+func InitializeBatchMetrics(config BatchMetricsConfig) {
+	metricsInitOnce.Do(func() {
+		// Get buckets from configuration
+		durationBuckets, sizeBuckets := GetBucketsFromConfig(config)
+
+		// Initialize metrics with configuration-driven buckets
+		BatchClassificationRequests = promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "batch_classification_requests_total",
+				Help: "Total number of batch classification requests",
+			},
+			[]string{"processing_type"},
+		)
+
+		BatchClassificationDuration = promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "batch_classification_duration_seconds",
+				Help:    "Duration of batch classification processing",
+				Buckets: durationBuckets,
+			},
+			[]string{"processing_type", "batch_size_range"},
+		)
+
+		BatchClassificationTexts = promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "batch_classification_texts_total",
+				Help: "Total number of texts processed in batch classification",
+			},
+			[]string{"processing_type"},
+		)
+
+		BatchClassificationErrors = promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "batch_classification_errors_total",
+				Help: "Total number of batch classification errors",
+			},
+			[]string{"processing_type", "error_type"},
+		)
+
+		ConcurrentGoroutines = promauto.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "batch_classification_concurrent_goroutines",
+				Help: "Number of active goroutines in concurrent batch processing",
+			},
+			[]string{"batch_id"},
+		)
+
+		BatchSizeDistribution = promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "batch_classification_size_distribution",
+				Help:    "Distribution of batch sizes",
+				Buckets: sizeBuckets,
+			},
+			[]string{"processing_type"},
+		)
+	})
 }

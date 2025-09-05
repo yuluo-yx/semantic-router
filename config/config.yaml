@@ -245,3 +245,14 @@ api:
     max_batch_size: 100          # Maximum number of texts in a single batch
     concurrency_threshold: 5     # Switch to concurrent processing when batch size > this value
     max_concurrency: 8           # Maximum number of concurrent goroutines
+        
+    # Metrics configuration for monitoring batch classification performance
+    metrics:
+      enabled: true              # Enable comprehensive metrics collection
+      detailed_goroutine_tracking: true  # Track individual goroutine lifecycle 
+      high_resolution_timing: false      # Use nanosecond precision timing 
+      sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%, 0.5 = 50%)
+      
+      # Histogram buckets for metrics (directly configure what you need)
+      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]     
