@@ -6,10 +6,12 @@ import (
 	"sync"
 	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 func TestConfig(t *testing.T) {
@@ -130,7 +132,7 @@ tools:
   tools_db_path: "/path/to/tools.json"
   fallback_to_empty: true
 `
-				err := os.WriteFile(configFile, []byte(validConfig), 0644)
+				err := os.WriteFile(configFile, []byte(validConfig), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -228,7 +230,7 @@ bert_model:
   model_id: "test-model"
   invalid: [ unclosed array
 `
-				err := os.WriteFile(configFile, []byte(invalidYAML), 0644)
+				err := os.WriteFile(configFile, []byte(invalidYAML), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -242,7 +244,7 @@ bert_model:
 
 		Context("with empty config file", func() {
 			BeforeEach(func() {
-				err := os.WriteFile(configFile, []byte(""), 0644)
+				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -263,7 +265,7 @@ bert_model:
   threshold: 0.8
 default_model: "model-b"
 `
-				err := os.WriteFile(configFile, []byte(validConfig), 0644)
+				err := os.WriteFile(configFile, []byte(validConfig), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -308,7 +310,7 @@ bert_model:
 semantic_cache:
   similarity_threshold: 0.9
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -329,7 +331,7 @@ bert_model:
 semantic_cache:
   enabled: true
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -359,7 +361,7 @@ categories:
         score: 0.95
 default_model: "default-model"
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -402,7 +404,7 @@ categories:
     model_scores: []
 default_model: "fallback-model"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -430,7 +432,7 @@ model_config:
   "unconfigured-model":
     param_count: 1000000
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -525,7 +527,7 @@ classifier:
     model_id: "pii-model"
     pii_mapping_path: "/path/to/pii.json"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -540,7 +542,7 @@ classifier:
   pii_model:
     pii_mapping_path: "/path/to/pii.json"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -555,7 +557,7 @@ classifier:
   pii_model:
     model_id: "pii-model"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -573,7 +575,7 @@ classifier:
     model_id: "category-model"
     category_mapping_path: "/path/to/category.json"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -584,7 +586,7 @@ classifier:
 
 			It("should return false when not configured", func() {
 				// Create an empty config file
-				err := os.WriteFile(configFile, []byte(""), 0644)
+				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -602,7 +604,7 @@ prompt_guard:
   model_id: "jailbreak-model"
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -618,7 +620,7 @@ prompt_guard:
   model_id: "jailbreak-model"
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -633,7 +635,7 @@ prompt_guard:
   enabled: true
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -653,7 +655,7 @@ model_config:
     batch_size: 32
     context_size: 4096
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -722,7 +724,7 @@ categories:
   - name: "category2"
     description: "Description for category 2"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -748,7 +750,7 @@ categories:
   - name: "category2"
     # No description field
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -768,7 +770,7 @@ categories:
 		Context("with no categories", func() {
 			It("should return empty slice", func() {
 				// Create an empty config file
-				err := os.WriteFile(configFile, []byte(""), 0644)
+				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -789,7 +791,7 @@ semantic_cache:
   max_entries: 0
   ttl_seconds: 0
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			cfg, err := config.LoadConfig(configFile)
@@ -808,7 +810,7 @@ gpu_config:
   flops: 1e20
   hbm: 1e15
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			cfg, err := config.LoadConfig(configFile)
@@ -826,7 +828,7 @@ categories:
   - name: "category with spaces"
     description: "Description with special chars: @#$%^&*()"
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			cfg, err := config.LoadConfig(configFile)
@@ -881,7 +883,7 @@ categories:
 
 default_model: "model-b"
 `
-			err := os.WriteFile(configFile, []byte(configContent), 0644)
+			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1017,7 +1019,7 @@ categories:
 
 default_model: "existing-model"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -1041,7 +1043,7 @@ vllm_endpoints:
 
 default_model: "missing-default-model"
 `
-				err := os.WriteFile(configFile, []byte(configContent), 0644)
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
 				cfg, err := config.LoadConfig(configFile)
@@ -1085,6 +1087,92 @@ default_model: "missing-default-model"
 			Expect(config.PIITypeNoPII).To(Equal("NO_PII"))
 			Expect(config.PIITypePerson).To(Equal("PERSON"))
 			Expect(config.PIITypeEmailAddress).To(Equal("EMAIL_ADDRESS"))
+		})
+	})
+
+	// Test batch classification metrics configuration
+	Describe("Batch Classification Metrics Configuration", func() {
+		It("should parse batch classification metrics configuration correctly", func() {
+			yamlContent := `
+api:
+  batch_classification:
+    max_batch_size: 50
+    concurrency_threshold: 3
+    max_concurrency: 6
+    metrics:
+      enabled: true
+      detailed_goroutine_tracking: false
+      high_resolution_timing: true
+      sample_rate: 0.8
+      duration_buckets: [0.01, 0.1, 1.0, 10.0]
+      size_buckets: [5, 15, 25, 75]
+`
+
+			var cfg config.RouterConfig
+			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify batch classification configuration
+			batchConfig := cfg.API.BatchClassification
+			Expect(batchConfig.MaxBatchSize).To(Equal(50))
+			Expect(batchConfig.ConcurrencyThreshold).To(Equal(3))
+			Expect(batchConfig.MaxConcurrency).To(Equal(6))
+
+			// Verify metrics configuration
+			metricsConfig := batchConfig.Metrics
+			Expect(metricsConfig.Enabled).To(BeTrue())
+			Expect(metricsConfig.DetailedGoroutineTracking).To(BeFalse())
+			Expect(metricsConfig.HighResolutionTiming).To(BeTrue())
+			Expect(metricsConfig.SampleRate).To(Equal(0.8))
+
+			// Verify custom buckets
+			Expect(metricsConfig.DurationBuckets).To(Equal([]float64{0.01, 0.1, 1.0, 10.0}))
+			Expect(metricsConfig.SizeBuckets).To(Equal([]float64{5, 15, 25, 75}))
+		})
+
+		It("should handle missing metrics configuration with defaults", func() {
+			yamlContent := `
+api:
+  batch_classification:
+    max_batch_size: 100
+`
+
+			var cfg config.RouterConfig
+			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify that missing metrics configuration doesn't cause errors
+			batchConfig := cfg.API.BatchClassification
+			Expect(batchConfig.MaxBatchSize).To(Equal(100))
+
+			// Metrics should have zero values (will be handled by defaults in application)
+			metricsConfig := batchConfig.Metrics
+			Expect(metricsConfig.Enabled).To(BeFalse())     // Default zero value
+			Expect(metricsConfig.SampleRate).To(Equal(0.0)) // Default zero value
+		})
+
+		It("should handle partial metrics configuration", func() {
+			yamlContent := `
+api:
+  batch_classification:
+    metrics:
+      enabled: true
+      sample_rate: 0.5
+`
+
+			var cfg config.RouterConfig
+			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			metricsConfig := cfg.API.BatchClassification.Metrics
+			Expect(metricsConfig.Enabled).To(BeTrue())
+			Expect(metricsConfig.SampleRate).To(Equal(0.5))
+
+			// Other fields should have zero values
+			Expect(metricsConfig.DetailedGoroutineTracking).To(BeFalse())
+			Expect(metricsConfig.HighResolutionTiming).To(BeFalse())
+			Expect(len(metricsConfig.DurationBuckets)).To(Equal(0))
+			Expect(len(metricsConfig.SizeBuckets)).To(Equal(0))
 		})
 	})
 })
