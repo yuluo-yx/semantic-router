@@ -10,6 +10,7 @@ Thank you for your interest in contributing to the vLLM Semantic Router project!
 - [Running Tests](#running-tests)
 - [Development Workflow](#development-workflow)
 - [Code Style and Standards](#code-style-and-standards)
+  - [Code Quality Checks](#code-quality-checks)
 - [Submitting Changes](#submitting-changes)
 - [Project Structure](#project-structure)
 
@@ -190,6 +191,18 @@ The test suite includes:
 - **Rust library:** Use `RUST_LOG=debug` environment variable for detailed Rust logs
 
 ## Code Style and Standards
+
+### Code Quality Checks
+
+Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
+
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Run all checks
+pre-commit run --all-files
+```
 
 ### Go Code
 - Follow standard Go formatting (`gofmt`)
