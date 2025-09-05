@@ -61,6 +61,9 @@ type RouterConfig struct {
 
 	// vLLM endpoints configuration for multiple backend support
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+
+	// API configuration for classification endpoints
+	API APIConfig `yaml:"api"`
 }
 
 // SemanticCacheConfig represents configuration for the semantic cache
@@ -77,6 +80,54 @@ type SemanticCacheConfig struct {
 
 	// Time-to-live for cache entries in seconds (0 means no expiration)
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+}
+
+// APIConfig represents configuration for API endpoints
+type APIConfig struct {
+	// Batch classification configuration
+	BatchClassification struct {
+		// Maximum number of texts allowed in a single batch request
+		MaxBatchSize int `yaml:"max_batch_size,omitempty"`
+
+		// Threshold for switching from sequential to concurrent processing
+		ConcurrencyThreshold int `yaml:"concurrency_threshold,omitempty"`
+
+		// Maximum number of concurrent goroutines for batch processing
+		MaxConcurrency int `yaml:"max_concurrency,omitempty"`
+
+		// Metrics configuration for batch classification monitoring
+		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
+	} `yaml:"batch_classification"`
+}
+
+// BatchClassificationMetricsConfig represents configuration for batch classification metrics
+type BatchClassificationMetricsConfig struct {
+	// Sample rate for metrics collection (0.0-1.0, 1.0 means collect all metrics)
+	SampleRate float64 `yaml:"sample_rate,omitempty"`
+
+	// Batch size range labels for metrics (optional - uses sensible defaults if not specified)
+	// Default ranges: "1", "2-5", "6-10", "11-20", "21-50", "50+"
+	BatchSizeRanges []BatchSizeRangeConfig `yaml:"batch_size_ranges,omitempty"`
+
+	// Histogram buckets for metrics (directly configured)
+	DurationBuckets []float64 `yaml:"duration_buckets,omitempty"`
+	SizeBuckets     []float64 `yaml:"size_buckets,omitempty"`
+
+	// Enable detailed metrics collection
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// Enable detailed goroutine tracking (may impact performance)
+	DetailedGoroutineTracking bool `yaml:"detailed_goroutine_tracking,omitempty"`
+
+	// Enable high-resolution timing (nanosecond precision)
+	HighResolutionTiming bool `yaml:"high_resolution_timing,omitempty"`
+}
+
+// BatchSizeRangeConfig defines a batch size range with its boundaries and label
+type BatchSizeRangeConfig struct {
+	Min   int    `yaml:"min"`
+	Max   int    `yaml:"max"` // -1 means no upper limit
+	Label string `yaml:"label"`
 }
 
 // PromptGuardConfig represents configuration for the prompt guard jailbreak detection

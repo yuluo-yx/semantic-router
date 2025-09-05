@@ -218,7 +218,125 @@ bert_model:
   model_id: sentence-transformers/all-MiniLM-L12-v2
   threshold: 0.6                  # Similarity threshold
   use_cpu: true                   # CPU-only inference
+
+# Batch Classification API Configuration
+api:
+  batch_classification:
+    max_batch_size: 100            # Maximum texts per batch request
+    concurrency_threshold: 5       # Switch to concurrent processing at this size
+    max_concurrency: 8             # Maximum concurrent goroutines
+    
+    # Metrics configuration for monitoring
+    metrics:
+      enabled: true                # Enable Prometheus metrics collection
+      detailed_goroutine_tracking: true  # Track individual goroutine lifecycle
+      high_resolution_timing: false      # Use nanosecond precision timing
+      sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%)
+      
+      # Batch size range labels for metrics (OPTIONAL - uses sensible defaults)
+      # Default ranges: "1", "2-5", "6-10", "11-20", "21-50", "50+"
+      # Only specify if you need custom ranges:
+      # batch_size_ranges:
+      #   - {min: 1, max: 1, label: "1"}
+      #   - {min: 2, max: 5, label: "2-5"}
+      #   - {min: 6, max: 10, label: "6-10"}
+      #   - {min: 11, max: 20, label: "11-20"}
+      #   - {min: 21, max: 50, label: "21-50"}
+      #   - {min: 51, max: -1, label: "50+"}  # -1 means no upper limit
+      
+      # Histogram buckets - choose from presets below or customize
+      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+      
+      # Preset examples for quick configuration (copy values above)
+      preset_examples:
+        fast:
+          duration: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
+          size: [1, 2, 3, 5, 8, 10]
+        standard:
+          duration: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+          size: [1, 2, 5, 10, 20, 50, 100]
+        slow:
+          duration: [0.1, 0.5, 1, 5, 10, 30, 60, 120]
+          size: [10, 50, 100, 500, 1000, 5000]
 ```
+
+### How to Use Preset Examples
+
+The configuration includes preset examples for quick setup. Here's how to use them:
+
+**Step 1: Choose your scenario**
+- `fast` - For real-time APIs (microsecond to millisecond response times)
+- `standard` - For typical web APIs (millisecond to second response times)  
+- `slow` - For batch processing or heavy computation (seconds to minutes)
+
+**Step 2: Copy the preset values**
+```yaml
+# Example: Switch to fast API configuration
+# Copy from preset_examples.fast and paste to the actual config:
+duration_buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
+size_buckets: [1, 2, 3, 5, 8, 10]
+```
+
+**Step 3: Restart the service**
+```bash
+pkill -f "router"
+make run-router
+```
+
+### Default Batch Size Ranges
+
+The system provides sensible default batch size ranges that work well for most use cases:
+
+- **"1"** - Single text requests
+- **"2-5"** - Small batch requests  
+- **"6-10"** - Medium batch requests
+- **"11-20"** - Large batch requests
+- **"21-50"** - Very large batch requests
+- **"50+"** - Maximum batch requests
+
+**You don't need to configure `batch_size_ranges` unless you have specific requirements.** The defaults are automatically used when the configuration is omitted.
+
+### Configuration Examples by Use Case
+
+**Real-time Chat API (fast preset)**
+```yaml
+# Copy these values to your config for sub-millisecond monitoring
+duration_buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
+size_buckets: [1, 2, 3, 5, 8, 10]
+# batch_size_ranges: uses defaults (no configuration needed)
+```
+
+**E-commerce API (standard preset)**
+```yaml
+# Copy these values for typical web API response times
+duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+size_buckets: [1, 2, 5, 10, 20, 50, 100]
+# batch_size_ranges: uses defaults (no configuration needed)
+```
+
+**Data Processing Pipeline (slow preset)**
+```yaml
+# Copy these values for heavy computation workloads
+duration_buckets: [0.1, 0.5, 1, 5, 10, 30, 60, 120]
+size_buckets: [10, 50, 100, 500, 1000, 5000]
+# Custom batch size ranges for large-scale processing (overrides defaults)
+batch_size_ranges:
+  - {min: 1, max: 50, label: "1-50"}
+  - {min: 51, max: 200, label: "51-200"}
+  - {min: 201, max: 1000, label: "201-1000"}
+  - {min: 1001, max: -1, label: "1000+"}
+```
+
+**Available Metrics:**
+- `batch_classification_requests_total` - Total number of batch requests
+- `batch_classification_duration_seconds` - Processing duration histogram
+- `batch_classification_texts_total` - Total number of texts processed
+- `batch_classification_errors_total` - Error count by type
+- `batch_classification_concurrent_goroutines` - Active goroutine count
+- `batch_classification_size_distribution` - Batch size distribution
+
+Access metrics at: `http://localhost:9190/metrics`
 
 ## Common Configuration Examples
 
@@ -438,6 +556,101 @@ make test-auto-prompt-no-reasoning   # General query
 make test-pii                        # PII detection
 make test-prompt-guard               # Jailbreak protection
 ```
+
+## Configuration Generation
+
+The Semantic Router supports automated configuration generation based on model performance benchmarks. This workflow uses MMLU-Pro evaluation results to determine optimal model routing for different categories.
+
+### Benchmarking Workflow
+
+1. **Run MMLU-Pro Evaluation:**
+   ```bash
+   # Evaluate models using MMLU-Pro benchmark
+   python src/training/model_eval/mmlu_pro_vllm_eval.py \
+     --endpoint http://localhost:8000/v1 \
+     --models phi4,gemma3:27b,mistral-small3.1 \
+     --samples-per-category 5 \
+     --use-cot \
+     --concurrent-requests 4 \
+     --output-dir results
+   ```
+
+2. **Generate Configuration:**
+   ```bash
+   # Generate config.yaml from benchmark results
+   python src/training/model_eval/result_to_config.py \
+     --results-dir results \
+     --output-file config/config.yaml \
+     --similarity-threshold 0.80
+   ```
+
+### Generated Configuration Features
+
+The generated configuration includes:
+
+- **Model Performance Rankings:** Models are ranked by performance for each category
+- **Reasoning Settings:** Automatically configures reasoning requirements per category:
+  - `use_reasoning`: Whether to use step-by-step reasoning
+  - `reasoning_description`: Description of reasoning approach
+  - `reasoning_effort`: Required effort level (low/medium/high)
+- **Default Model Selection:** Best overall performing model is set as default
+- **Security and Performance Settings:** Pre-configured optimal values for:
+  - PII detection thresholds
+  - Semantic cache settings
+  - Tool selection parameters
+
+### Customizing Generated Config
+
+The generated config.yaml can be customized by:
+
+1. Editing category-specific settings in `result_to_config.py`
+2. Adjusting thresholds and parameters via command line arguments
+3. Manually modifying the generated config.yaml
+
+### Example Workflow
+
+Here's a complete example workflow for generating and testing a configuration:
+
+```bash
+# Run MMLU-Pro evaluation
+# Option 1: Specify models manually
+python src/training/model_eval/mmlu_pro_vllm_eval.py \
+  --endpoint http://localhost:8000/v1 \
+  --models phi4,gemma3:27b,mistral-small3.1 \
+  --samples-per-category 5 \
+  --use-cot \
+  --concurrent-requests 4 \
+  --output-dir results \
+  --max-tokens 2048 \
+  --temperature 0.0 \
+  --seed 42
+
+# Option 2: Auto-discover models from endpoint
+python src/training/model_eval/mmlu_pro_vllm_eval.py \
+  --endpoint http://localhost:8000/v1 \
+  --samples-per-category 5 \
+  --use-cot \
+  --concurrent-requests 4 \
+  --output-dir results \
+  --max-tokens 2048 \
+  --temperature 0.0 \
+  --seed 42
+
+# Generate initial config
+python src/training/model_eval/result_to_config.py \
+  --results-dir results \
+  --output-file config/config.yaml \
+  --similarity-threshold 0.80
+
+# Test the generated config
+make test
+```
+
+This workflow ensures your configuration is:
+- Based on actual model performance
+- Properly tested before deployment
+- Version controlled for tracking changes
+- Optimized for your specific use case
 
 ## Next Steps
 

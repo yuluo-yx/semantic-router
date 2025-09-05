@@ -11,8 +11,20 @@ build: rust build-router
 
 # Build the Rust library
 rust:
-	@echo "Building Rust library..."
-	cd candle-binding && cargo build --release
+	@echo "Ensuring rust is installed..."
+	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
+		echo "rustc not found, installing..."; \
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
+	fi && \
+	if [ -f "$$HOME/.cargo/env" ]; then \
+		echo "Loading Rust environment from $$HOME/.cargo/env..." && \
+		. $$HOME/.cargo/env; \
+	fi && \
+	if ! command -v cargo >/dev/null 2>&1; then \
+		echo "Error: cargo not found in PATH" && exit 1; \
+	fi && \
+	echo "Building Rust library..." && \
+	cd candle-binding && cargo build --release'
 
 # Build router
 build-router: rust
@@ -20,11 +32,14 @@ build-router: rust
 	@mkdir -p bin
 	@cd src/semantic-router && go build -o ../../bin/router cmd/main.go
 
+# Config file path with default
+CONFIG_FILE ?= config/config.yaml
+
 # Run the router
-run-router: build-router
-	@echo "Running router..."
+run-router: build-router download-models
+	@echo "Running router with config: ${CONFIG_FILE}"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		./bin/router -config=config/config.yaml
+		./bin/router -config=${CONFIG_FILE}
 
 # Prepare Envoy
 prepare-envoy:

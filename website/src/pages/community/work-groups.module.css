@@ -50,57 +50,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 2rem;
   margin-top: 2rem;
-}
-
-.featuredGroupsRow {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
-
-.featuredWorkGroup {
-  background: linear-gradient(135deg, #f6f8fa 0%, #e1e7f0 50%, #d0d7de 100%);
-  color: #24292f !important;
-  border: 2px solid #0969da !important;
-  box-shadow: 0 8px 32px rgba(9, 105, 218, 0.2);
-}
-
-.featuredWorkGroup .skillsAndNeeds {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3rem;
-  margin-top: 1.5rem;
-}
-
-.featuredWorkGroup .groupName,
-.featuredWorkGroup .skillsSection h4,
-.featuredWorkGroup .needsSection h4 {
-  color: #0969da !important;
-}
-
-.featuredWorkGroup .description,
-.featuredWorkGroup .skillsList,
-.featuredWorkGroup .needsList {
-  color: #24292f !important;
-}
-
-.featuredWorkGroup .skillsList li,
-.featuredWorkGroup .needsList li {
-  color: #656d76 !important;
-}
-
-.featuredWorkGroup .label {
-  background: #0969da !important;
-  color: white !important;
-  border: 1px solid #0969da !important;
-}
-
-.featuredWorkGroup:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 48px rgba(9, 105, 218, 0.3);
-  border-color: #8250df !important;
+  align-items: start;
 }
 
 .workGroupCard {
@@ -264,6 +214,13 @@
 }
 
 /* Responsive design */
+@media (max-width: 1024px) {
+  .workGroupsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1rem;
@@ -274,16 +231,6 @@
   }
 
   .workGroupsGrid {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-
-  .featuredGroupsRow {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-
-  .featuredWorkGroup .skillsAndNeeds {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
@@ -333,32 +280,4 @@
 
 [data-theme='dark'] .link {
   color: #58a6ff;
-}
-
-/* Featured work group in dark mode should keep its special styling */
-[data-theme='dark'] .featuredWorkGroup {
-  background: linear-gradient(135deg, #21262d 0%, #30363d 50%, #161b22 100%) !important;
-  border-color: #58a6ff !important;
-}
-
-[data-theme='dark'] .featuredWorkGroup .groupName,
-[data-theme='dark'] .featuredWorkGroup .skillsSection h4,
-[data-theme='dark'] .featuredWorkGroup .needsSection h4 {
-  color: #58a6ff !important;
-}
-
-[data-theme='dark'] .featuredWorkGroup .description,
-[data-theme='dark'] .featuredWorkGroup .skillsList,
-[data-theme='dark'] .featuredWorkGroup .needsList {
-  color: #f0f6fc !important;
-}
-
-[data-theme='dark'] .featuredWorkGroup .skillsList li,
-[data-theme='dark'] .featuredWorkGroup .needsList li {
-  color: #8b949e !important;
-}
-
-[data-theme='dark'] .featuredWorkGroup .label {
-  background: #58a6ff !important;
-  color: #0d1117 !important;
 }

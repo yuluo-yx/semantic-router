@@ -10,6 +10,7 @@ Thank you for your interest in contributing to the vLLM Semantic Router project!
 - [Running Tests](#running-tests)
 - [Development Workflow](#development-workflow)
 - [Code Style and Standards](#code-style-and-standards)
+  - [Code Quality Checks](#code-quality-checks)
 - [Submitting Changes](#submitting-changes)
 - [Project Structure](#project-structure)
 
@@ -29,7 +30,7 @@ Before you begin, ensure you have the following installed:
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/vllm-project/semantic-router.git
    cd semantic-router
    ```
 
@@ -190,6 +191,31 @@ The test suite includes:
 - **Rust library:** Use `RUST_LOG=debug` environment variable for detailed Rust logs
 
 ## Code Style and Standards
+
+### Code Quality Checks
+
+Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
+
+**Step 1: Install pre-commit tool**
+```bash
+# Using pip (recommended)
+pip install pre-commit
+
+# Or using conda
+conda install -c conda-forge pre-commit
+
+# Or using homebrew (macOS)
+brew install pre-commit
+```
+
+**Step 2: Install pre-commit hooks for this repository**
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Run all checks
+pre-commit run --all-files
+```
 
 ### Go Code
 - Follow standard Go formatting (`gofmt`)

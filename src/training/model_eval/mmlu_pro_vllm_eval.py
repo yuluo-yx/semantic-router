@@ -96,8 +96,18 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
     try:
         models = client.models.list()
         return [model.id for model in models.data]
-    except:
+    except Exception as e:
         print(f"Error communicating with vLLM endpoint: {e}")
+        # Try direct HTTP request as fallback
+        try:
+            response = requests.get(f"{endpoint}/models")
+            if response.status_code == 200:
+                models_data = response.json()
+                return [model["id"] for model in models_data.get("data", [])]
+            else:
+                print(f"Failed to get models list. Status code: {response.status_code}")
+        except Exception as e:
+            print(f"Failed to get models list via HTTP: {e}")
         return []
 
 

@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -43,7 +44,7 @@ func CreatePIIViolationResponse(model string, deniedPII []string) *ext_proc.Proc
 	responseBody, err := json.Marshal(openAIResponse)
 	if err != nil {
 		// Log the error and return a fallback response
-		fmt.Printf("Error marshaling OpenAI response: %v\n", err)
+		log.Printf("Error marshaling OpenAI response: %v", err)
 		responseBody = []byte(`{"error": "Failed to generate response"}`)
 	}
 
@@ -106,7 +107,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32) 
 	responseBody, err := json.Marshal(openAIResponse)
 	if err != nil {
 		// Log the error and return a fallback response
-		fmt.Printf("Error marshaling jailbreak response: %v\n", err)
+		log.Printf("Error marshaling jailbreak response: %v", err)
 		responseBody = []byte(`{"error": "Failed to generate response"}`)
 	}
 
