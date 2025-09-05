@@ -179,7 +179,7 @@ semantic_router_jailbreak_attempts_total{action="block"} 5
 
 The router exposes dedicated Prometheus counters to monitor reasoning mode decisions and template usage across model families. These metrics are emitted by the router and can be scraped by your Prometheus server.
 
-- llm_reasoning_decisions_total{category, model, enabled, effort}
+- `llm_reasoning_decisions_total{category, model, enabled, effort}`
   - Description: Count of reasoning decisions made per category and selected model, with whether reasoning was enabled and the applied effort level.
   - Labels:
     - category: category name determined during routing
@@ -187,13 +187,13 @@ The router exposes dedicated Prometheus counters to monitor reasoning mode decis
     - enabled: "true" or "false" depending on the decision
     - effort: effort level used when enabled (e.g., low|medium|high)
 
-- llm_reasoning_template_usage_total{family, param}
+- `llm_reasoning_template_usage_total{family, param}`
   - Description: Count of times a model-family-specific template parameter was applied to requests.
   - Labels:
     - family: normalized model family (e.g., qwen3, deepseek, gpt-oss, gpt)
     - param: name of the template knob applied (e.g., enable_thinking, thinking, reasoning_effort)
 
-- llm_reasoning_effort_usage_total{family, effort}
+- `llm_reasoning_effort_usage_total{family, effort}`
   - Description: Count of times a reasoning effort level was set for a given model family.
   - Labels:
     - family: normalized model family
