@@ -22,9 +22,9 @@ func (c *LinearCategoryInference) Classify(text string) (candle_binding.ClassRes
 	return candle_binding.ClassifyText(text)
 }
 
-type ModernBERTCategoryInference struct{}
+type ModernBertCategoryInference struct{}
 
-func (c *ModernBERTCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
+func (c *ModernBertCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyModernBertText(text)
 }
 
@@ -38,10 +38,20 @@ func (c *LinearJailbreakInference) Classify(text string) (candle_binding.ClassRe
 	return candle_binding.ClassifyJailbreakText(text)
 }
 
-type ModernBERTJailbreakInference struct{}
+type ModernBertJailbreakInference struct{}
 
-func (c *ModernBERTJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+func (c *ModernBertJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyModernBertJailbreakText(text)
+}
+
+type PIIInference interface {
+	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
+}
+
+type ModernBertPIIInference struct{}
+
+func (c *ModernBertPIIInference) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+	return candle_binding.ClassifyModernBertPIITokens(text, configPath)
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
@@ -75,6 +85,7 @@ type Classifier struct {
 	// Dependencies
 	categoryInference  CategoryInference
 	jailbreakInference JailbreakInference
+	piiInference       PIIInference
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -92,21 +103,25 @@ type Classifier struct {
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
 	var categoryInference CategoryInference
 	if cfg.Classifier.CategoryModel.UseModernBERT {
-		categoryInference = &ModernBERTCategoryInference{}
+		categoryInference = &ModernBertCategoryInference{}
 	} else {
 		categoryInference = &LinearCategoryInference{}
 	}
 
 	var jailbreakInference JailbreakInference
 	if cfg.PromptGuard.UseModernBERT {
-		jailbreakInference = &ModernBERTJailbreakInference{}
+		jailbreakInference = &ModernBertJailbreakInference{}
 	} else {
 		jailbreakInference = &LinearJailbreakInference{}
 	}
 
+	piiInference := &ModernBertPIIInference{}
+
 	return &Classifier{
-		categoryInference:    categoryInference,
-		jailbreakInference:   jailbreakInference,
+		categoryInference:  categoryInference,
+		jailbreakInference: jailbreakInference,
+		piiInference:       piiInference,
+
 		Config:               cfg,
 		CategoryMapping:      categoryMapping,
 		PIIMapping:           piiMapping,
@@ -289,7 +304,7 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 	// Use ModernBERT PII token classifier for entity detection
 	configPath := fmt.Sprintf("%s/config.json", c.Config.Classifier.PIIModel.ModelID)
 	start := time.Now()
-	tokenResult, err := candle_binding.ClassifyModernBertPIITokens(text, configPath)
+	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
 	metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
@@ -371,7 +386,7 @@ func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnal
 		// Use ModernBERT PII token classifier for detailed analysis
 		configPath := fmt.Sprintf("%s/config.json", c.Config.Classifier.PIIModel.ModelID)
 		start := time.Now()
-		tokenResult, err := candle_binding.ClassifyModernBertPIITokens(content, configPath)
+		tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
 		metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 		if err != nil {
 			log.Printf("Error analyzing content %d: %v", i, err)
