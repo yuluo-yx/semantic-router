@@ -217,13 +217,17 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				API: config.APIConfig{
 					BatchClassification: struct {
-						MaxBatchSize         int `yaml:"max_batch_size,omitempty"`
-						ConcurrencyThreshold int `yaml:"concurrency_threshold,omitempty"`
-						MaxConcurrency       int `yaml:"max_concurrency,omitempty"`
+						MaxBatchSize         int                                     `yaml:"max_batch_size,omitempty"`
+						ConcurrencyThreshold int                                     `yaml:"concurrency_threshold,omitempty"`
+						MaxConcurrency       int                                     `yaml:"max_concurrency,omitempty"`
+						Metrics              config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 					}{
 						MaxBatchSize:         3, // Custom small limit
 						ConcurrencyThreshold: 2,
 						MaxConcurrency:       4,
+						Metrics: config.BatchClassificationMetricsConfig{
+							Enabled: true,
+						},
 					},
 				},
 			},
@@ -253,13 +257,17 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				API: config.APIConfig{
 					BatchClassification: struct {
-						MaxBatchSize         int `yaml:"max_batch_size,omitempty"`
-						ConcurrencyThreshold int `yaml:"concurrency_threshold,omitempty"`
-						MaxConcurrency       int `yaml:"max_concurrency,omitempty"`
+						MaxBatchSize         int                                     `yaml:"max_batch_size,omitempty"`
+						ConcurrencyThreshold int                                     `yaml:"concurrency_threshold,omitempty"`
+						MaxConcurrency       int                                     `yaml:"max_concurrency,omitempty"`
+						Metrics              config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 					}{
 						MaxBatchSize:         10,
 						ConcurrencyThreshold: 3,
 						MaxConcurrency:       2,
+						Metrics: config.BatchClassificationMetricsConfig{
+							Enabled: true,
+						},
 					},
 				},
 			},

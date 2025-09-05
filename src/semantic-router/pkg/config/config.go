@@ -94,7 +94,39 @@ type APIConfig struct {
 
 		// Maximum number of concurrent goroutines for batch processing
 		MaxConcurrency int `yaml:"max_concurrency,omitempty"`
+
+		// Metrics configuration for batch classification monitoring
+		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 	} `yaml:"batch_classification"`
+}
+
+// BatchClassificationMetricsConfig represents configuration for batch classification metrics
+type BatchClassificationMetricsConfig struct {
+	// Sample rate for metrics collection (0.0-1.0, 1.0 means collect all metrics)
+	SampleRate float64 `yaml:"sample_rate,omitempty"`
+
+	// Batch size range labels for metrics
+	BatchSizeRanges []BatchSizeRangeConfig `yaml:"batch_size_ranges,omitempty"`
+
+	// Histogram buckets for metrics (directly configured)
+	DurationBuckets []float64 `yaml:"duration_buckets,omitempty"`
+	SizeBuckets     []float64 `yaml:"size_buckets,omitempty"`
+
+	// Enable detailed metrics collection
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// Enable detailed goroutine tracking (may impact performance)
+	DetailedGoroutineTracking bool `yaml:"detailed_goroutine_tracking,omitempty"`
+
+	// Enable high-resolution timing (nanosecond precision)
+	HighResolutionTiming bool `yaml:"high_resolution_timing,omitempty"`
+}
+
+// BatchSizeRangeConfig defines a batch size range with its boundaries and label
+type BatchSizeRangeConfig struct {
+	Min   int    `yaml:"min"`
+	Max   int    `yaml:"max"` // -1 means no upper limit
+	Label string `yaml:"label"`
 }
 
 // PromptGuardConfig represents configuration for the prompt guard jailbreak detection
