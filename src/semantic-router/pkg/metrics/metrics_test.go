@@ -3,7 +3,37 @@ package metrics
 import (
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
 )
+
+// TestMain ensures metrics are initialized before running tests
+func TestMain(m *testing.M) {
+	// Initialize metrics with default configuration for testing
+	config := BatchMetricsConfig{
+		Enabled:                   true,
+		DetailedGoroutineTracking: true,
+		HighResolutionTiming:      false,
+		SampleRate:                1.0,
+		DurationBuckets:           FallbackDurationBuckets,
+		SizeBuckets:               FallbackSizeBuckets,
+		BatchSizeRanges: []config.BatchSizeRangeConfig{
+			{Min: 1, Max: 1, Label: "1"},
+			{Min: 2, Max: 5, Label: "2-5"},
+			{Min: 6, Max: 10, Label: "6-10"},
+			{Min: 11, Max: 20, Label: "11-20"},
+			{Min: 21, Max: 50, Label: "21-50"},
+			{Min: 51, Max: -1, Label: "50+"},
+		},
+	}
+
+	// Initialize batch metrics
+	InitializeBatchMetrics(config)
+	SetBatchMetricsConfig(config)
+
+	// Run tests
+	m.Run()
+}
 
 // TestBatchClassificationMetrics tests the batch classification metrics recording
 func TestBatchClassificationMetrics(t *testing.T) {
@@ -52,10 +82,6 @@ func TestBatchClassificationMetrics(t *testing.T) {
 			if tt.expectError {
 				RecordBatchClassificationError(tt.processingType, tt.errorType)
 			}
-
-			// Test passes if no panic occurs during metric recording
-			// In a real production environment, you would verify the actual metric values
-			// using prometheus test utilities or by checking the metric registry
 		})
 	}
 }
@@ -97,9 +123,6 @@ func TestConcurrentGoroutineTracking(t *testing.T) {
 
 	// Simulate goroutine end
 	ConcurrentGoroutines.WithLabelValues(batchID).Dec()
-
-	// Test passes if no panic occurs during goroutine tracking
-	// In production, you would verify the gauge values
 }
 
 // BenchmarkBatchClassificationMetrics benchmarks the performance impact of metrics recording
@@ -142,6 +165,4 @@ func TestMetricsIntegration(t *testing.T) {
 	for i := 0; i < batchSize; i++ {
 		ConcurrentGoroutines.WithLabelValues(batchID).Dec()
 	}
-
-	// Test passes if no panic occurs during the complete workflow
 }
