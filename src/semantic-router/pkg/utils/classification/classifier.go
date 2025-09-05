@@ -12,6 +12,22 @@ import (
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
 )
 
+type ModelInference interface {
+	// Category classification
+	ClassifyText(text string) (candle_binding.ClassResult, error)
+	ClassifyModernBertText(text string) (candle_binding.ClassResult, error)
+}
+
+type CandleModelInference struct{}
+
+func (c *CandleModelInference) ClassifyText(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyText(text)
+}
+
+func (c *CandleModelInference) ClassifyModernBertText(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyModernBertText(text)
+}
+
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
 type JailbreakDetection struct {
 	Content       string  `json:"content"`
@@ -40,6 +56,9 @@ type PIIAnalysisResult struct {
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
+	// Dependencies
+	modelInference ModelInference
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -55,6 +74,7 @@ type Classifier struct {
 // NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
 	return &Classifier{
+		modelInference: &CandleModelInference{},
 		Config:               cfg,
 		CategoryMapping:      categoryMapping,
 		PIIMapping:           piiMapping,
@@ -202,10 +222,10 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 	start := time.Now()
 	if c.Config.Classifier.CategoryModel.UseModernBERT {
 		// Use ModernBERT classifier
-		result, err = candle_binding.ClassifyModernBertText(text)
+		result, err = c.modelInference.ClassifyModernBertText(text)
 	} else {
 		// Use linear classifier
-		result, err = candle_binding.ClassifyText(text)
+		result, err = c.modelInference.ClassifyText(text)
 	}
 	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
 
