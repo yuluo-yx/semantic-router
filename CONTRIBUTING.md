@@ -196,6 +196,19 @@ The test suite includes:
 
 Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
 
+**Step 1: Install pre-commit tool**
+```bash
+# Using pip (recommended)
+pip install pre-commit
+
+# Or using conda
+conda install -c conda-forge pre-commit
+
+# Or using homebrew (macOS)
+brew install pre-commit
+```
+
+**Step 2: Install pre-commit hooks for this repository**
 ```bash
 # Install pre-commit hooks
 pre-commit install
