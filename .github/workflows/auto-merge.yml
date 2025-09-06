@@ -1,11 +1,11 @@
-name: Auto Merge on Owner Approval
+name: PR Approval Notification
 
 on:
   pull_request_review:
     types: [submitted, dismissed]
 
 jobs:
-  auto-merge:
+  pr-approval-notification:
     runs-on: ubuntu-latest
     # Only run on pull requests, not on other events
     if: github.event.pull_request != null || github.event.pull_request_review != null
@@ -20,7 +20,6 @@ jobs:
     env:
       # Configuration options
       REQUIRED_CHECKS: "test-and-build"  # Comma-separated list of required check names
-      MERGE_METHOD: "squash"  # squash, merge, or rebase
       SENSITIVE_PATHS: ".github/workflows/*,OWNER*"  # Comma-separated patterns for sensitive files
     
     steps:
@@ -526,7 +525,7 @@ jobs:
 
             return securityPassed;
 
-      - name: Auto-merge evaluation
+      - name: PR approval evaluation
         if: always() && steps.should-proceed.outputs.result == 'true'
         id: auto-merge-evaluation
         uses: actions/github-script@v7
@@ -546,120 +545,44 @@ jobs:
             const pendingChecks = pendingChecksStr ? JSON.parse(pendingChecksStr) : [];
             const securityIssues = securityIssuesStr ? JSON.parse(securityIssuesStr) : [];
 
-            console.log(`Final auto-merge evaluation for PR #${prNumber}:`);
+            console.log(`Final approval evaluation for PR #${prNumber}:`);
             console.log(`- All approved: ${allApproved}`);
             console.log(`- CI passed: ${ciPassed}`);
             console.log(`- Security passed: ${securityPassed}`);
 
             if (!allApproved) {
-              console.log(`❌ Cannot auto-merge: need approval from at least one of: ${JSON.parse('${{ steps.identify-owners.outputs.required_owners }}' || '[]').join(', ')}`);
+              console.log(`❌ Cannot notify approval: need approval from at least one of: ${JSON.parse('${{ steps.identify-owners.outputs.required_owners }}' || '[]').join(', ')}`);
               return;
             }
 
             if (!ciPassed) {
               if (failedChecks.length > 0) {
-                console.log(`❌ Cannot auto-merge: failed CI checks: ${failedChecks.join(', ')}`);
+                console.log(`❌ Cannot notify approval: failed CI checks: ${failedChecks.join(', ')}`);
               }
               if (pendingChecks.length > 0) {
-                console.log(`⏳ Cannot auto-merge yet: pending CI checks: ${pendingChecks.join(', ')}`);
+                console.log(`⏳ Cannot notify approval yet: pending CI checks: ${pendingChecks.join(', ')}`);
               }
               return;
             }
 
             if (!securityPassed) {
-              console.log(`❌ Cannot auto-merge: security issues: ${securityIssues.join(', ')}`);
+              console.log(`❌ Cannot notify approval: security issues: ${securityIssues.join(', ')}`);
               return;
             }
 
-            // All checks passed - ready for merge!
-            console.log('🎉 All conditions met for auto-merge!');
+            // All checks passed - ready to notify approval!
+            console.log('🎉 All conditions met for approval notification!');
 
-            // Set flag to proceed with merge
+            // Set flag to proceed with notification
             core.setOutput('ready_for_merge', 'true');
 
-      - name: Execute auto-merge
+      - name: Add approval notification comment
         if: steps.auto-merge-evaluation.outputs.ready_for_merge == 'true'
-        id: execute-merge
+        id: add-approval-comment
         uses: actions/github-script@v7
         with:
           script: |
             const prNumber = ${{ steps.pr-info.outputs.pr_number }};
-            const mergeMethod = '${{ env.MERGE_METHOD }}';
-            const requiredOwnersStr = '${{ steps.identify-owners.outputs.required_owners }}';
-            const approvedOwnersStr = '${{ steps.check-approvals.outputs.approved_owners }}';
-            const securityIssuesStr = '${{ steps.check-security.outputs.security_issues }}';
-
-            const requiredOwners = requiredOwnersStr ? JSON.parse(requiredOwnersStr) : [];
-            const approvedOwners = approvedOwnersStr ? JSON.parse(approvedOwnersStr) : [];
-            const securityIssues = securityIssuesStr ? JSON.parse(securityIssuesStr) : [];
-
-            console.log(`Executing auto-merge for PR #${prNumber} using ${mergeMethod} method`);
-
-            try {
-              // Get PR details for commit message
-              const { data: pr } = await github.rest.pulls.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-              });
-
-              // Create commit message
-              let commitTitle = pr.title;
-              let commitMessage = '';
-
-              if (mergeMethod === 'squash') {
-                // For squash merge, include PR number and auto-merge info
-                commitTitle = `${pr.title} (#${prNumber})`;
-                commitMessage = `${pr.body || ''}\n\n`;
-                commitMessage += `Auto-merged by GitHub Actions after approval from: ${approvedOwners.join(', ')}\n`;
-                if (securityIssues.length > 0) {
-                  commitMessage += `Security warnings: ${securityIssues.join(', ')}\n`;
-                }
-              }
-
-              // Execute the merge
-              const { data: mergeResult } = await github.rest.pulls.merge({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-                commit_title: commitTitle,
-                commit_message: commitMessage,
-                merge_method: mergeMethod,
-              });
-
-              console.log(`✅ Successfully merged PR #${prNumber}`);
-              console.log(`Merge commit SHA: ${mergeResult.sha}`);
-              console.log(`Merged: ${mergeResult.merged}`);
-
-              // Set outputs for next steps
-              core.setOutput('merge_successful', 'true');
-              core.setOutput('merge_sha', mergeResult.sha);
-              core.setOutput('merge_message', mergeResult.message);
-
-              return {
-                success: true,
-                sha: mergeResult.sha,
-                message: mergeResult.message
-              };
-
-            } catch (error) {
-              console.log(`❌ Failed to merge PR #${prNumber}: ${error.message}`);
-
-              // Set outputs for error handling
-              core.setOutput('merge_successful', 'false');
-              core.setOutput('merge_error', error.message);
-
-              // Re-throw to trigger failure handling
-              throw error;
-            }
-
-      - name: Add success comment
-        if: steps.execute-merge.outputs.merge_successful == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
-            const mergeSha = '${{ steps.execute-merge.outputs.merge_sha }}';
             const approvedOwnersStr = '${{ steps.check-approvals.outputs.approved_owners }}';
             const ownerMapStr = '${{ steps.identify-owners.outputs.owner_map }}';
             const securityIssuesStr = '${{ steps.check-security.outputs.security_issues }}';
@@ -670,48 +593,26 @@ jobs:
             const securityIssues = securityIssuesStr ? JSON.parse(securityIssuesStr) : [];
             const sensitiveFiles = sensitiveFilesStr ? JSON.parse(sensitiveFilesStr) : [];
 
-            // Create success comment
-            let commentBody = '## 🎉 Thanks for your contributions!\n\n';
-            commentBody += `This PR will be automatically merged after receiving approval from one of the required owners.\n\n`;
+            console.log(`Adding approval notification comment for PR #${prNumber}`);
+
+            // Create approval notification comment with vLLM logo
+            let commentBody = '<div align="center">\n';
+            commentBody += '<img src="https://raw.githubusercontent.com/vllm-project/semantic-router/main/website/static/img/repo.png" alt="vLLM" width="80%"/>';
+            commentBody += '</div>\n\n';
+            commentBody += '## 🎉 Thanks for your contributions!\n\n';
+            commentBody += `This PR has been approved by the code owners and meets all the requirements for merging. A maintainer will merge it soon.\n\n`;
 
             // Show approval details
-            commentBody += '### ✅ Approvals Received\n';
+            commentBody += '### ✅ Approved by\n';
             for (const owner of approvedOwners) {
-              commentBody += `- ${owner}\n`;
+              commentBody += `- @${owner}\n`;
             }
             commentBody += '\n';
 
-            // Show owner mapping
-            if (Object.keys(ownerMap).length > 0) {
-              commentBody += '### 📁 Owner Mapping\n';
-              for (const [dirPath, info] of Object.entries(ownerMap)) {
-                commentBody += `**${dirPath === '.' ? 'Root Directory' : dirPath}**: ${info.owners.join(', ')}\n`;
-              }
-              commentBody += '\n';
-            }
-
-            // Show security warnings if any
-            if (securityIssues.length > 0) {
-              commentBody += '### ⚠️ Security Warnings\n';
-              for (const issue of securityIssues) {
-                commentBody += `- ${issue}\n`;
-              }
-              commentBody += '\n';
-            }
-
-            // Show sensitive files if any
-            if (sensitiveFiles.length > 0) {
-              commentBody += '### 🔒 Sensitive Files Modified\n';
-              for (const file of sensitiveFiles) {
-                commentBody += `- \`${file}\`\n`;
-              }
-              commentBody += '\n';
-            }
-
-            commentBody += `**Merge commit:** ${mergeSha}\n`;
-            commentBody += `**Merge method:** ${{ env.MERGE_METHOD }}\n\n`;
+            commentBody += '**Status:** ✅ Ready for merge\n';
+            commentBody += '**Next steps:** Please be patient while a maintainer merges this PR.\n\n';
             commentBody += '---\n';
-            commentBody += '*This merge was performed automatically by GitHub Actions based on owner approvals and CI status.*';
+            commentBody += '*This notification was generated automatically by GitHub Actions.*';
 
             // Add the comment
             await github.rest.issues.createComment({
@@ -721,4 +622,14 @@ jobs:
               body: commentBody
             });
 
-            console.log(`✅ Added success comment to PR #${prNumber}`);
+            console.log(`✅ Added approval notification comment to PR #${prNumber}`);
+
+            // Set outputs for next steps
+            core.setOutput('comment_added', 'true');
+
+            return {
+              success: true,
+              comment_added: true
+            };
+
+
