@@ -45,6 +45,9 @@ type RouterConfig struct {
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 
+	// Reasoning family configurations to define how different model families handle reasoning syntax
+	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+
 	// Semantic cache configuration
 	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
 
@@ -208,6 +211,16 @@ type ModelParams struct {
 
 	// Optional pricing used for cost computation
 	Pricing ModelPricing `yaml:"pricing,omitempty"`
+
+	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
+	// If empty, the model doesn't support reasoning mode
+	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+}
+
+// ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
+type ReasoningFamilyConfig struct {
+	Type      string `yaml:"type"`      // "chat_template_kwargs" or "reasoning_effort"
+	Parameter string `yaml:"parameter"` // "thinking", "enable_thinking", "reasoning_effort", etc.
 }
 
 // PIIPolicy represents the PII (Personally Identifiable Information) policy for a model
@@ -262,6 +275,41 @@ type Category struct {
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
+}
+
+// Legacy types - can be removed once migration is complete
+
+// GetModelReasoningFamily returns the reasoning family configuration for a given model name
+func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
+	if rc == nil || rc.ModelConfig == nil || rc.ReasoningFamilies == nil {
+		return nil
+	}
+
+	// Look up the model in model_config
+	modelParams, exists := rc.ModelConfig[modelName]
+	if !exists || modelParams.ReasoningFamily == "" {
+		return nil
+	}
+
+	// Look up the reasoning family configuration
+	familyConfig, exists := rc.ReasoningFamilies[modelParams.ReasoningFamily]
+	if !exists {
+		return nil
+	}
+
+	return &familyConfig
+}
+
+// Legacy functions - can be removed once migration is complete
+
+// contains checks if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 var (
