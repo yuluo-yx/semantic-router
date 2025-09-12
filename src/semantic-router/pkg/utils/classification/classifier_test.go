@@ -17,12 +17,18 @@ func TestClassifier(t *testing.T) {
 }
 
 type MockCategoryInference struct {
-	classifyResult candle_binding.ClassResult
-	classifyError  error
+	classifyResult          candle_binding.ClassResult
+	classifyError           error
+	classifyWithProbsResult candle_binding.ClassResultWithProbs
+	classifyWithProbsError  error
 }
 
 func (m *MockCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return m.classifyResult, m.classifyError
+}
+
+func (m *MockCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	return m.classifyWithProbsResult, m.classifyWithProbsError
 }
 
 type MockCategoryInitializer struct{ InitError error }
@@ -181,6 +187,81 @@ var _ = Describe("category classification and model selection", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(category).To(Equal(""))
 				Expect(score).To(BeNumerically("~", 0.8, 0.001))
+			})
+		})
+	})
+
+	Describe("category classification with entropy", func() {
+		Context("when category mapping is not initialized", func() {
+			It("should return error", func() {
+				classifier.CategoryMapping = nil
+				_, _, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
+			})
+		})
+
+		Context("when classification succeeds with probabilities", func() {
+			It("should return category and entropy decision", func() {
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         2,
+					Confidence:    0.95,
+					Probabilities: []float32{0.02, 0.03, 0.95},
+					NumClasses:    3,
+				}
+
+				// Add UseReasoning configuration for the categories
+				classifier.Config.Categories = []config.Category{
+					{Name: "technology", UseReasoning: false},
+					{Name: "sports", UseReasoning: false},
+					{Name: "politics", UseReasoning: true},
+				}
+
+				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(category).To(Equal("politics"))
+				Expect(confidence).To(BeNumerically("~", 0.95, 0.001))
+				Expect(reasoningDecision.UseReasoning).To(BeTrue()) // Politics uses reasoning
+				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
+			})
+		})
+
+		Context("when classification confidence is below threshold", func() {
+			It("should return empty category but still provide entropy decision", func() {
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         0,
+					Confidence:    0.3,
+					Probabilities: []float32{0.3, 0.35, 0.35},
+					NumClasses:    3,
+				}
+
+				classifier.Config.Categories = []config.Category{
+					{Name: "technology", UseReasoning: false},
+					{Name: "sports", UseReasoning: true},
+					{Name: "politics", UseReasoning: true},
+				}
+
+				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(category).To(Equal(""))
+				Expect(confidence).To(BeNumerically("~", 0.3, 0.001))
+				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
+			})
+		})
+
+		Context("when model inference fails", func() {
+			It("should return error", func() {
+				mockCategoryModel.classifyWithProbsError = errors.New("model inference failed")
+
+				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Some text")
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("classification error"))
+				Expect(category).To(Equal(""))
+				Expect(confidence).To(BeNumerically("~", 0.0, 0.001))
+				Expect(reasoningDecision.UseReasoning).To(BeFalse())
 			})
 		})
 	})
