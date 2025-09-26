@@ -74,6 +74,9 @@ jobs:
     - name: Download models
       run: make download-models
 
+    - name: Check Models
+      run : ls -al models/ && du -ash --max-depth=1 models/ && du -ash --max-depth=1 ~/.cache/huggingface/
+
     - name: Run semantic router tests
       run: make test
       env:
