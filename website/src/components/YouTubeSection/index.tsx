@@ -10,7 +10,9 @@ const YouTubeSection: React.FC = () => {
             🎥 vLLM Semantic Router Demos
           </h2>
           <p className={styles.youtubeDescription}>
-            <strong>Latest News</strong> 🎉: User Experience is something we do care about. Introducing vLLM-SR dashboard:
+            <strong>Latest News</strong>
+            {' '}
+            🎉: User Experience is something we do care about. Introducing vLLM-SR dashboard:
           </p>
           <div className={styles.featureList}>
             <div className={styles.featureItem}>
@@ -46,4 +48,3 @@ const YouTubeSection: React.FC = () => {
 }
 
 export default YouTubeSection
-
