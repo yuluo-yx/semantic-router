@@ -35,3 +35,13 @@ codespell: CODESPELL_SKIP := $(shell cat tools/linter/codespell/.codespell.skip 
 codespell:
 	@$(LOG_TARGET)
 	codespell --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
+
+.PHONY: newline-check
+newline-check: ## Check the newline
+	@$(LOG_TARGET)
+	python3 tools/linter/newline/newline.py check
+
+.PHONY: newline-fix
+newline-fix: ## Fix the newline
+	@$(LOG_TARGET)
+	python3 tools/linter/newline/newline.py fix
