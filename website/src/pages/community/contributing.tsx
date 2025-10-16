@@ -229,6 +229,11 @@ pre-commit install && pre-commit run --all-files`}
           </section>
 
           <section className={styles.section}>
+            <h2>📝 EditorConfig Use</h2>
+            <p>The project provides an EditorConfig configuration file to standardize the code files of the project. On your development tool, you only need to install the EditorConfig plugin to enable it.</p>
+          </section>
+
+          <section className={styles.section}>
             <h2>🏷️ Working Group Areas</h2>
             <p>
               Consider joining one of our
