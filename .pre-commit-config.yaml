@@ -95,6 +95,7 @@ repos:
         language_version: python3
         files: \.py$
         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)
+
 # Commented out flake8 - only reports issues, doesn't auto-fix
 # -   repo: https://github.com/PyCQA/flake8
 #     rev: 7.3.0
