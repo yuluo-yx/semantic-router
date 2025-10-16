@@ -185,11 +185,11 @@ api:
 # Observability Configuration
 observability:
   tracing:
-    enabled: false # Enable distributed tracing (default: false)
+    enabled: true # Enable distributed tracing for docker-compose stack
     provider: "opentelemetry" # Provider: opentelemetry, openinference, openllmetry
     exporter:
-      type: "stdout" # Exporter: otlp, jaeger, zipkin, stdout
-      endpoint: "localhost:4317" # OTLP endpoint (when type: otlp)
+      type: "otlp" # Export spans to Jaeger (via OTLP gRPC)
+      endpoint: "jaeger:4317" # Jaeger collector inside compose network
       insecure: true # Use insecure connection (no TLS)
     sampling:
       type: "always_on" # Sampling: always_on, always_off, probabilistic
