@@ -2,10 +2,13 @@
 # =  Everything For models  =
 # ======== models.mk ========
 
+##@ Models
+
 # CI_MINIMAL_MODELS=true will download only the minimal set of models required for tests.
 # Default behavior downloads the full set used for local development.
 
 download-models:
+download-models: ## Download models (full or minimal set depending on CI_MINIMAL_MODELS)
 	@$(LOG_TARGET)
 	@mkdir -p models
 	@if [ "$$CI_MINIMAL_MODELS" = "true" ]; then \
@@ -23,6 +26,7 @@ download-models:
 # - Optional plain PII classifier mapping (small)
 
 download-models-minimal:
+download-models-minimal: ## Pre-download minimal set of models for CI tests
 	@mkdir -p models
 	# Pre-download tiny LLM for llm-katan (optional but speeds up first start)
 	@if [ ! -f "models/Qwen/Qwen3-0.6B/.downloaded" ] || [ ! -d "models/Qwen/Qwen3-0.6B" ]; then \
@@ -47,6 +51,7 @@ download-models-minimal:
 # Full model set for local development and docs
 
 download-models-full:
+download-models-full: ## Download all models used in local development and docs
 	@mkdir -p models
 	# Pre-download tiny LLM for llm-katan (optional but speeds up first start)
 	@if [ ! -f "models/Qwen/Qwen3-0.6B/.downloaded" ] || [ ! -d "models/Qwen/Qwen3-0.6B" ]; then \
