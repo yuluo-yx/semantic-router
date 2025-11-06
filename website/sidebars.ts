@@ -48,7 +48,6 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Installation',
       items: [
-        'installation/installation',
         {
           type: 'category',
           label: 'Kubernetes',
@@ -60,6 +59,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'installation/docker-compose',
+        'installation/installation',
         'installation/configuration',
       ],
     },
