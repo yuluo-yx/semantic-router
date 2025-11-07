@@ -5,6 +5,6 @@ metadata:
 spec:
   host: vllm-phi4-mini-epp
   trafficPolicy:
-      tls:
-        mode: SIMPLE
-        insecureSkipVerify: true
+    tls:
+      mode: SIMPLE
+      insecureSkipVerify: true

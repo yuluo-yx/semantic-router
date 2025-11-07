@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    model.aibrix.ai/name: vllm-llama3-8b-instruct # Note: The label value `model.aibrix.ai/name` here must match with the service name.
+    model.aibrix.ai/name: vllm-llama3-8b-instruct  # Note: The label value `model.aibrix.ai/name` here must match with the service name.
     model.aibrix.ai/port: "8000"
   name: vllm-llama3-8b-instruct
   namespace: default
@@ -60,7 +60,7 @@ metadata:
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8000"
-  name: vllm-llama3-8b-instruct # Note: The Service name must match the label value `model.aibrix.ai/name` in the Deployment
+  name: vllm-llama3-8b-instruct  # Note: The Service name must match the label value `model.aibrix.ai/name` in the Deployment
   namespace: default
 spec:
   type: ClusterIP

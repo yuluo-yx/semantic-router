@@ -1,4 +1,3 @@
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -18,9 +17,8 @@ spec:
         type: PathPrefix
         value: /
       headers:
-        - type: Exact
-          name: x-selected-model
-          value: 'llama3-8b'
+      - type: Exact
+        name: x-selected-model
+        value: llama3-8b
     timeouts:
       request: 300s
-

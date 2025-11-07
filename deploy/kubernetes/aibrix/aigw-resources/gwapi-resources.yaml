@@ -31,7 +31,7 @@ spec:
   - name: semantic-router
     operation:
       op: add
-      path: ""
+      path: ''
       value:
         connect_timeout: 10s
         http2_protocol_options: {}
@@ -72,26 +72,26 @@ spec:
             maxSurge: 1
         pod:
           affinity:
-            podAntiAffinity: # pods are placed on different nodes
+            podAntiAffinity:
               preferredDuringSchedulingIgnoredDuringExecution:
               - weight: 100
                 podAffinityTerm:
                   labelSelector:
                     matchExpressions:
-                      - key: app.kubernetes.io/name
-                        operator: In
-                        values:
-                          - envoy
-                  topologyKey: "kubernetes.io/hostname"
-            nodeAffinity: # prevent gateway pod to be placed on gpu node.
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                      - envoy
+                  topologyKey: kubernetes.io/hostname
+            nodeAffinity:
               preferredDuringSchedulingIgnoredDuringExecution:
               - weight: 100
                 preference:
                   matchExpressions:
-                    - key: nvidia.com/gpu.present
-                      operator: NotIn
-                      values:
-                        - "true"
+                  - key: nvidia.com/gpu.present
+                    operator: NotIn
+                    values:
+                    - 'true'
         patch:
           type: StrategicMerge
           value:
@@ -99,18 +99,18 @@ spec:
               template:
                 spec:
                   containers:
-                    - name: envoy
-                      image: envoyproxy/envoy:v1.33.2
-                      resources:
-                        requests:
-                          cpu: 1
-                          memory: 1Gi
-                        limits:
-                          cpu: 1
-                          memory: 1Gi
-                    - name: shutdown-manager
-                      image: envoyproxy/gateway:v1.2.8
-                      resources:
-                        requests:
-                          cpu: 10m
-                          memory: 32Mi
+                  - name: envoy
+                    image: envoyproxy/envoy:v1.33.2
+                    resources:
+                      requests:
+                        cpu: 1
+                        memory: 1Gi
+                      limits:
+                        cpu: 1
+                        memory: 1Gi
+                  - name: shutdown-manager
+                    image: envoyproxy/gateway:v1.2.8
+                    resources:
+                      requests:
+                        cpu: 10m
+                        memory: 32Mi

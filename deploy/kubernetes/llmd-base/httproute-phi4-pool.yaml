@@ -1,4 +1,3 @@
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -18,9 +17,8 @@ spec:
         type: PathPrefix
         value: /
       headers:
-        - type: Exact
-          name: x-selected-model
-          value: 'phi4-mini'
+      - type: Exact
+        name: x-selected-model
+        value: phi4-mini
     timeouts:
       request: 300s
-

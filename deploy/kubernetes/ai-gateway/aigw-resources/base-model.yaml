@@ -21,9 +21,9 @@ spec:
         - --model
         - base-model
         - --port
-        - "8000"
+        - '8000'
         - --max-loras
-        - "6"
+        - '6'
         - --lora-modules
         - '{"name": "math-expert"}'
         - '{"name": "science-expert"}'
@@ -84,6 +84,6 @@ metadata:
   namespace: default
 spec:
   endpoints:
-    - fqdn:
-        hostname: vllm-llama3-8b-instruct.default.svc.cluster.local
-        port: 8000
+  - fqdn:
+      hostname: vllm-llama3-8b-instruct.default.svc.cluster.local
+      port: 8000
