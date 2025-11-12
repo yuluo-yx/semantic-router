@@ -64,7 +64,26 @@ jobs:
             }
 
             // 3) Heuristic + sentiment-lite checks
-            const linkCount   = (body.match(/https?:\/\/|www\./gi) || []).length;
+            // Link analysis with domain allowlist (do not penalize common safe docs/code links)
+            const safeDomains = [
+              "github.com","docs.github.com","githubusercontent.com","gitlab.com","bitbucket.org",
+              "readthedocs.io","arxiv.org","pypi.org","npmjs.com","crates.io","stackoverflow.com","stackexchange.com"
+            ];
+            const urlMatches = (body.match(/https?:\/\/[^\s)]+/gi) || []);
+            let safeLinkCount = 0;
+            let suspiciousLinkCount = 0;
+            for (const u of urlMatches) {
+              try {
+                const h = new URL(u).hostname.replace(/^www\./i, "");
+                const isShortHost = /^(bit\.ly|t\.co|tinyurl\.com|goo\.gl|ow\.ly)$/i.test(h);
+                const isSafe = safeDomains.some(d => h === d || h.endsWith(`.${d}`));
+                if (isSafe && !isShortHost) safeLinkCount += 1;
+                else suspiciousLinkCount += 1;
+              } catch {
+                suspiciousLinkCount += 1;
+              }
+            }
+            const linkCount = urlMatches.length;
             const emailCount  = (body.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).length;
             const phoneCount  = (body.match(/(\+?\d[\d\s().-]{8,}\d)/g) || []).length;
             const mentions    = (body.match(/@\w{1,39}/g) || []).length;
@@ -146,20 +165,8 @@ jobs:
             let sentiment = 0;
             for (const t of tokens) if (afinn[t] != null) sentiment += afinn[t];
 
-            // Score
+            // Score: Only use attack/insult signals for blocking (ignore links/emails/phones)
             let points = 0;
-            if (linkCount >= 2) points += 2;
-            if (emailCount > 0 || phoneCount > 0) points += 2;
-            if (mentions >= 5) points += 1;
-            if (exclaimBlk) points += 1;
-            if (repeatedChr) points += 1;
-            if (shortened) points += 1;
-            if (lowUnique) points += 1;
-            if (keywordHit) points += 3;
-            if (hype) points += 2;
-            if (sentiment >= 4 && linkCount >= 1) points += 1;    // overly positive + links
-            if (sentiment <= -2 && (hype || keywordHit)) points += 1;
-
             // Attack/insult scoring with guardrails for technical context
             let attackContribution = 0;
             if (insultHit) attackContribution += 2;
@@ -169,9 +176,10 @@ jobs:
             if (techCtxHit) attackContribution = Math.min(1, attackContribution); // cap if technical context detected
             points += attackContribution;
 
-            core.info(`Spam score for @${actor} = ${points} (links:${linkCount}, emails:${emailCount}, phones:${phoneCount}, mentions:${mentions}, sentiment:${sentiment}, attackHits:${attackHits}, insult:${insultHit}, techCtx:${techCtxHit})`);
+            core.info(`Spam score for @${actor} = ${points} (attackOnly; links/emails/phones ignored) (links:${linkCount} safe:${safeLinkCount} suspicious:${suspiciousLinkCount}, emails:${emailCount}, phones:${phoneCount}, mentions:${mentions}, sentiment:${sentiment}, attackHits:${attackHits}, insult:${insultHit}, techCtx:${techCtxHit})`);
 
-            const isSpam = points >= 3; // adjust threshold to tune sensitivity
+            // Only block when attack/insult crosses threshold
+            const isSpam = attackContribution >= 2; // adjust threshold if needed
             if (!isSpam) {
               core.info("Comment not flagged as spam.");
               return;
