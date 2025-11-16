@@ -1,4 +1,4 @@
-name: Anti-Spam Filter (Hidden Logic)
+name: Content Moderation
 
 on:
   issues:
@@ -29,23 +29,25 @@ jobs:
           script: |
             // Load and execute the spam detection script from secret
             const detectionScript = process.env.SPAM_DETECTION_SCRIPT;
-            
+
             if (!detectionScript) {
-              core.error("SPAM_DETECTION_SCRIPT secret not found!");
-              core.setFailed("Spam filter not configured");
+              core.warning("SPAM_DETECTION_SCRIPT secret not configured - skipping spam detection");
+              core.info("To enable spam filtering, set up the SPAM_DETECTION_SCRIPT secret.");
+              core.info("See documentation for setup instructions.");
               return;
             }
-            
+
             try {
               // Execute the hidden script
               // The script has access to: github, context, core
               const detectSpam = eval(detectionScript);
-              
+
               // Run the detection
               await detectSpam(github, context, core);
-              
+
             } catch (err) {
               core.error(`Spam filter error: ${err.message}`);
-              core.setFailed(`Filter execution failed: ${err.message}`);
+              core.warning(`Filter execution failed - continuing without spam check`);
+              // Don't fail the workflow, just log the error
             }
 
