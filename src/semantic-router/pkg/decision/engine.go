@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 // DecisionEngine evaluates routing decisions based on rule combinations
@@ -41,7 +42,7 @@ func NewDecisionEngine(
 	strategy string,
 ) *DecisionEngine {
 	if strategy == "" {
-		strategy = "priority" // default strategy
+		strategy = consts.PriorityStrategy // default strategy
 	}
 	return &DecisionEngine{
 		keywordRules:   keywordRules,
