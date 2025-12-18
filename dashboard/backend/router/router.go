@@ -93,7 +93,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/embedded/grafana/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error":"Grafana not configured","message":"TARGET_GRAFANA_URL environment variable is not set"}`))
+			_, _ = w.Write([]byte(`{"error":"Grafana not configured","message":"TARGET_GRAFANA_URL environment variable is not set"}`))
 		})
 		log.Printf("Warning: Grafana URL not configured")
 	}
@@ -368,7 +368,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/embedded/chatui/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error":"HuggingChat not configured","message":"TARGET_CHATUI_URL environment variable is not set"}`))
+			_, _ = w.Write([]byte(`{"error":"HuggingChat not configured","message":"TARGET_CHATUI_URL environment variable is not set"}`))
 		})
 		log.Printf("Info: HuggingChat not configured (optional)")
 	}
@@ -457,7 +457,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/embedded/prometheus/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error":"Prometheus not configured","message":"TARGET_PROMETHEUS_URL environment variable is not set"}`))
+			_, _ = w.Write([]byte(`{"error":"Prometheus not configured","message":"TARGET_PROMETHEUS_URL environment variable is not set"}`))
 		})
 		log.Printf("Warning: Prometheus URL not configured")
 	}
@@ -502,7 +502,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/embedded/jaeger/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error":"Jaeger not configured","message":"TARGET_JAEGER_URL environment variable is not set"}`))
+			_, _ = w.Write([]byte(`{"error":"Jaeger not configured","message":"TARGET_JAEGER_URL environment variable is not set"}`))
 		})
 		log.Printf("Info: Jaeger URL not configured (optional)")
 	}
@@ -593,7 +593,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/embedded/openwebui/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error":"Open WebUI not configured","message":"TARGET_OPENWEBUI_URL environment variable is not set or empty"}`))
+			_, _ = w.Write([]byte(`{"error":"Open WebUI not configured","message":"TARGET_OPENWEBUI_URL environment variable is not set or empty"}`))
 		})
 		log.Printf("Info: Open WebUI not configured (optional)")
 	}
