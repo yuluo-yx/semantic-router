@@ -460,7 +460,7 @@ func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			BertModel: config.BertModel{
-				ModelID:   "sentence-transformers/all-MiniLM-L12-v2",
+				ModelID:   "sentence-transformers/all-MiniLM-L6-v2",
 				Threshold: 0.8,
 				UseCPU:    true,
 			},
@@ -575,11 +575,22 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	}
 
 	// Create tools database
+	toolsSimilarityThreshold := float32(0.2) // Default threshold
+	if cfg.Tools.SimilarityThreshold != nil {
+		toolsSimilarityThreshold = *cfg.Tools.SimilarityThreshold
+	}
 	toolsOptions := tools.ToolsDatabaseOptions{
-		SimilarityThreshold: cfg.Threshold,
+		SimilarityThreshold: toolsSimilarityThreshold,
 		Enabled:             cfg.Tools.Enabled,
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
+
+	// Load tools from file if configured
+	if cfg.Tools.Enabled && cfg.Tools.ToolsDBPath != "" {
+		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
+			return nil, fmt.Errorf("failed to load tools database: %w", loadErr)
+		}
+	}
 
 	// Create classifier
 	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
@@ -1072,7 +1083,7 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.InlineModels.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
+			Expect(cfg.InlineModels.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L6-v2"))
 			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
 			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
 			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
