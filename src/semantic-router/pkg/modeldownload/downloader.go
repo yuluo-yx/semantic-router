@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// hfCommand stores the detected HuggingFace CLI command ("hf" or "huggingface-cli")
+var hfCommand string
 
 // DownloadModel downloads a model using huggingface-cli
 func DownloadModel(spec ModelSpec, config DownloadConfig) error {
@@ -31,7 +33,12 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 		args = append(args, "--revision", spec.Revision)
 	}
 
-	cmd := exec.Command("hf", args...)
+	// Use detected CLI command, default to "hf"
+	cliCmd := hfCommand
+	if cliCmd == "" {
+		cliCmd = "hf"
+	}
+	cmd := exec.Command(cliCmd, args...)
 
 	// Set environment variables
 	env := os.Environ()
@@ -98,26 +105,6 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 		successCount++
 	}
 
-	for _, spec := range missing {
-		requiredFiles := spec.RequiredFiles
-		if len(requiredFiles) == 0 {
-			requiredFiles = DefaultRequiredFiles
-		}
-		complete, err := IsModelComplete(spec.LocalPath, requiredFiles)
-		if err != nil {
-			continue
-		}
-		if !complete {
-			// Get missing files list
-			for _, file := range requiredFiles {
-				if _, statErr := os.Stat(filepath.Join(spec.LocalPath, file)); os.IsNotExist(statErr) {
-					// File is missing, will be downloaded
-					_ = statErr // Suppress unused variable warning
-				}
-			}
-		}
-	}
-
 	if successCount < len(missing) {
 		return fmt.Errorf("failed to download %d out of %d models", len(missing)-successCount, len(missing))
 	}
@@ -125,13 +112,14 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 	return nil
 }
 
-// CheckHuggingFaceCLI checks if huggingface-cli is available
+// CheckHuggingFaceCLI checks if huggingface-cli is available and sets hfCommand
 func CheckHuggingFaceCLI() error {
 	// Try 'hf env' command first (new recommended command)
 	cmd := exec.Command("hf", "env")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		// 'hf' command succeeded, extract version from output
+		hfCommand = "hf"
+		// Extract version from output
 		lines := strings.Split(string(output), "\n")
 		for _, line := range lines {
 			if strings.Contains(line, "huggingface_hub version:") {
@@ -140,7 +128,6 @@ func CheckHuggingFaceCLI() error {
 				return nil
 			}
 		}
-		// Version line not found, but command succeeded
 		logging.Infof("Found huggingface-cli (hf command available)")
 		return nil
 	}
@@ -151,7 +138,7 @@ func CheckHuggingFaceCLI() error {
 		return fmt.Errorf("huggingface-cli not found: %w\nPlease install it with: pip install huggingface_hub[cli]", helpErr)
 	}
 
-	// CLI exists, log without triggering deprecation warning
+	hfCommand = "huggingface-cli"
 	logging.Infof("Found huggingface-cli (using legacy command)")
 	return nil
 }
