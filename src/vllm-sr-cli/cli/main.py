@@ -115,9 +115,20 @@ def serve(config, image, image_pull_policy):
 
         log.info(f"Using config file: {config}")
 
+        # Collect environment variables to pass to container
+        env_vars = {}
+
+        # HuggingFace related environment variables
+        hf_env_vars = ['HF_ENDPOINT', 'HF_TOKEN', 'HF_HOME', 'HF_HUB_CACHE']
+        for var in hf_env_vars:
+            if var in os.environ:
+                env_vars[var] = os.environ[var]
+                log.info(f"Passing environment variable: {var}={os.environ[var]}")
+
         # Start container
         start_vllm_sr(
             config_file=str(config_path.absolute()),
+            env_vars=env_vars,
             image=image,
             pull_policy=image_pull_policy,
         )

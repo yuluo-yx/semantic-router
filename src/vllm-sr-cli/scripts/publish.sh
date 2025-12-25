@@ -32,7 +32,7 @@ case $COMMAND in
     
     # Install dependencies
     echo "Installing build dependencies..."
-    pip install -q build twine
+    pip3 install -q build twine
     
     # Clean previous builds
     echo "Cleaning previous builds..."
@@ -74,7 +74,7 @@ case $COMMAND in
     echo -e "${GREEN}✓ Published to Test PyPI!${NC}"
     echo ""
     echo "Test installation:"
-    echo "  pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vllm-sr==${CURRENT_VERSION}"
+    echo "  pip3 install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vllm-sr==${CURRENT_VERSION}"
     echo ""
     echo "View on Test PyPI:"
     echo "  https://test.pypi.org/project/vllm-sr/${CURRENT_VERSION}/"
@@ -108,7 +108,7 @@ case $COMMAND in
     echo -e "${GREEN}✓ Published to PyPI!${NC}"
     echo ""
     echo "Installation:"
-    echo "  pip install vllm-sr==${CURRENT_VERSION}"
+    echo "  pip3 install vllm-sr==${CURRENT_VERSION}"
     echo ""
     echo "View on PyPI:"
     echo "  https://pypi.org/project/vllm-sr/${CURRENT_VERSION}/"

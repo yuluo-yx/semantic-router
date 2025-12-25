@@ -17,6 +17,7 @@
 
 *Latest News* 🔥
 
+- [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html) 🚀
 - [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html) 🚪
 - [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html) 🧠
 - [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published 📝
@@ -80,86 +81,61 @@ Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts t
 
 ## Quick Start 🚀
 
-### Using VSR CLI (Recommended)
-
-The `vsr` CLI tool provides a unified interface for managing the vLLM Semantic Router across all environments. It reduces setup time from hours to minutes with intelligent auto-detection, comprehensive diagnostics, and beautiful CLI output.
-
 #### Installation
 
-```bash
-# Clone and build
-cd semantic-router/src/semantic-router
-make build-cli
-export PATH=$PATH:$(pwd)/bin
-
-# Verify installation
-vsr --version
-```
-
-#### Get Started in 4 Commands
+> [!TIP]
+> We recommend that you setup a Python virtual environment to manage dependencies.
 
 ```bash
-vsr init                    # Initialize configuration
-make download-models        # Download AI models
-vsr config validate        # Validate setup
-vsr deploy docker          # Deploy with Docker Compose
+$ python -m venv vsr
+$ source vsr/bin/activate
+$ pip install vllm-sr
 ```
 
-#### Key Features
-
-- **Multi-Environment Support**: Deploy to Local, Docker, Kubernetes, or Helm
-- **Model Management**: Download, validate, list, and inspect models
-- **Health Monitoring**: Status checks, diagnostics, and health reports
-- **Debug Tools**: Interactive debugging and troubleshooting
-- **Dashboard Integration**: Auto-detect and open dashboard in browser
-- **Enhanced Logging**: Multi-environment log fetching with filtering
-
-#### Common Commands
+Installed successfully if you see the following help message:
 
 ```bash
-vsr status                  # Check deployment status
-vsr logs --follow          # View logs in real-time
-vsr health                 # Quick health check
-vsr dashboard              # Open dashboard
-vsr model list             # List available models
-vsr debug                  # Run diagnostics
-vsr upgrade docker         # Upgrade deployment
-vsr undeploy docker        # Stop deployment
+$ vllm-sr
+
+       _ _     __  __       ____  ____
+__   _| | |_ _|  \/  |     / ___||  _ \
+\ \ / / | | | | |\/| |_____\___ \| |_) |
+ \ V /| | | |_| | |  |_____|___) |  _ <
+  \_/ |_|_|\__,_|_|  |     |____/|_| \_\
+
+vLLM Semantic Router - Intelligent routing for vLLM
+
+Usage: vllm-sr [OPTIONS] COMMAND [ARGS]...
+
+  vLLM Semantic Router CLI - Intelligent routing and caching for vLLM
+  endpoints.
+
+Options:
+  --version  Show version and exit.
+  --help     Show this message and exit.
+
+Commands:
+  config  Print generated configuration.
+  init    Initialize vLLM Semantic Router configuration.
+  logs    Show logs from vLLM Semantic Router service.
+  serve   Start vLLM Semantic Router.
+  status  Show status of vLLM Semantic Router services.
+  stop    Stop vLLM Semantic Router.
 ```
 
-For complete CLI documentation, see [src/semantic-router/cmd/vsr/README.md](src/semantic-router/cmd/vsr/README.md) or [Quick Start Guide](src/semantic-router/cmd/vsr/QUICKSTART.md).
-
-### Using Quickstart Script
-
-Alternatively, get up and running in seconds with our interactive setup script:
-
-```bash
-bash ./scripts/quickstart.sh
-```
-
-This command will:
-
-- 🔍 Check all prerequisites automatically
-- 📦 Install HuggingFace CLI if needed
-- 📥 Download all required AI models (~1.5GB)
-- 🐳 Start all Docker services
-- ⏳ Wait for services to become healthy
-- 🌐 Show you all the endpoints and next steps
-
-### Automatic Model Download 🤖
-
-Semantic Router automatically downloads required models from HuggingFace at startup:
+> [!TIP]
+> You can specify the HF_ENDPOINT, HF_TOKEN, and HF_HOME environment variables to configure the Hugging Face credentials.
 
 ```bash
 # Set environment variables (optional)
-export HF_ENDPOINT=https://huggingface.co
+export HF_ENDPOINT=https://huggingface.co  # Or use mirror: https://hf-mirror.com
 export HF_TOKEN=your_token_here  # Only for gated models
+export HF_HOME=/path/to/cache  # Optional: custom cache directory
 
 # Start the service - models download automatically
-vllm-sr --config config/config.yaml
+# Environment variables are automatically passed to the container
+vllm-sr serve
 ```
-
-For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
 
 ## Documentation 📖
 
