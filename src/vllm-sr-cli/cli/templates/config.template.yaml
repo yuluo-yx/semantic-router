@@ -82,7 +82,7 @@ decisions:
         - type: "domain"
           name: "math"
     modelRefs:
-      - model: "openai/gpt-5.2"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -153,9 +153,9 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "127.0.0.1:8000"
+          endpoint: "host.docker.internal:8000"
           protocol: "http"
-      access_key: "sk-xxxxxx"
+      access_key: "jGNm/R0CpwDQsvJoaABrymRTrGKt7B63dikib7hW8EyMISRJr"
     - name: "openai/gpt-5.2"
       endpoints:
         - name: "external_provider"

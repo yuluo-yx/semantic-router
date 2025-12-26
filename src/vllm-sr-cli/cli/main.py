@@ -119,11 +119,15 @@ def serve(config, image, image_pull_policy):
         env_vars = {}
 
         # HuggingFace related environment variables
-        hf_env_vars = ['HF_ENDPOINT', 'HF_TOKEN', 'HF_HOME', 'HF_HUB_CACHE']
+        hf_env_vars = ["HF_ENDPOINT", "HF_TOKEN", "HF_HOME", "HF_HUB_CACHE"]
         for var in hf_env_vars:
             if var in os.environ:
                 env_vars[var] = os.environ[var]
-                log.info(f"Passing environment variable: {var}={os.environ[var]}")
+                # Mask sensitive tokens in logs
+                if var == "HF_TOKEN":
+                    log.info(f"Passing environment variable: {var}=***")
+                else:
+                    log.info(f"Passing environment variable: {var}={os.environ[var]}")
 
         # Start container
         start_vllm_sr(
