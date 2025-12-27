@@ -17,41 +17,39 @@
 
 *Latest News* 🔥
 
-- [2025/12/16] **Collaboration**: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
+- [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
 - [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
 - [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html)
-- [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published
-- [2025/10/21] We announced the [2025 Q4 Roadmap: Journey to Iris](https://vllm-semantic-router.com/blog/q4-roadmap-iris)
-- [2025/10/12] **Our paper** [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys.
-- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team.
-- [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway).
-- [2025/09/01] We released the project officially: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html).
+- [2025/11/03] Our paper [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published
+- [2025/10/12] Our paper [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys.
+- [2025/10/08] Collaboration: vLLM Semantic Router with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team.
+- [2025/09/01] Released the project: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html).
 
 ---
 
-## Innovations ✨
+## Goals
 
-We are building **System Level Intelligence** for Mixture-of-Models (MoM), bringing the **Collective Intelligence** into **LLM systems**, answering the following questions:
+We are building the **System Level Intelligence** for Mixture-of-Models (MoM), bringing the **Collective Intelligence** into **LLM systems**, answering the following questions:
 
 1. How to capture the missing signals in request, response and context?
 2. How to combine the signals to make better decisions?
-3. How to collaborate between different models more efficiently?
+3. How to collaborate more efficiently between different models?
 4. How to secure the real world and LLM system from jailbreaks, pii leaks, hallucinations?
 5. How to collect the valuable signals and build a self-learning system?
 
 ![vLLM Semantic Router Banner](./website/static/img/banner.png)
+
+### Where it lives
+
+It lives between the real world and models:
+
+![level](./website/static/img/level.png)
 
 ### Architecture
 
 A quick overview of the current architecture:
 
 ![architecture](./website/static/img/architecture.png)
-
-#### Request Flow
-
-A query goes through the following steps before it reaches the LLM:
-
-![flow](./website/static/img/flow.png)
 
 ## Quick Start
 
