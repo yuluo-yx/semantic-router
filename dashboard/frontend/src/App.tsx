@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
 import ConfigPage from './pages/ConfigPage'
 import PlaygroundPage from './pages/PlaygroundPage'
+import PlaygroundFullscreenPage from './pages/PlaygroundFullscreenPage'
 import TopologyPage from './pages/TopologyPage'
 import TracingPage from './pages/TracingPage'
 import { ConfigSection } from './components/ConfigNav'
@@ -106,6 +107,10 @@ const App: React.FC = () => {
               <PlaygroundPage />
             </Layout>
           }
+        />
+        <Route
+          path="/playground/fullscreen"
+          element={<PlaygroundFullscreenPage />}
         />
         <Route
           path="/topology"
