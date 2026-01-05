@@ -70,6 +70,16 @@ const allTeamMembers: TeamMember[] = [
     memberType: 'committer',
   },
   {
+    name: 'Yossi Ovadia',
+    company: 'Red Hat',
+    role: 'Senior Principal Engineer',
+    avatar: 'https://github.com/yossiovadia.png',
+    github: 'https://github.com/yossiovadia',
+    linkedin: 'https://www.linkedin.com/in/yossi-ovadia-336b314/',
+    bio: 'Making life easier for developers and customers through innovative tooling. From the Red Hat Office of the CTO.',
+    memberType: 'committer',
+  },
+  {
     name: 'samzong',
     role: 'AI Infrastructure / Cloud-Native PM',
     company: 'DaoCloud',
@@ -119,7 +129,7 @@ const allTeamMembers: TeamMember[] = [
     bio: 'Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.',
     memberType: 'committer',
   },
-    {
+  {
     name: 'JaredforReal',
     company: 'Z.ai',
     role: 'Software Engineer',
@@ -165,16 +175,6 @@ const allTeamMembers: TeamMember[] = [
     avatar: 'https://avatars.githubusercontent.com/u/28390961?v=4',
     github: 'https://github.com/carlory',
     bio: 'Open Source Engineer at DaoCloud, focusing on container technology and cloud-native solutions. Passionate about contributing to vllm and other open source projects.',
-    memberType: 'committer',
-  },
-  {
-    name: 'Yossi Ovadia',
-    company: 'Red Hat',
-    role: 'Senior Principal Engineer',
-    avatar: 'https://github.com/yossiovadia.png',
-    github: 'https://github.com/yossiovadia',
-    linkedin: 'https://www.linkedin.com/in/yossi-ovadia-336b314/',
-    bio: 'Making life easier for developers and customers through innovative tooling. From the Red Hat Office of the CTO.',
     memberType: 'committer',
   },
   {
