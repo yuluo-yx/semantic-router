@@ -21,9 +21,6 @@ const config: Config = {
   organizationName: 'vllm-project', // Usually your GitHub org/user name.
   projectName: 'semantic-router', // Usually your repo name.
 
-  onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
-
   // Even if you don't use internalization, you can use this field to set useful
   // metadata like html lang. For example, if your site is Chinese, you may want
   // to replace "en" with "zh-Hans".
@@ -38,6 +35,9 @@ const config: Config = {
 
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
   themes: ['@docusaurus/theme-mermaid'],
 
@@ -50,19 +50,24 @@ const config: Config = {
           versions: {
             'current': {
               label: 'Next 🚧',
-              path: '',
+              path: 'next',
               badge: true,
             },
             'v0.1': {
               label: 'v0.1',
-              path: 'v0.1',
+              path: '',
               badge: true,
             },
           },
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl:
-            'https://github.com/vllm-project/semantic-router/tree/main/website/',
+          // Custom editUrl function to always point to the "current" (main) version
+          editUrl: ({ locale, docPath }) => {
+            if (locale !== 'en') {
+              return `https://github.com/vllm-project/semantic-router/edit/main/website/i18n/${locale}/docusaurus-plugin-content-docs/current/${docPath}`
+            }
+            return `https://github.com/vllm-project/semantic-router/edit/main/website/docs/${docPath}`
+          },
         },
         blog: {
           showReadingTime: true,
@@ -242,12 +247,28 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
+              label: 'Quick Start',
+              to: '/docs/intro',
+            },
+            {
               label: 'Installation',
               to: '/docs/installation',
             },
             {
+              label: 'Tutorials',
+              to: '/docs/tutorials/intelligent-route/embedding-routing',
+            },
+            {
               label: 'API Reference',
               to: '/docs/api/router',
+            },
+            {
+              label: 'CRD Reference',
+              to: '/docs/api/crd-reference',
+            },
+            {
+              label: 'Troubleshooting',
+              to: '/docs/troubleshooting/common-errors',
             },
           ],
         },
@@ -262,18 +283,42 @@ const config: Config = {
               label: 'Hugging Face',
               href: 'https://huggingface.co/LLM-Semantic-Router',
             },
+            {
+              label: 'GitHub Discussions',
+              href: 'https://github.com/vllm-project/semantic-router/discussions',
+            },
+            {
+              label: 'Team',
+              to: '/community/team',
+            },
+            {
+              label: 'Contributing',
+              to: '/community/contributing',
+            },
           ],
         },
         {
           title: 'More',
           items: [
             {
-              label: 'License',
-              href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',
+              label: 'Blog',
+              to: '/blog',
             },
             {
-              label: 'Contributing',
-              href: 'https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md',
+              label: 'Publications',
+              to: '/publications',
+            },
+            {
+              label: 'News',
+              to: '/news',
+            },
+            {
+              label: 'Roadmap',
+              to: '/roadmap/v0.1',
+            },
+            {
+              label: 'License',
+              href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',
             },
           ],
         },
