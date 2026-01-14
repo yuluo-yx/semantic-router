@@ -33,6 +33,7 @@ const (
 	SignalTypeFactCheck    = "fact_check"
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
+	SignalTypeLanguage     = "language"
 )
 
 // RouterConfig represents the main configuration for the LLM Router
@@ -173,6 +174,10 @@ type Signals struct {
 	// Preference rules for route preference matching via external LLM
 	// When matched, outputs the preference name (route name) that best matches the conversation
 	PreferenceRules []PreferenceRule `yaml:"preference_rules,omitempty"`
+
+	// Language rules for multi-language detection signal classification
+	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
+	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -1215,6 +1220,18 @@ type PreferenceRule struct {
 
 	// Description provides human-readable explanation of what this route handles
 	// This description is sent to the external LLM for route matching
+	Description string `yaml:"description,omitempty"`
+}
+
+// LanguageRule defines a rule for multi-language detection signal classification
+// The language classifier detects the query language and outputs language codes
+// e.g., "en" (English), "es" (Spanish), "zh" (Chinese), "fr" (French)
+type LanguageRule struct {
+	// Name is the language code that can be referenced in decision rules
+	// e.g., "en", "es", "zh", "fr", "de", "ja"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of the language
 	Description string `yaml:"description,omitempty"`
 }
 
