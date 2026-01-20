@@ -83,9 +83,6 @@ sudo docker run -d \
 ```bash
 # Check container status
 sudo docker ps | grep vllm-gpt-oss-120b
-
-# Test the endpoint
-curl http://localhost:8000/v1/models
 ```
 
 ### Step 2: Install vLLM Semantic Router
@@ -131,7 +128,7 @@ INFO: Starting vLLM Semantic Router...
 INFO: Loading configuration from config.yaml
 INFO: Initializing signals: keyword, embedding, domain, language, fact_check
 INFO: Dashboard enabled on port 8700
-INFO: API server listening on 0.0.0.0:8888
+INFO: API server listening on 0.0.0.0:8899
 ```
 
 ### Step 5: Configure Firewall
@@ -169,7 +166,7 @@ You should see the vLLM Semantic Router dashboard with:
 User Query
     ↓
 ┌─────────────────────────────────────┐
-│   vLLM Semantic Router (Port 8888) │
+│   vLLM Semantic Router (Port 8899) │
 └─────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────┐
