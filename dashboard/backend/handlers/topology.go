@@ -426,88 +426,6 @@ func getFallbackReason(decisionName string) string {
 	return "Unknown fallback reason"
 }
 
-// matchKeywordRule checks if query matches a keyword rule
-func matchKeywordRule(query, queryLower string, kw routerconfig.KeywordRule) bool {
-	matchedCount := 0
-	for _, keyword := range kw.Keywords {
-		var matched bool
-		if kw.CaseSensitive {
-			// Case-sensitive: use original query and keyword as-is
-			matched = strings.Contains(query, keyword)
-		} else {
-			// Case-insensitive: use lowercase versions
-			matched = strings.Contains(queryLower, strings.ToLower(keyword))
-		}
-		if matched {
-			matchedCount++
-		}
-	}
-
-	// Apply operator logic
-	operator := strings.ToUpper(kw.Operator)
-	switch operator {
-	case "AND":
-		return matchedCount == len(kw.Keywords)
-	default: // "", "OR"
-		return matchedCount > 0
-	}
-}
-
-// matchDomainCategory checks if query likely matches a domain category
-func matchDomainCategory(queryLower string, category routerconfig.Category) bool {
-	// Simple keyword-based domain matching for simulation
-	domainKeywords := map[string][]string{
-		"math":      {"calculate", "math", "equation", "solve", "formula", "number", "计算", "数学"},
-		"code":      {"code", "program", "function", "debug", "compile", "代码", "编程"},
-		"coding":    {"code", "program", "function", "debug", "compile", "代码", "编程"},
-		"writing":   {"write", "essay", "story", "article", "blog", "写作", "文章"},
-		"reasoning": {"think", "reason", "analyze", "logic", "deduce", "推理", "分析"},
-		"creative":  {"creative", "imagine", "design", "art", "创意", "设计"},
-		"science":   {"science", "experiment", "theory", "research", "科学", "研究"},
-		"general":   {"help", "what", "how", "why", "explain", "帮助", "什么", "如何"},
-	}
-
-	categoryLower := strings.ToLower(category.Name)
-	if keywords, ok := domainKeywords[categoryLower]; ok {
-		for _, kw := range keywords {
-			if strings.Contains(queryLower, kw) {
-				return true
-			}
-		}
-	}
-
-	// Also check description keywords
-	if category.Description != "" {
-		descWords := strings.Fields(strings.ToLower(category.Description))
-		for _, word := range descWords {
-			if len(word) > 3 && strings.Contains(queryLower, word) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// matchFactCheckRuleSimple checks if query might need fact checking (simplified)
-func matchFactCheckRuleSimple(queryLower string, ruleName string) bool {
-	// Simplified fact-check detection based on rule name and query patterns
-	factCheckPatterns := []string{
-		"is it true", "fact check", "verify", "真的吗", "是真的",
-		"actually", "claim", "statistics", "data shows",
-	}
-
-	if strings.Contains(strings.ToLower(ruleName), "needs_fact_check") {
-		for _, pattern := range factCheckPatterns {
-			if strings.Contains(queryLower, pattern) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 // normalizeSignalName normalizes signal name for consistent matching
 // Converts spaces to underscores and lowercases for matching "computer science" with "computer_science"
 func normalizeSignalName(name string) string {
@@ -526,21 +444,4 @@ func normalizeModelName(name string) string {
 		}
 	}
 	return result.String()
-}
-
-// generateModelKey generates a unique key for a model configuration
-// matching the frontend format: model|reasoning|effort-{level}|lora-{name}
-// Used for edge highlighting (edges differ by reasoning mode)
-func generateModelKey(modelRef routerconfig.ModelRef) string {
-	parts := []string{modelRef.Model}
-	if modelRef.UseReasoning != nil && *modelRef.UseReasoning {
-		parts = append(parts, "reasoning")
-	}
-	if modelRef.ReasoningEffort != "" {
-		parts = append(parts, fmt.Sprintf("effort-%s", modelRef.ReasoningEffort))
-	}
-	if modelRef.LoRAName != "" {
-		parts = append(parts, fmt.Sprintf("lora-%s", modelRef.LoRAName))
-	}
-	return strings.Join(parts, "|")
 }
