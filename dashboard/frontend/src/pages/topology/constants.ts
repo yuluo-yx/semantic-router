@@ -28,9 +28,9 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
 export const SIGNAL_LATENCY: Record<SignalType, string> = {
   keyword: '<1ms',
   embedding: '10-50ms',
-  domain: '50-100ms',
-  fact_check: '50-100ms',
-  user_feedback: '50-100ms',
+  domain: '10-50ms',
+  fact_check: '10-50ms',
+  user_feedback: '10-50ms',
   preference: '200-500ms',
   language: '<1ms',
 }
