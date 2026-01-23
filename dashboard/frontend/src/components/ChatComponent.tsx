@@ -1,10 +1,63 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import MarkdownRenderer from './MarkdownRenderer'
 import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 import ThinkingBlock from './ThinkingBlock'
+
+// Greeting lines - defined outside component to maintain stable reference
+const GREETING_LINES = [
+  "Hi there, I am MoM :-)",
+  "The System Intelligence for LLMs",
+  "The World First Model-of-Models",
+  "Open Source for Everyone",
+  "How can I help you today?"
+]
+
+// Typing effect component for greeting with multiple lines
+// Memoized to prevent re-renders when parent state changes (e.g., input typing)
+const TypingGreeting = memo(({ lines }: { lines: string[] }) => {
+  const [currentLineIndex, setCurrentLineIndex] = useState(0)
+  const [displayedText, setDisplayedText] = useState('')
+  const [isTyping, setIsTyping] = useState(true)
+
+  useEffect(() => {
+    if (currentLineIndex >= lines.length) return
+
+    const currentLine = lines[currentLineIndex]
+    let charIndex = 0
+    setIsTyping(true)
+    setDisplayedText('')
+
+    const typingInterval = setInterval(() => {
+      if (charIndex < currentLine.length) {
+        setDisplayedText(currentLine.slice(0, charIndex + 1))
+        charIndex++
+      } else {
+        clearInterval(typingInterval)
+        setIsTyping(false)
+        // Wait before moving to next line
+        setTimeout(() => {
+          if (currentLineIndex < lines.length - 1) {
+            setCurrentLineIndex(prev => prev + 1)
+          }
+        }, 1500)
+      }
+    }, 60)
+
+    return () => clearInterval(typingInterval)
+  }, [currentLineIndex, lines])
+
+  return (
+    <div className={styles.typingGreeting}>
+      <h2>
+        {displayedText}
+        {isTyping && <span className={styles.typingCursor}>|</span>}
+      </h2>
+    </div>
+  )
+})
 
 // Choice represents a single model's response in ratings mode
 interface Choice {
@@ -462,11 +515,7 @@ const ChatComponent = ({
       <div className={styles.messagesContainer}>
         {messages.length === 0 ? (
           <div className={styles.emptyState}>
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <h3>Start a conversation</h3>
-            <p>Send a message to begin chatting with the mixture of models.</p>
+            <TypingGreeting lines={GREETING_LINES} />
           </div>
         ) : (
           <div className={styles.messages}>
@@ -558,59 +607,63 @@ const ChatComponent = ({
       </div>
 
       <div className={styles.inputContainer}>
-        <div className={styles.inputActions}>
-          <button
-            className={styles.inputActionButton}
-            onClick={() => setShowSettings(!showSettings)}
-            title="Settings"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="8" cy="8" r="2.5"/>
-              <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <button
-            className={styles.inputActionButton}
-            onClick={handleClear}
-            title="Clear chat"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+        <div className={styles.inputWrapper}>
+          <textarea
+            ref={inputRef}
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask me anything..."
+            className={styles.input}
+            rows={1}
+            disabled={isLoading}
+          />
+          <div className={styles.inputActionsRow}>
+            <div className={styles.inputActions}>
+              <button
+                className={styles.inputActionButton}
+                onClick={() => setShowSettings(!showSettings)}
+                title="Settings"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="8" cy="8" r="2.5"/>
+                  <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+              <button
+                className={styles.inputActionButton}
+                onClick={handleClear}
+                title="Clear chat"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            {isLoading ? (
+              <button
+                className={`${styles.sendButton} ${styles.stopButton}`}
+                onClick={handleStop}
+                title="Stop generating"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+              </button>
+            ) : (
+              <button
+                className={styles.sendButton}
+                onClick={handleSend}
+                disabled={!inputValue.trim()}
+                title="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-        <textarea
-          ref={inputRef}
-          value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send)"
-          className={styles.input}
-          rows={1}
-          disabled={isLoading}
-        />
-        {isLoading ? (
-          <button
-            className={`${styles.sendButton} ${styles.stopButton}`}
-            onClick={handleStop}
-            title="Stop generating"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="1"/>
-            </svg>
-          </button>
-        ) : (
-          <button
-            className={styles.sendButton}
-            onClick={handleSend}
-            disabled={!inputValue.trim()}
-            title="Send message"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        )}
       </div>
     </div>
     </>
